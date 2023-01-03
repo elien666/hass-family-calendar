@@ -22,15 +22,16 @@ const Div = styled.div`
 function App() {
 
   const [ startDate, setStartDate ] = React.useState(DateTime.now())
-  const data = useCalendarData(startDate)
+  const [ isLoading, toggleLoading ] = React.useState(false)
+  const data = useCalendarData(startDate, toggleLoading)
 
   return (
     <Div>
       <GlobalStyle />
-      <Header startDate={startDate} setStartDate={setStartDate}/>
+      <Header startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
       <Week data={data} />
     </Div>
   );
 }
 
-export default App;
+export default App

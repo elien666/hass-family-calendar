@@ -2,45 +2,93 @@ import React from 'react'
 import { DateTime } from 'luxon'
 import axios from 'axios'
 import qs from 'qs'
-import { mdiDelete } from '@mdi/js'
+import { mdiDelete, mdiCake } from '@mdi/js'
+import useTimeout from './use-timeout'
 
 axios.defaults.headers.common['Authorization'] = 'Bearer '
 
-const host = 'http://homeassistant.local:8123/api/calendars/calendar.hamsischwan_s_kalender'
-const url = (params) => `${host}?${qs.stringify(params)}`
+const host = (name) => `http://homeassistant.local:8123/api/calendars/${name}`
+const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
-const useCalendarData = (startDate) => {
+const calendars = [
+  { name: 'calendar.hamsischwan_s_kalender', icon: undefined },
+  { name: 'calendar.biotonne', icon: mdiDelete },
+  { name: 'calendar.gelber_sack', icon: mdiDelete },
+  { name: 'calendar.blaue_tonne', icon: mdiDelete },
+  { name: 'calendar.schwarze_tonne', icon: mdiDelete },
+  { name: 'calendar.familiengeburtstage', icon: mdiCake },
+  { name: 'calendar.birthdays', icon: mdiCake },
+]
+
+const loadCalendarInto = (calendar, start, end, data) => (
+  axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }))
+    .then((response) => {
+      response.data.forEach((event) => {
+        // Find bucket
+        const eventStart = 'dateTime' in event.start
+          ? DateTime.fromISO(event.start.dateTime)
+          : DateTime.fromSQL(event.start.date)
+        const bucket = Math.floor(eventStart.diff(start, 'days').as('days'))
+
+        // Add to bucket
+        const type = 'dateTime' in event.start ? 'events' : 'allDay'
+
+        if (bucket >= 0 && bucket <= data.length) {
+          data[bucket][type] = [
+            ...data[bucket][type],
+            { ...event, icon: calendar.icon }
+          ]
+        } else {
+          // Only enable for debugging
+          // console.log('Ignoring event', bucket, type, ':', event)
+        }
+
+      })
+    })
+)
+
+const loadAll = (startDate, data, setData, toggleLoading) => {
+  // Set up day buckets
+  const dateRange = [0,1,2,3,4,5].map((diff) => (
+    startDate.plus({ days: diff })).startOf('day')
+  )
+  dateRange[6] = startDate.plus({ days: 6 }).endOf('day')
+
+  const newData = dateRange.map((date) => ({ date, allDay: [], events: []}))
+
+  // Immediately show new dates, if startDate is new
+  if (!data[0].date.equals(newData[0].date)) {
+    setData(newData)
+  }
+
+  // Fetch data
+  try {
+    toggleLoading(true)
+    const loading = calendars.map((calendar) => (
+      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData)
+    ))
+
+    Promise.all(loading)
+      .catch((err) => {
+        console.log('Could not load calendar', err)
+      })
+      .finally(() => {
+        toggleLoading(false)
+        setData(newData)
+      })
+  } catch (err) {
+    console.log(err)
+  }
+}
+
+const useCalendarData = (startDate, toggleLoading) => {
   const [ data, setData ] = React.useState([])
+  const timeout = useTimeout()
 
   React.useEffect(() => {
-    console.log('LOADING', startDate.toISO())
-
-    // Set up day buckets
-    const dateRange = [0,1,2,3,4,5].map((diff) => (
-      startDate.plus({ days: diff })).startOf('day')
-    )
-    dateRange[6] = startDate.plus({ days: 6 }).endOf('day')
-
-    const data = dateRange.map((date) => ({ date, allDay: [], events: []}))
-
-    axios(url({ start: dateRange[0].toISO(), end: dateRange[6].toISO() }))
-      .then((response) => {
-        setData(dateRange.map((date) => {
-          const events = response.data.filter((event => {
-            if ('dateTime' in event.start) {
-              return DateTime.fromISO(event.start.dateTime).hasSame(date, 'day')
-            } else {
-              return DateTime.fromSQL(event.start.date).hasSame(date, 'day')
-            }
-          }))
-          return {
-            date,
-            allDay: events.filter((event) => 'date' in event.start).map((event) => ({ ...event, icon: undefined })),
-            events: events.filter((event) => 'dateTime' in event.start).map((event) => ({ ...event, icon: mdiDelete }))
-          }
-        }))
-      })
-  }, [startDate])
+    loadAll(startDate, data, setData, toggleLoading)
+  // eslint-disable-next-line
+  }, [startDate, timeout, setData])
 
   return data
 }
