@@ -33,7 +33,7 @@ const loadCalendarInto = (calendar, start, end, data) => (
         // Add to bucket
         const type = 'dateTime' in event.start ? 'events' : 'allDay'
 
-        if (bucket >= 0 && bucket <= data.length) {
+        if (bucket >= 0 && bucket < data.length) {
           data[bucket][type] = [
             ...data[bucket][type],
             { ...event, icon: calendar.icon }
