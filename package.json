@@ -2,6 +2,7 @@
   "name": "hass-family-calendar",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://elien666.github.io/hass-family-calendar",
   "dependencies": {
     "@mdi/js": "^7.1.96",
     "@mdi/react": "^1.6.1",
@@ -10,6 +11,7 @@
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.2.2",
     "clsx": "^1.2.1",
+    "gh-pages": "^4.0.0",
     "luxon": "^3.2.0",
     "qs": "^6.11.0",
     "react": "^18.2.0",
@@ -19,6 +21,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
