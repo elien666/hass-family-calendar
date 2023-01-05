@@ -11,7 +11,7 @@ const Div = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(3, max-content);
-  grid-column-gap:  12px;
+  grid-column-gap: 12px;
 
   padding: 0 12px;
   background-color: #2f2f2f;
@@ -26,7 +26,7 @@ const Div = styled.div`
     text-align: center;
     margin-bottom: 0;
     padding-bottom: 12px;
-    border-bottom: solid 1px #707070;
+    border-bottom: solid 1px #ffffff;
   }
 
   .event, .allDayEvent {
@@ -64,13 +64,18 @@ const Div = styled.div`
   .allDayRow, .eventRow {
     padding: 12px 0;
   }
-  
+
   .allDayRow {
-    border-bottom: solid 1px #707070;
+    border-bottom: solid 1px #ffffff;
   }
 
   .weekend {
     background-color: #414141;
+  }
+
+  .today h2 {
+    color: #f85a5a;
+    font-weight: 600;
   }
 `
 
@@ -80,14 +85,14 @@ const Week = ({ data }) => {
 
       {/* First row: Captions */}
       {data.map((day, index) => (
-        <div key={index} className={clsx({ weekend: isWeekend(day.date)})}>
+        <div key={index} className={clsx({ weekend: isWeekend(day.date), today: index===0})}>
           <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
         </div>
       ))}
 
       {/* Second row: Full day events */}
       {data.map((day, index) => (
-        <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date)})}>
+        <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: index===0})}>
           {day.allDay.map((event, index) => (
             <div key={index} className={'allDayEvent'}>
               {event.icon && <Icon path={event.icon} size={'1rem'} color='#ffffff'/>}
@@ -99,7 +104,7 @@ const Week = ({ data }) => {
 
       {/* Third row: Events */}
       {data.map((day, index) => (
-        <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date)})}>
+        <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: index===0})}>
           {day.events.map((event, index) => (
             <div key={index} className={'event'}>
               <h3>
