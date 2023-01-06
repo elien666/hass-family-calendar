@@ -1,4 +1,4 @@
-import { mdiGarageVariant } from '@mdi/js'
+import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor from '../utils/use-garage-door'
@@ -23,9 +23,9 @@ const Div = styled.div`
 
 const toPresentation = (state) => {
   const map = {
-    'unknown': 'In Bewegung oder halb-offen',
-    'open': 'Offen',
-    'closed': 'Geschlossen'
+    'unknown': { label: 'In Bewegung oder halb-offen', icon: mdiGarageAlertVariant },
+    'open': { label: 'Offen', icon: mdiGarageOpenVariant },
+    'closed': { label: 'Geschlossen', icon: mdiGarageVariant }
   }
   return map[state]
 }
@@ -38,8 +38,8 @@ const Garage = () => {
     <Div>
       <h2>Garage</h2>
       <div>
-        <Icon path={mdiGarageVariant} size={'3rem'} color='#ffffff'/>
-        <span>{toPresentation(garageDoor)}</span>
+        <Icon path={toPresentation(garageDoor).icon} size={'3rem'} color='#ffffff'/>
+        <span>{toPresentation(garageDoor).label}</span>
       </div>
     </Div>
   )
