@@ -80,7 +80,7 @@ const Label = ({ icon }) => <div>{weatherIconToPresentation[icon].label}</div>
 const Weather = ({ toggleLoading }) => {
 
   const data = useWeatherData(toggleLoading)
-  if (data === null) return ''
+  if (data === null || !'currently' in data || !'daily' in data || !'hourly' in data) return ''
 
   return (
     <Div>
