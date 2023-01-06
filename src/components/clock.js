@@ -4,7 +4,7 @@ import styled from 'styled-components'
 
 const Div = styled.div`
   font-family: "Luckiest Guy", sans-serif;
-  font-size: 60px;
+  font-size: 76px;
   margin: 30px 0 10px 0;
   span {
     animation: blinking 2s steps(2, start) infinite;

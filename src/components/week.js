@@ -10,82 +10,90 @@ const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TI
 const isWeekend = (date) => date.toFormat('c') >= 6
 
 const Div = styled.div`
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(3, max-content);
-  grid-column-gap: 12px;
-
-  padding: 0 12px;
-  background-color: #2f2f2f;
-  border-radius: 4px;
-
-  h1, h2 {
-    font-weight: 400;
-  }
-
-  h2 {
-    font-size: 18px;
-    text-align: center;
-    margin-bottom: 0;
-    padding-bottom: 12px;
-    border-bottom: solid 1px #ffffff;
-  }
-
-  .event, .allDayEvent {
-    padding: 6px 12px;
+  
+  display: flex;
+  flex-direction: column;
+  
+  .schedule {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(2, max-content) 1fr;
+    grid-column-gap: 12px;
+    flex-grow: 1;
+  
+    padding: 0 12px;
+    background-color: #2f2f2f;
     border-radius: 4px;
-    background-color: #356957;
-
-    h3 {
-      margin: 0 0 6px 0;
+  
+    h1, h2 {
+      font-weight: 400;
+    }
+  
+    h2 {
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 0;
+      padding-bottom: 12px;
+      border-bottom: solid 1px #ffffff;
+    }
+  
+    .event, .allDayEvent {
+      padding: 6px 12px;
+      border-radius: 4px;
+      background-color: #356957;
+  
+      h3 {
+        margin: 0 0 6px 0;
+        display: flex;
+        align-items: flex-start;
+      }
+  
+      svg {
+        margin-right: 6px;
+        padding-top: 2px;
+        min-width: 1rem;
+      }
+  
+      & + .event {
+        margin-top: 12px;
+      }
+    }
+  
+    .allDayEvent {
       display: flex;
       align-items: flex-start;
+      background-color: #38576b;
+  
+      & + .allDayEvent {
+        margin-top: 12px;
+      }
     }
-
-    svg {
-      margin-right: 6px;
-      padding-top: 2px;
-      min-width: 1rem;
+  
+    .eventRow {
+      padding: 12px 0;
     }
-
-    & + .event {
-      margin-top: 12px;
+  
+    .allDayRow {
+      padding: 12px 0;
+      border-bottom: solid 1px #ffffff;
     }
-  }
-
-  .allDayEvent {
-    display: flex;
-    align-items: flex-start;
-    background-color: #38576b;
-
-    & + .allDayEvent {
-      margin-top: 12px;
+  
+    .weekend {
+      background-color: #363636;
     }
-  }
-
-  .allDayRow, .eventRow {
-    padding: 12px 0;
-  }
-
-  .allDayRow {
-    border-bottom: solid 1px #ffffff;
-  }
-
-  .weekend {
-    background-color: #363636;
-  }
-
-  .today h2 {
-    color: #f85a5a;
-    font-weight: 600;
+  
+    .today h2 {
+      color: #f85a5a;
+      font-weight: 600;
+    }
   }
 `
 
 const Week = ({ data, startDate, setStartDate, isLoading }) => {
   return (
-    <div>
+    <Div>
       <Header startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
-      <Div>
+      <div className={'schedule'}>
 
         {/* First row: Captions */}
         {data.map((day, index) => (
@@ -122,8 +130,8 @@ const Week = ({ data, startDate, setStartDate, isLoading }) => {
             ))}
           </div>
         ))}
-      </Div>
-    </div>
+      </div>
+    </Div>
   )
 }
 

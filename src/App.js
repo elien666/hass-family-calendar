@@ -17,10 +17,12 @@ const GlobalStyle = createGlobalStyle`
 
 const Div = styled.div`
   padding: 0 12px;
+  overflow: hidden;
   
   .main {
     display: grid;
     grid-template-columns: 80% 1fr;
+    height: 100vh;
   }
 `
 

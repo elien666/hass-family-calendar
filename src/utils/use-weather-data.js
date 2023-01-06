@@ -28,16 +28,10 @@ const useWeatherData = (toggleLoading) => {
 
   React.useEffect(() => {
 
-    // TODO: Enable weather loading
     toggleLoading(true)
-
-    console.log('Loading weather')
-
-    toggleLoading(false)
 
     axios(url())
       .then((response) => {
-        console.log(response.data)
         setData(response.data)
       })
       .catch((err) => {
