@@ -4,6 +4,7 @@ import styled, { createGlobalStyle } from 'styled-components'
 import useCalendarData from './utils/use-calendar-data'
 import Header from './components/header'
 import Week from './components/week'
+import Sidebar from './components/sidebar'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -17,6 +18,11 @@ const GlobalStyle = createGlobalStyle`
 
 const Div = styled.div`
   padding: 0 12px;
+  
+  .main {
+    display: grid;
+    grid-template-columns: 80% 1fr;
+  }
 `
 
 // TODO: Check start date not today
@@ -31,7 +37,10 @@ function App() {
     <Div>
       <GlobalStyle />
       <Header startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
-      <Week data={data} />
+      <div className={'main'}>
+        <Week data={data} />
+        <Sidebar />
+      </div>
     </Div>
   );
 }
