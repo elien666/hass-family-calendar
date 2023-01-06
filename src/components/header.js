@@ -4,6 +4,7 @@ import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
 import styled from 'styled-components'
 import { DateTime } from 'luxon'
 import clsx from 'clsx'
+import useKeyPress from '../utils/use-Key-press'
 
 const Div = styled.div`
   display: flex;
@@ -59,6 +60,22 @@ const Header = ({ startDate, setStartDate, isLoading }) => {
     return () => clearInterval(timer)
   })
 
+  const nextWeek = () => setStartDate((date) => date.minus({ days: 7 }))
+  const previousWeek = () => setStartDate((date) => date.plus({ days: 7 }))
+
+  const keyPrevious = useKeyPress('ArrowLeft')
+  const keyNext = useKeyPress('ArrowRight')
+
+  React.useEffect(() => {
+    if (keyPrevious) previousWeek()
+    // eslint-disable-next-line
+  }, [keyPrevious]) // Only fire when relevant key press changes
+
+  React.useEffect(() => {
+    if (keyNext) nextWeek()
+    // eslint-disable-next-line
+  }, [keyNext]) // Only fire when relevant key press changes
+
   return (
     <Div>
 
@@ -66,11 +83,11 @@ const Header = ({ startDate, setStartDate, isLoading }) => {
         <Icon path={mdiChevronLeft}
               size={'32px'}
               color='#ffffff'
-              onClick={() => setStartDate((date) => date.minus({ days: 7 }))}/>
+              onClick={nextWeek}/>
         <Icon path={mdiChevronRight}
               size={'32px'}
               color='#ffffff'
-              onClick={() => setStartDate((date) => date.plus({ days: 7 }))}/>
+              onClick={previousWeek}/>
       </div>
 
       <div className={'time'}>
