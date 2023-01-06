@@ -20,7 +20,6 @@ const Div = styled.div`
 `
 
 // TODO: Check start date not today
-// TODO: Commit build
 // TODO: Sidebar
 function App() {
 
