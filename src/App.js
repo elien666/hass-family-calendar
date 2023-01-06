@@ -2,7 +2,6 @@ import React from 'react'
 import { DateTime } from 'luxon'
 import styled, { createGlobalStyle } from 'styled-components'
 import useCalendarData from './utils/use-calendar-data'
-import Header from './components/header'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
 
@@ -31,15 +30,14 @@ function App() {
 
   const [ startDate, setStartDate ] = React.useState(DateTime.now())
   const [ isLoading, toggleLoading ] = React.useState(false)
-  const data = useCalendarData(startDate, setStartDate, toggleLoading)
+  const calendarData = useCalendarData(startDate, setStartDate, toggleLoading)
 
   return (
     <Div>
       <GlobalStyle />
-      <Header startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
       <div className={'main'}>
-        <Week data={data} />
-        <Sidebar />
+        <Week data={calendarData} startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
+        <Sidebar toggleLoading={toggleLoading}/>
       </div>
     </Div>
   );

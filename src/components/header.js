@@ -5,11 +5,13 @@ import styled from 'styled-components'
 import { DateTime } from 'luxon'
 import clsx from 'clsx'
 import useKeyPress from '../utils/use-Key-press'
+import Clock from './clock'
 
 const Div = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  height: 100px;
   
   svg.indicator {
     margin-left: 1rem;
@@ -34,31 +36,9 @@ const Div = styled.div`
     cursor: pointer;
   }
 
-  .time {
-    font-family: "Luckiest Guy", sans-serif;
-    font-size: 60px;
-    margin: 30px 0 10px 0;
-    span {
-      animation: blinking 2s steps(2, start) infinite;
-    }
-
-    @keyframes blinking {
-      to {
-        visibility: hidden;
-      }
-    }
-  }
 `
 
 const Header = ({ startDate, setStartDate, isLoading }) => {
-
-  const [ now, setNow ] = React.useState(DateTime.now())
-
-  React.useEffect(() => {
-    const timer = setInterval(() => setNow(DateTime.now()), 1000)
-
-    return () => clearInterval(timer)
-  })
 
   const nextWeek = () => setStartDate((date) => date.minus({ days: 7 }))
   const previousWeek = () => setStartDate((date) => date.plus({ days: 7 }))
@@ -90,9 +70,7 @@ const Header = ({ startDate, setStartDate, isLoading }) => {
               onClick={previousWeek}/>
       </div>
 
-      <div className={'time'}>
-        {now.toFormat('HH')}<span>:</span>{now.toFormat('mm')}
-      </div>
+      <Clock />
 
       <Icon path={mdiLoading}
             size={'32px'}

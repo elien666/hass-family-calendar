@@ -1,11 +1,11 @@
 import React from 'react'
 
-const reloadEveryInMs = 60000 // 60 seconds
+const DEFAULT_TIMEOUT = 60000 // 60 seconds
 
-const useTimeout = () => {
+const useTimeout = (timout = DEFAULT_TIMEOUT) => {
   const [ toggle, setToggle ] = React.useState(true)
   React.useEffect(() => {
-    const interval = setInterval(() => setToggle(v => !v), reloadEveryInMs)
+    const interval = setInterval(() => setToggle(v => !v), timout)
 
     return () => clearInterval(interval)
   })

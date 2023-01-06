@@ -2,6 +2,8 @@ import { DateTime } from 'luxon'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import clsx from 'clsx'
+import Header from './header'
+import React from 'react'
 
 const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
 
@@ -79,46 +81,49 @@ const Div = styled.div`
   }
 `
 
-const Week = ({ data }) => {
+const Week = ({ data, startDate, setStartDate, isLoading }) => {
   return (
-    <Div>
+    <div>
+      <Header startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
+      <Div>
 
-      {/* First row: Captions */}
-      {data.map((day, index) => (
-        <div key={index} className={clsx({ weekend: isWeekend(day.date), today: index===0})}>
-          <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
-        </div>
-      ))}
+        {/* First row: Captions */}
+        {data.map((day, index) => (
+          <div key={index} className={clsx({ weekend: isWeekend(day.date), today: index===0})}>
+            <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
+          </div>
+        ))}
 
-      {/* Second row: Full day events */}
-      {data.map((day, index) => (
-        <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: index===0})}>
-          {day.allDay.map((event, index) => (
-            <div key={index} className={'allDayEvent'}>
-              {event.icon && <Icon path={event.icon} size={'1rem'} color='#ffffff'/>}
-              {event.summary}
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {/* Third row: Events */}
-      {data.map((day, index) => (
-        <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: index===0})}>
-          {day.events.map((event, index) => (
-            <div key={index} className={'event'}>
-              <h3>
+        {/* Second row: Full day events */}
+        {data.map((day, index) => (
+          <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: index===0})}>
+            {day.allDay.map((event, index) => (
+              <div key={index} className={'allDayEvent'}>
                 {event.icon && <Icon path={event.icon} size={'1rem'} color='#ffffff'/>}
-                {formatDateTime(event.start.dateTime)} - {formatDateTime(event.end.dateTime)}
-              </h3>
-              <div>
                 {event.summary}
               </div>
-            </div>
-          ))}
-        </div>
-      ))}
-    </Div>
+            ))}
+          </div>
+        ))}
+
+        {/* Third row: Events */}
+        {data.map((day, index) => (
+          <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: index===0})}>
+            {day.events.map((event, index) => (
+              <div key={index} className={'event'}>
+                <h3>
+                  {event.icon && <Icon path={event.icon} size={'1rem'} color='#ffffff'/>}
+                  {formatDateTime(event.start.dateTime)} - {formatDateTime(event.end.dateTime)}
+                </h3>
+                <div>
+                  {event.summary}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </Div>
+    </div>
   )
 }
 

@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import { WiDaySunny } from 'weather-icons-react'
+import Weather from './weather'
 
 const Div = styled.div`
   padding: 0 24px;
@@ -13,11 +13,6 @@ const Div = styled.div`
     font-weight: 400;
   }
   
-  .weather {
-    display: flex;
-    align-items: center;
-  }
-  
   .hvv {
     svg {
       height: 32px;
@@ -26,13 +21,10 @@ const Div = styled.div`
   }
 `
 
-const Sidebar = () => {
+const Sidebar = ({ toggleLoading }) => {
   return (
     <Div>
-      <div className={'weather'}>
-        <WiDaySunny size={60} color={'#ffffff'} />
-        <h2>6° C / 12° C</h2>
-      </div>
+      <Weather toggleLoading={toggleLoading} />
       <div className={'hvv'}>
         <svg xmlns="http://www.w3.org/2000/svg" width="226.2" height="68.3" viewBox="0 0 226.2 68.3">
           <g transform="translate(10368 -6294)">
@@ -43,7 +35,7 @@ const Sidebar = () => {
         <div>Nächste Abfahrten:</div>
       </div>
       <div className={'states'}>
-        <h2>Status</h2>
+        <strong>Status</strong>
       </div>
     </Div>
   )
