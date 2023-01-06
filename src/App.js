@@ -9,7 +9,7 @@ const GlobalStyle = createGlobalStyle`
   body {
     margin: 0;
     padding: 0;
-    font-family: Open-Sans, Helvetica, sans-serif;
+    font-family: Lato, Helvetica, sans-serif;
     background-color: #1c1c1c;
     color: #ffffff;
   }
@@ -19,11 +19,15 @@ const Div = styled.div`
   padding: 0 12px;
 `
 
+// TODO: Check start date not today
+// TODO: Commit build
+// TODO: Keyboard navigation
+// TODO: Sidebar
 function App() {
 
   const [ startDate, setStartDate ] = React.useState(DateTime.now())
   const [ isLoading, toggleLoading ] = React.useState(false)
-  const data = useCalendarData(startDate, toggleLoading)
+  const data = useCalendarData(startDate, setStartDate, toggleLoading)
 
   return (
     <Div>

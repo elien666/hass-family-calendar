@@ -70,7 +70,7 @@ const Div = styled.div`
   }
 
   .weekend {
-    background-color: #414141;
+    background-color: #363636;
   }
 
   .today h2 {

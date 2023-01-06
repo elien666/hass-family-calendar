@@ -81,7 +81,7 @@ const loadAll = (startDate, data, setData, toggleLoading) => {
   }
 }
 
-const useCalendarData = (startDate, toggleLoading) => {
+const useCalendarData = (startDate, setStartDate, toggleLoading) => {
   const [ data, setData ] = React.useState([])
   const timeout = useTimeout()
 
