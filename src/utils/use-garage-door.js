@@ -14,7 +14,7 @@ const url = `http://homeassistant.local:8123/api/states/${ENTITTY_ID}`
 
 const useGarageDoor = () => {
 
-  const [ state, setState ] = React.useState('Ich weeeß es nicht')
+  const [ state, setState ] = React.useState('closed')
 
   React.useEffect(() => {
     axios(url)
