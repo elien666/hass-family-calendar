@@ -39,8 +39,8 @@ const Div = styled.div`
 
 const Header = ({ startDate, setStartDate, isLoading }) => {
 
-  const nextWeek = () => setStartDate((date) => date.minus({ days: 7 }))
-  const previousWeek = () => setStartDate((date) => date.plus({ days: 7 }))
+  const nextWeek = () => setStartDate((date) => date.plus({ days: 7 }))
+  const previousWeek = () => setStartDate((date) => date.minus({ days: 7 }))
 
   const keyPrevious = useKeyPress('ArrowLeft')
   const keyNext = useKeyPress('ArrowRight')
