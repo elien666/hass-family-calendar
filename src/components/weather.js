@@ -1,6 +1,10 @@
 import styled from 'styled-components'
 import useWeatherData, { weatherIconToPresentation } from '../utils/use-weather-data'
 import { DateTime } from 'luxon'
+import useKeyPress from '../utils/use-key-press'
+import React from 'react'
+import Overlay from './overlay'
+import merryTimeline from 'merry-timeline'
 
 const Div = styled.div`
 
@@ -16,7 +20,7 @@ const Div = styled.div`
       font-size: 50px;
       
       span {
-        font-size: 16px;
+        font-size: 36px;
         margin-left: 1rem;
       }
     }
@@ -58,17 +62,49 @@ const Div = styled.div`
       font-size: 1rem;
     }
   }
+  
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    
+    > div:nth-child(1) {
+      flex-grow: 1;
+    }
+    
+    .headline {
+      justify-content: flex-start;
+    }
+  }
 `
 
-const Forecast = ({ data }) => (
+const Forecast = ({ data, daily=false }) => (
   <div>
-    <div>{DateTime.fromSeconds(data.time).toLocaleString(DateTime.TIME_24_SIMPLE)}</div>
+    <div>
+      {!daily && DateTime.fromSeconds(data.time).toLocaleString(DateTime.TIME_24_SIMPLE)}
+      {daily && DateTime.fromSeconds(data.time).toFormat('d.M')}
+    </div>
     <div><Icon icon={data.icon}/></div>
-    <div><strong>{Math.round(data.temperature)}°</strong></div>
-    <div>{data.precipProbability * 100} %</div>
-    <div>{(data.precipAccumulation * 100).toFixed(1)} mm</div>
+    <div><strong>
+      {!daily && <>{Math.round(data.temperature)}°</>}
+      {daily && <>{Math.round(data.temperatureHigh)}° / {Math.round(data.temperatureLow)}°</>}
+    </strong></div>
+    <div>{Math.round(data.precipProbability * 100)} %</div>
+    <div>{(data.precipIntensity * 100).toFixed(1)} mm</div>
   </div>
 )
+
+const convertTo24hMerryTimeline = (data) => {
+  const result = data.hourly.data.slice(0,24).map((data) => (
+    {
+      'color': weatherIconToPresentation[ data.icon ].color,
+      'text': weatherIconToPresentation[ data.icon ].label,
+      'annotation': `${Math.round(data.temperature)}°`,
+      'time': data.time
+    }
+  ))
+  console.log(result)
+  return result
+}
 
 const Icon = ({ icon }) => {
   const presentation = weatherIconToPresentation[icon]
@@ -80,6 +116,24 @@ const Label = ({ icon }) => <div>{weatherIconToPresentation[icon].label}</div>
 const Weather = ({ toggleLoading }) => {
 
   const data = useWeatherData(toggleLoading)
+  const [ showWeather, toggle ] = React.useState(false)
+  const keyWeather = useKeyPress('w')
+  const merryWeatherNext24h = React.useRef()
+
+  React.useEffect(() => {
+
+    // Next 24 hours
+    if (!merryWeatherNext24h.current) return
+    const options = { timezone: "Europe/Berlin" };
+    merryTimeline(merryWeatherNext24h.current, convertTo24hMerryTimeline(data), options);
+
+  }, [merryWeatherNext24h, data])
+
+  // Toggle weather on keypress
+  React.useEffect(() => {
+    if (keyWeather) toggle(v => !v)
+  }, [keyWeather]) // Only fire when key is pressed
+
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) return ''
 
   return (
@@ -103,6 +157,41 @@ const Weather = ({ toggleLoading }) => {
           <Forecast key={index} data={data.hourly.data[i]} />
         ))}
       </div>
+      <Overlay visible={showWeather}>
+        <div className={'full-weather'}>
+          <h2>Wetter Vorhersage</h2>
+          <div className={'detail-header'}>
+            <div>
+              <div className={'headline'}>
+                <Icon icon={data.daily.data[0].icon}/>
+                <h2>
+                  {Math.round(data.daily.data[0].temperatureHigh)}° /
+                  <span>{Math.round(data.daily.data[0].temperatureLow)}°</span>
+                </h2>
+              </div>
+            </div>
+            <div className={'values'}>
+              <h3>{weatherIconToPresentation[data.daily.data[0].icon].label}</h3>
+              <div><span>Gefühlt:</span> {Math.round(data.daily.data[0].apparentTemperatureHigh)}° C</div>
+              <div><span>Luftfeuchtigkeit:</span> {Math.round(data.daily.data[0].humidity * 100)} %</div>
+              <div><span>Wind:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
+              <div><span>Bewölkung:</span> {data.daily.data[0].cloudCover * 100} %</div>
+              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 100} %</div>
+              <div><span>UV Index:</span> {data.daily.data[0].uvIndex}</div>
+              <div><span>Luftdruck:</span> {Math.round(data.daily.data[0].pressure)}</div>
+              <div><span>Windgeschwindigkeit:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
+            </div>
+          </div>
+          <h3>Die nächsten 24 Stunden</h3>
+          <div ref={merryWeatherNext24h}></div>
+          <h3>Die nächste Woche</h3>
+          <div className={'forecast'}>
+            {[1,2,3,4,5,6,7].map((i, index) => (
+              <Forecast key={index} data={data.daily.data[i]} daily />
+            ))}
+          </div>
+        </div>
+      </Overlay>
     </Div>
   )
 }
