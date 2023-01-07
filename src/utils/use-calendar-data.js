@@ -86,7 +86,13 @@ const useCalendarData = (startDate, setStartDate, toggleLoading) => {
   const timeout = useTimeout()
 
   React.useEffect(() => {
-    loadAll(startDate, data, setData, toggleLoading)
+    // If today is visible but not the first column, start week with today
+    const today = DateTime.now()
+    if (!startDate.hasSame(today, 'day') && startDate < today && today <= startDate.plus({ days: 6})) {
+      setStartDate(today)
+    } else {
+      loadAll(startDate, data, setData, toggleLoading)
+    }
   // eslint-disable-next-line
   }, [startDate, timeout, setData])
 

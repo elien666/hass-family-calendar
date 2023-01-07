@@ -3,7 +3,6 @@ import Icon from '@mdi/react'
 import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
 import styled from 'styled-components'
 import clsx from 'clsx'
-import useKeyPress from '../utils/use-Key-press'
 import Clock from './clock'
 
 const Div = styled.div`
@@ -31,29 +30,28 @@ const Div = styled.div`
     }
   }
 
-  .buttons svg {
-    cursor: pointer;
+  .buttons {
+    display: flex;
+    align-items: center;
+    
+    svg {
+      cursor: pointer;
+    }
+    
+    button {
+      cursor: pointer;
+      background-color: transparent;
+      padding: 6px 12px;
+      border-radius: 4px;
+      color: #ffffff;
+      border: solid 1px #a1a0a0;
+      margin-left: 1rem;
+    }
   }
 
 `
 
-const Header = ({ startDate, setStartDate, isLoading }) => {
-
-  const nextWeek = () => setStartDate((date) => date.plus({ days: 7 }))
-  const previousWeek = () => setStartDate((date) => date.minus({ days: 7 }))
-
-  const keyPrevious = useKeyPress('ArrowLeft')
-  const keyNext = useKeyPress('ArrowRight')
-
-  React.useEffect(() => {
-    if (keyPrevious) previousWeek()
-    // eslint-disable-next-line
-  }, [keyPrevious]) // Only fire when relevant key press changes
-
-  React.useEffect(() => {
-    if (keyNext) nextWeek()
-    // eslint-disable-next-line
-  }, [keyNext]) // Only fire when relevant key press changes
+const Header = ({ isLoading, nextWeek, previousWeek, startWeekWithToday }) => {
 
   return (
     <Div>
@@ -67,6 +65,7 @@ const Header = ({ startDate, setStartDate, isLoading }) => {
               size={'32px'}
               color='#ffffff'
               onClick={previousWeek}/>
+        <button onClick={startWeekWithToday}>Today</button>
       </div>
 
       <Clock />

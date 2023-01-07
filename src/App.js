@@ -4,6 +4,7 @@ import styled, { createGlobalStyle } from 'styled-components'
 import useCalendarData from './utils/use-calendar-data'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
+import useShortcuts from './utils/use-shortcuts'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -18,7 +19,7 @@ const GlobalStyle = createGlobalStyle`
 const Div = styled.div`
   padding: 0 12px;
   overflow: hidden;
-  
+
   .main {
     display: grid;
     grid-template-columns: 80% 1fr;
@@ -26,23 +27,23 @@ const Div = styled.div`
   }
 `
 
-// TODO: Check start date not today
-// TODO: Sidebar
 function App() {
 
   const [ startDate, setStartDate ] = React.useState(DateTime.now())
   const [ isLoading, toggleLoading ] = React.useState(false)
   const calendarData = useCalendarData(startDate, setStartDate, toggleLoading)
+  const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
 
   return (
     <Div>
-      <GlobalStyle />
+      <GlobalStyle/>
       <div className={'main'}>
-        <Week data={calendarData} startDate={startDate} setStartDate={setStartDate} isLoading={isLoading}/>
+        <Week data={calendarData} nextWeek={nextWeek} previousWeek={previousWeek}
+              startWeekWithToday={startWeekWithToday} isLoading={isLoading}/>
         <Sidebar toggleLoading={toggleLoading}/>
       </div>
     </Div>
-  );
+  )
 }
 
 export default App
