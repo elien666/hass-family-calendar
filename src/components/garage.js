@@ -66,7 +66,7 @@ const toPresentation = (state) => {
 
 const Status = ({ garageDoor, animate = false }) => (
   <StatusDiv className={clsx({ animate: animate })}>
-    <Icon path={toPresentation(garageDoor).icon} size={'3rem'} color='#ffffff'/>
+    <Icon path={toPresentation(garageDoor).icon} size={'2rem'} color='#ffffff'/>
     <span>{toPresentation(garageDoor).label}</span>
   </StatusDiv>
 )
