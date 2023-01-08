@@ -1,0 +1,9 @@
+# "/usr/lib/systemd/system/keydaemon.unit"
+[Unit]
+Description=HDMI On/Off Shortcut Daemon
+
+[Service]
+ExecStart=/home/elien/hdmi-on-off-shortcut.py
+
+[Install]
+WantedBy=multi-user.target
