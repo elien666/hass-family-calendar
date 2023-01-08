@@ -92,7 +92,7 @@ const Forecast = ({ data, daily=false }) => (
   <div>
     <div>
       {!daily && DateTime.fromSeconds(data.time).toLocaleString(DateTime.TIME_24_SIMPLE)}
-      {daily && DateTime.fromSeconds(data.time).toFormat('d.M')}
+      {daily && DateTime.fromSeconds(data.time).setLocale('de').toFormat('ccc, d.M')}
     </div>
     <div><Icon icon={data.icon}/></div>
     <div><strong>
