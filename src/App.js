@@ -5,6 +5,8 @@ import useCalendarData from './utils/use-calendar-data'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
 import useShortcuts from './utils/use-shortcuts'
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -42,6 +44,7 @@ function App() {
               startWeekWithToday={startWeekWithToday} isLoading={isLoading}/>
         <Sidebar toggleLoading={toggleLoading}/>
       </div>
+    <ToastContainer />
     </Div>
   )
 }

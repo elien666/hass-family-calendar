@@ -54,4 +54,10 @@ const useGarageDoor = () => {
 
 }
 
+export const toggleGarageDoor = () => {
+  axios.post('http://homeassistant.local:8123/api/services/cover/toggle', {
+    entity_id: 'cover.00241d89947150'
+  })
+}
+
 export default useGarageDoor

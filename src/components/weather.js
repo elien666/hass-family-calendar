@@ -102,7 +102,6 @@ const convertTo24hMerryTimeline = (data) => {
       'time': data.time
     }
   ))
-  console.log(result)
   return result
 }
 
