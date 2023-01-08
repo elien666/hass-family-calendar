@@ -1,0 +1,2 @@
+45 23 * * * /home/elien/hdmi-off.sh
+30  7 * * * /home/elien/hdmi-on.sh
