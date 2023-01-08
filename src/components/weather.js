@@ -5,6 +5,12 @@ import useKeyPress from '../utils/use-key-press'
 import React from 'react'
 import Overlay from './overlay'
 import merryTimeline from 'merry-timeline'
+import TimeAgo from 'timeago-react'
+import * as timeago from 'timeago.js'
+import de from 'timeago.js/lib/lang/de'
+
+// register it.
+timeago.register('de', de);
 
 const Div = styled.div`
 
@@ -74,6 +80,11 @@ const Div = styled.div`
     .headline {
       justify-content: flex-start;
     }
+  }
+  
+  .info {
+    margin-top: .5rem;
+    font-size: .8rem;
   }
 `
 
@@ -188,6 +199,9 @@ const Weather = ({ toggleLoading }) => {
             {[1,2,3,4,5,6,7].map((i, index) => (
               <Forecast key={index} data={data.daily.data[i]} daily />
             ))}
+          </div>
+          <div className={'info'}>
+            Aktualisiert <TimeAgo datetime={DateTime.fromSeconds(data.currently.time).toJSDate()} locale={'de'} />
           </div>
         </div>
       </Overlay>
