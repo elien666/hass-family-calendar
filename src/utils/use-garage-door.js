@@ -54,7 +54,9 @@ const useGarageDoor = () => {
 
 }
 
-export const toggleGarageDoor = () => {
+export const toggleGarageDoor = (isLoading) => {
+  isLoading(true)
+  setInterval(() => isLoading(false), 3000)
   axios.post('http://homeassistant.local:8123/api/services/cover/toggle', {
     entity_id: 'cover.00241d89947150'
   })

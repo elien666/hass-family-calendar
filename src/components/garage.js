@@ -101,7 +101,6 @@ const Garage = () => {
         const promise = new Promise((resolve) => {
           setGarageInMotion({ resolve })
         })
-        setAnimate(false)
         showToast(promise)
       }
     } else if (garageInMotion) {
@@ -116,8 +115,7 @@ const Garage = () => {
   React.useEffect(() => {
     if (keyGarage) {
       // Send toggle action to Home Assistant
-      setAnimate(true)
-      toggleGarageDoor()
+      toggleGarageDoor(setAnimate)
     }
   }, [keyGarage]) // Only fire when key is pressed
 
