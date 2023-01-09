@@ -36,10 +36,11 @@ const Div = styled.div`
   }
 `
 
-const Sidebar = ({ toggleLoading }) => {
+const Sidebar = () => {
+  console.log('Rendering Sidebar')
   return (
     <Div>
-      <Weather toggleLoading={toggleLoading} />
+      <Weather />
       <Hvv />
       <div className={'two-cols'}>
         <Garage />

@@ -1,10 +1,7 @@
 import React from 'react'
-import { DateTime } from 'luxon'
 import styled, { createGlobalStyle } from 'styled-components'
-import useCalendarData from './utils/use-calendar-data'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
-import useShortcuts from './utils/use-shortcuts'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
@@ -31,18 +28,14 @@ const Div = styled.div`
 
 function App() {
 
-  const [ startDate, setStartDate ] = React.useState(DateTime.now())
-  const [ isLoading, toggleLoading ] = React.useState(false)
-  const calendarData = useCalendarData(startDate, setStartDate, toggleLoading)
-  const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
+  //const [ isLoading, toggleLoading ] = React.useState(false)
 
   return (
     <Div>
       <GlobalStyle/>
       <div className={'main'}>
-        <Week data={calendarData} nextWeek={nextWeek} previousWeek={previousWeek}
-              startWeekWithToday={startWeekWithToday} isLoading={isLoading}/>
-        <Sidebar toggleLoading={toggleLoading}/>
+        <Week />
+        <Sidebar />
       </div>
     <ToastContainer />
     </Div>

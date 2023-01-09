@@ -23,12 +23,12 @@ export const weatherIconToPresentation = {
 const url = () => `/forecast/${API_KEY}/${LATITUDE},${LONGITUDE}?&units=si&exclude=minutely`
 
 const useWeatherData = (toggleLoading) => {
-  const [ data, setData ] = React.useState(null)
-  const timer = useTimeout(60 * 60 * 1000) // 1 hour in ms
+  const [ data, setData ] = React.useState([])
+  const timer = useTimeout(60000 * 10, 'Weather') // 1 hour in ms
 
   React.useEffect(() => {
 
-    toggleLoading(true)
+    if(toggleLoading) toggleLoading(true)
 
     axios(url())
       .then((response) => {
@@ -37,7 +37,7 @@ const useWeatherData = (toggleLoading) => {
       .catch((err) => {
         console.log('Could not load weather data', err)
       })
-      .finally(() => toggleLoading(false))
+      .finally(() => { if(toggleLoading) toggleLoading(false) })
 
   }, [ timer, toggleLoading ])
 

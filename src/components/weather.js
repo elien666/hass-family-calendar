@@ -123,19 +123,21 @@ const Icon = ({ icon }) => {
 
 const Label = ({ icon }) => <div>{weatherIconToPresentation[icon].label}</div>
 
-const Weather = ({ toggleLoading }) => {
+const Weather = () => {
 
-  const data = useWeatherData(toggleLoading)
+  const data = useWeatherData()
   const [ showWeather, toggle ] = React.useState(false)
   const keyWeather = useKeyPress('w')
   const merryWeatherNext24h = React.useRef()
 
   React.useEffect(() => {
-
     // Next 24 hours
     if (!merryWeatherNext24h.current) return
     const options = { timezone: "Europe/Berlin" };
-    merryTimeline(merryWeatherNext24h.current, convertTo24hMerryTimeline(data), options);
+    const timeLine = document.createElement('div')
+    merryWeatherNext24h.current.textContent = ''
+    merryWeatherNext24h.current.appendChild(timeLine)
+    merryTimeline(timeLine, convertTo24hMerryTimeline(data), options);
 
   }, [merryWeatherNext24h, data])
 
@@ -158,9 +160,12 @@ const Weather = ({ toggleLoading }) => {
         <div><span>Luftfeuchtigkeit:</span> {data.currently.humidity * 100}%</div>
         <div><span>Wind:</span> {Math.round(data.currently.windSpeed)} km/h</div>
         <div><span>Bewölkung:</span> {data.currently.cloudCover * 100} %</div>
-        <div><span>Regen:</span> {data.currently.precipProbability * 100} %</div>
+        <div><span>Regen:</span> {data.currently.precipProbability * 1000} %</div>
         <div><span>Sonnenaufgang:</span> {DateTime.fromSeconds(data.daily.data[0].sunriseTime).toLocaleString(DateTime.TIME_24_SIMPLE)}</div>
         <div><span>Sonnenuntergang:</span> {DateTime.fromSeconds(data.daily.data[0].sunsetTime).toLocaleString(DateTime.TIME_24_SIMPLE)}</div>
+        <div className={'info'}>
+          Aktualisiert <TimeAgo datetime={DateTime.fromSeconds(data.currently.time).toJSDate()} locale={'de'} />
+        </div>
       </div>
       <div className={'forecast'}>
         {[3,6,9,12].map((i, index) => (
@@ -186,14 +191,14 @@ const Weather = ({ toggleLoading }) => {
               <div><span>Luftfeuchtigkeit:</span> {Math.round(data.daily.data[0].humidity * 100)} %</div>
               <div><span>Wind:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
               <div><span>Bewölkung:</span> {data.daily.data[0].cloudCover * 100} %</div>
-              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 100} %</div>
+              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 1000} %</div>
               <div><span>UV Index:</span> {data.daily.data[0].uvIndex}</div>
               <div><span>Luftdruck:</span> {Math.round(data.daily.data[0].pressure)}</div>
               <div><span>Windgeschwindigkeit:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
             </div>
           </div>
           <h3>Die nächsten 24 Stunden</h3>
-          <div ref={merryWeatherNext24h}></div>
+          <div ref={merryWeatherNext24h}/>
           <h3>Die nächste Woche</h3>
           <div className={'forecast'}>
             {[1,2,3,4,5,6,7].map((i, index) => (

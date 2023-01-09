@@ -17,7 +17,6 @@ const calendars = [
   { name: 'calendar.blaue_tonne', icon: mdiDelete },
   { name: 'calendar.schwarze_tonne', icon: mdiDelete },
   { name: 'calendar.familiengeburtstage', icon: mdiCake },
-  { name: 'calendar.birthdays', icon: mdiCake },
 ]
 
 const loadCalendarInto = (calendar, start, end, data) => (
@@ -81,9 +80,9 @@ const loadAll = (startDate, data, setData, toggleLoading) => {
   }
 }
 
-const useCalendarData = (startDate, setStartDate, toggleLoading) => {
+const useCalendarData = (startDate, setStartDate) => {
   const [ data, setData ] = React.useState([])
-  const timeout = useTimeout()
+  const timeout = useTimeout(60000, 'Calendar')
 
   React.useEffect(() => {
     // If today is visible but not the first column, start week with today
@@ -91,7 +90,7 @@ const useCalendarData = (startDate, setStartDate, toggleLoading) => {
     if (!startDate.hasSame(today, 'day') && startDate < today && today <= startDate.plus({ days: 6})) {
       setStartDate(today)
     } else {
-      loadAll(startDate, data, setData, toggleLoading)
+      loadAll(startDate, data, setData, () => { return })
     }
   // eslint-disable-next-line
   }, [startDate, timeout, setData])

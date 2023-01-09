@@ -51,7 +51,7 @@ const Div = styled.div`
 
 `
 
-const Header = ({ isLoading, nextWeek, previousWeek, startWeekWithToday }) => {
+const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
 
   return (
     <Div>
@@ -72,7 +72,7 @@ const Header = ({ isLoading, nextWeek, previousWeek, startWeekWithToday }) => {
 
       <Icon path={mdiLoading}
             size={'32px'}
-            color='#ffffff' className={clsx( 'indicator', { isLoading })}/>
+            color='#ffffff' className={clsx( 'indicator' )}/>
 
     </Div>
   )

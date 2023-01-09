@@ -4,6 +4,8 @@ import styled from 'styled-components'
 import clsx from 'clsx'
 import Header from './header'
 import React from 'react'
+import useCalendarData from '../utils/use-calendar-data'
+import useShortcuts from '../utils/use-shortcuts'
 
 const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
 
@@ -91,10 +93,15 @@ const Div = styled.div`
   }
 `
 
-const Week = ({ data, isLoading, nextWeek, previousWeek, startWeekWithToday }) => {
+const Week = () => {
+
+  const [ startDate, setStartDate ] = React.useState(DateTime.now())
+  const data = useCalendarData(startDate, setStartDate)
+  const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
+
   return (
     <Div>
-      <Header isLoading={isLoading} nextWeek={nextWeek} previousWeek={previousWeek}
+      <Header nextWeek={nextWeek} previousWeek={previousWeek}
               startWeekWithToday={startWeekWithToday}/>
       <div className={'schedule'}>
 
