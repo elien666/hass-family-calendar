@@ -1,6 +1,8 @@
+import React from 'react'
 import styled from 'styled-components'
 import { DateTime } from 'luxon'
 import clsx from 'clsx'
+import useHvv from '../utils/use-hvv'
 
 const Div = styled.div`
   margin-top: 2rem;
@@ -64,6 +66,9 @@ const Departure = ({ line, direction, time, offset }) => (
 )
 
 const Hvv = () => {
+
+  useHvv()
+
   return (
     <Div>
       <svg xmlns="http://www.w3.org/2000/svg" width="226.2" height="68.3" viewBox="0 0 226.2 68.3">

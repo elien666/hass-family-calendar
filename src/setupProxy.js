@@ -1,4 +1,4 @@
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const { createProxyMiddleware } = require('http-proxy-middleware')
 
 module.exports = function(app) {
   app.use(
@@ -7,5 +7,12 @@ module.exports = function(app) {
       target: 'https://api.pirateweather.net',
       changeOrigin: true,
     })
-  );
-};
+  )
+    .use(
+      '/gti',
+      createProxyMiddleware({
+        target: 'http://gti.geofox.de',
+        changeOrigin: true,
+      })
+    )
+}
