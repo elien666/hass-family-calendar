@@ -1,0 +1,128 @@
+[
+  {
+    "line": {
+      "name": "10",
+      "direction": "Glatzer Straße",
+      "origin": "U Wandsbek Markt",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Metrobus",
+        "model": "Niederflur Metrobus"
+      },
+      "id": "HHA-B:10_HHA-B"
+    },
+    "directionId": 1,
+    "timeOffset": 1,
+    "serviceId": 101156,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "162",
+      "direction": "U Wandsbek Markt",
+      "origin": "Bf. Rahlstedt (Amtsstraße)",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Stadtbus",
+        "model": "Niederflur Stadtbus"
+      },
+      "id": "HHA-B:162_HHA-B"
+    },
+    "directionId": 6,
+    "timeOffset": 3,
+    "serviceId": 52024,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "263",
+      "direction": "Großlohe",
+      "origin": "U Wandsbek Markt",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Stadtbus",
+        "model": "Niederflur Stadtbus"
+      },
+      "id": "HHA-B:263_HHA-B"
+    },
+    "directionId": 1,
+    "timeOffset": 6,
+    "serviceId": 78733,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "10",
+      "direction": "U Wandsbek Markt",
+      "origin": "Glatzer Straße",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Metrobus",
+        "model": "Niederflur Metrobus"
+      },
+      "id": "HHA-B:10_HHA-B"
+    },
+    "directionId": 6,
+    "timeOffset": 8,
+    "serviceId": 100907,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "10",
+      "direction": "Glatzer Straße",
+      "origin": "U Wandsbek Markt",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Metrobus",
+        "model": "Niederflur Metrobus"
+      },
+      "id": "HHA-B:10_HHA-B"
+    },
+    "directionId": 1,
+    "timeOffset": 11,
+    "serviceId": 101159,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "263",
+      "direction": "U Wandsbek Markt",
+      "origin": "Großlohe",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Stadtbus",
+        "model": "Niederflur Stadtbus"
+      },
+      "id": "HHA-B:263_HHA-B"
+    },
+    "directionId": 6,
+    "timeOffset": 13,
+    "serviceId": 78712,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  }
+]

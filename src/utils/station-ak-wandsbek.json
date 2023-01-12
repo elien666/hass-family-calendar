@@ -1,0 +1,10 @@
+{
+  "name": "AK Wandsbek",
+  "city": "Hamburg",
+  "id": "Master:62016",
+  "type": "STATION",
+  "coordinate": {
+    "x": 10.091341,
+    "y": 53.568702
+  }
+}

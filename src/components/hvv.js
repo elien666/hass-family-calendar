@@ -67,7 +67,9 @@ const Departure = ({ line, direction, time, offset }) => (
 
 const Hvv = () => {
 
-  useHvv()
+  const data = useHvv('departureList')
+
+  console.log(data)
 
   return (
     <Div>
