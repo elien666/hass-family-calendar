@@ -104,8 +104,8 @@ const Forecast = ({ data, daily=false }) => (
   </div>
 )
 
-const convertTo24hMerryTimeline = (data) => {
-  const result = data.hourly.data.slice(0,24).map((data) => (
+const convertTo24hMerryTimeline = (data) => (
+  data.hourly.data.slice(0,24).map((data) => (
     {
       'color': weatherIconToPresentation[ data.icon ].color,
       'text': weatherIconToPresentation[ data.icon ].label,
@@ -113,8 +113,7 @@ const convertTo24hMerryTimeline = (data) => {
       'time': data.time
     }
   ))
-  return result
-}
+)
 
 const Icon = ({ icon }) => {
   const presentation = weatherIconToPresentation[icon]
@@ -163,9 +162,6 @@ const Weather = () => {
         <div><span>Regen:</span> {data.currently.precipProbability * 1000} %</div>
         <div><span>Sonnenaufgang:</span> {DateTime.fromSeconds(data.daily.data[0].sunriseTime).toLocaleString(DateTime.TIME_24_SIMPLE)}</div>
         <div><span>Sonnenuntergang:</span> {DateTime.fromSeconds(data.daily.data[0].sunsetTime).toLocaleString(DateTime.TIME_24_SIMPLE)}</div>
-        <div className={'info'}>
-          Aktualisiert <TimeAgo datetime={DateTime.fromSeconds(data.currently.time).toJSDate()} locale={'de'} />
-        </div>
       </div>
       <div className={'forecast'}>
         {[3,6,9,12].map((i, index) => (
