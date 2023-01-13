@@ -62,7 +62,7 @@ const useHvv = (endPoint) => {
         const now = DateTime.now()
         data = { ...data,
           station: akWandsbek,
-          time: { date: now.toFormat('dd.MM.YYYY'), time: now.toFormat('hh:mm') },
+          time: { date: now.toFormat('dd.MM.yyyy'), time: now.toFormat('HH:mm') },
           maxList: 6,
           maxTimeOffset: 60,
           useRealtime: true
