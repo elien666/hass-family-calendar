@@ -1,27 +1,6 @@
 [
   {
     "line": {
-      "name": "10",
-      "direction": "Glatzer Straße",
-      "origin": "U Wandsbek Markt",
-      "type": {
-        "simpleType": "BUS",
-        "shortInfo": "Bus",
-        "longInfo": "Niederflur Metrobus",
-        "model": "Niederflur Metrobus"
-      },
-      "id": "HHA-B:10_HHA-B"
-    },
-    "directionId": 1,
-    "timeOffset": 1,
-    "serviceId": 101156,
-    "station": {
-      "combinedName": "AK Wandsbek",
-      "id": "Master:62016"
-    }
-  },
-  {
-    "line": {
       "name": "162",
       "direction": "U Wandsbek Markt",
       "origin": "Bf. Rahlstedt (Amtsstraße)",
@@ -34,7 +13,7 @@
       "id": "HHA-B:162_HHA-B"
     },
     "directionId": 6,
-    "timeOffset": 3,
+    "timeOffset": 0,
     "serviceId": 52024,
     "station": {
       "combinedName": "AK Wandsbek",
@@ -55,7 +34,7 @@
       "id": "HHA-B:263_HHA-B"
     },
     "directionId": 1,
-    "timeOffset": 6,
+    "timeOffset": 3,
     "serviceId": 78733,
     "station": {
       "combinedName": "AK Wandsbek",
@@ -76,7 +55,7 @@
       "id": "HHA-B:10_HHA-B"
     },
     "directionId": 6,
-    "timeOffset": 8,
+    "timeOffset": 5,
     "serviceId": 100907,
     "station": {
       "combinedName": "AK Wandsbek",
@@ -97,7 +76,7 @@
       "id": "HHA-B:10_HHA-B"
     },
     "directionId": 1,
-    "timeOffset": 11,
+    "timeOffset": 8,
     "serviceId": 101159,
     "station": {
       "combinedName": "AK Wandsbek",
@@ -118,8 +97,29 @@
       "id": "HHA-B:263_HHA-B"
     },
     "directionId": 6,
-    "timeOffset": 13,
+    "timeOffset": 10,
     "serviceId": 78712,
+    "station": {
+      "combinedName": "AK Wandsbek",
+      "id": "Master:62016"
+    }
+  },
+  {
+    "line": {
+      "name": "162",
+      "direction": "Bf. Rahlstedt (Amtsstraße)",
+      "origin": "U Wandsbek Markt",
+      "type": {
+        "simpleType": "BUS",
+        "shortInfo": "Bus",
+        "longInfo": "Niederflur Stadtbus",
+        "model": "Niederflur Stadtbus"
+      },
+      "id": "HHA-B:162_HHA-B"
+    },
+    "directionId": 1,
+    "timeOffset": 13,
+    "serviceId": 52161,
     "station": {
       "combinedName": "AK Wandsbek",
       "id": "Master:62016"

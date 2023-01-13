@@ -1,7 +1,5 @@
 import React from 'react'
 import styled from 'styled-components'
-import { DateTime } from 'luxon'
-import clsx from 'clsx'
 import useHvv from '../utils/use-hvv'
 
 const Div = styled.div`
@@ -53,23 +51,23 @@ const Div = styled.div`
   }
 `
 
-const Departure = ({ line, direction, time, offset }) => (
-  <div className={'departure'}>
-    <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
-    <div>{direction}</div>
-    <div>
-      {time.toLocaleString(DateTime.TIME_24_SIMPLE)}&nbsp;
-      {offset && <span className={clsx({ error: !offset.endsWith(0)})}>{offset}</span>}
-      {!offset && <span className={'invisible'}>+0</span>}
+const Departure = ({ line, direction, timeOffset, delay }) => {
+  const inMinutes = timeOffset + delay/60
+
+  return (
+    <div className={'departure'}>
+      <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
+      <div>{direction}</div>
+      <div>
+        {inMinutes === 0 ? 'Jetzt' : <>in {inMinutes} Minuten</>}
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 const Hvv = () => {
 
   const data = useHvv('departureList')
-
-  console.log(data)
 
   return (
     <Div>
@@ -80,10 +78,13 @@ const Hvv = () => {
         </g>
       </svg>
       <h3>AK Wandsbek</h3>
-      <Departure line={'10'} direction={'U Wandsbek Markt'} time={DateTime.fromSQL('21:45:00.000')} offset={'+1'} />
-      <Departure line={'162'} direction={'Bf. Rahlstedt (Amtsstraße)'} time={DateTime.fromSQL('21:48:00.000')} offset={'+0'} />
-      <Departure line={'263'} direction={'Willinghusen (Kehre)'} time={DateTime.fromSQL('21:48:00.000')} offset={'+1'} />
-      <Departure line={'263'} direction={'U Wandsbek Markt'} time={DateTime.fromSQL('21:54:00.000')} />
+      {data.to?.map((entry, index) => (
+        <Departure key={index} line={entry.line} direction={entry.direction} timeOffset={entry.timeOffset} delay={entry.delay} />
+      ))}
+      <div>&nbsp;</div>
+      {data.from?.map((entry, index) => (
+        <Departure key={index} line={entry.line} direction={entry.direction} timeOffset={entry.timeOffset} delay={entry.delay} />
+      ))}
     </Div>
   )
 }

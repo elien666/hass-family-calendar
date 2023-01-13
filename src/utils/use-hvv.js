@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo } from 'react'
+import React  from 'react'
 import createSignature from './create-signature'
 import axios from 'axios'
 import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
+import useTimeout from './use-timeout'
 
 const callApi = (endPoint, data) => (
   axios({
@@ -19,9 +20,27 @@ const callApi = (endPoint, data) => (
   })
 )
 
+const transformData = (data) => {
+  const mapped = data.departures.map((entry) => (
+    {
+      line: entry.line.name,
+      direction: entry.line.direction,
+      timeOffset: entry.timeOffset,
+      delay: entry.delay ? entry.delay : '0',
+      directionId: entry.directionId
+    }
+  ))
+
+  return {
+    from: mapped.filter((entry) => entry.directionId === 1),
+    to: mapped.filter((entry) => entry.directionId === 6)
+  }
+}
+
 const useHvv = (endPoint) => {
 
-  const [ responseData, set ] = React.useState({})
+  const [ responseData, set ] = React.useState([])
+  const timeout = useTimeout(60000) // 60 seconds
 
   React.useEffect(() => {
 
@@ -48,18 +67,26 @@ const useHvv = (endPoint) => {
           maxTimeOffset: 60,
           useRealtime: true
         }
+        break
+
+      default:
+        data = undefined
 
     }
 
     callApi(endPoint, data)
       .then((response) => {
-      set(response.data)
+        if (endPoint ==='departureList') {
+          set(transformData(response.data))
+        } else {
+          set(response.data)
+        }
     })
       .catch((error) => {
         console.log('Error calling Geofox API', error)
       })
 
-  }, [endPoint])
+  }, [endPoint, timeout])
 
   return responseData
 

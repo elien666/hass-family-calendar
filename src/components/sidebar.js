@@ -37,7 +37,6 @@ const Div = styled.div`
 `
 
 const Sidebar = () => {
-  console.log('Rendering Sidebar')
   return (
     <Div>
       <Weather />
