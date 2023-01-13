@@ -1,6 +1,6 @@
 import React from 'react'
 import styled from 'styled-components'
-import useHvv from '../utils/use-hvv'
+import useHvv, { SUPPORTED_CALLS } from '../utils/use-hvv'
 
 const Div = styled.div`
   margin-top: 2rem;
@@ -8,11 +8,10 @@ const Div = styled.div`
   svg {
     height: 32px;
     width: auto;
-    margin-bottom: 1rem;
   }
 
   h3 {
-    margin: 0 0 .5rem 0;
+    margin: 1rem 0 .5rem 0;
     padding: 0;
     font-size: 1rem;
     color: #a1a0a0;
@@ -20,7 +19,11 @@ const Div = styled.div`
 
   .departure {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    
+    img {
+      margin-top: 3px;
+    }
 
     > *:nth-child(1) {
       height: 14px;
@@ -51,23 +54,19 @@ const Div = styled.div`
   }
 `
 
-const Departure = ({ line, direction, timeOffset, delay }) => {
-  const inMinutes = timeOffset + delay/60
-
-  return (
+const Departure = ({ line, direction, realtimeOffset }) => (
     <div className={'departure'}>
       <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
       <div>{direction}</div>
       <div>
-        {inMinutes === 0 ? 'Jetzt' : <>in {inMinutes} Minuten</>}
+        {realtimeOffset  === 0 ? 'Jetzt' : <>in {realtimeOffset} '</>}
       </div>
     </div>
   )
-}
 
 const Hvv = () => {
 
-  const data = useHvv('departureList')
+  const data = useHvv(SUPPORTED_CALLS.departureList)
 
   return (
     <Div>
@@ -77,13 +76,13 @@ const Hvv = () => {
           <path d="M0,0V11.7l16.4,7.4L0,26.1V37.8L29.5,23.1V15.5Z" transform="translate(-10368 6294)" fill="#00ff00"/>
         </g>
       </svg>
-      <h3>AK Wandsbek</h3>
+      <h3>AK Wandsbek → Wandsbek Markt</h3>
       {data.to?.map((entry, index) => (
-        <Departure key={index} line={entry.line} direction={entry.direction} timeOffset={entry.timeOffset} delay={entry.delay} />
+        <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
       ))}
-      <div>&nbsp;</div>
+      <h3>AK Wandsbek → Stadtauswärts</h3>
       {data.from?.map((entry, index) => (
-        <Departure key={index} line={entry.line} direction={entry.direction} timeOffset={entry.timeOffset} delay={entry.delay} />
+        <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
       ))}
     </Div>
   )

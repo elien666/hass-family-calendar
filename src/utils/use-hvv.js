@@ -5,6 +5,8 @@ import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
 
+export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
+
 const callApi = (endPoint, data) => (
   axios({
     method: 'post',
@@ -20,6 +22,8 @@ const callApi = (endPoint, data) => (
   })
 )
 
+const byRealtimeOffset = (a, b) => a.realtimeOffset - b.realtimeOffset
+
 const transformData = (data) => {
   const mapped = data.departures.map((entry) => (
     {
@@ -27,13 +31,14 @@ const transformData = (data) => {
       direction: entry.line.direction,
       timeOffset: entry.timeOffset,
       delay: entry.delay ? entry.delay : '0',
-      directionId: entry.directionId
+      directionId: entry.directionId,
+      realtimeOffset: entry.timeOffset + ((entry.delay ? entry.delay : 0)/60)
     }
   ))
 
   return {
-    from: mapped.filter((entry) => entry.directionId === 1),
-    to: mapped.filter((entry) => entry.directionId === 6)
+    from: mapped.filter((entry) => entry.directionId === 1).slice(0,3).sort(byRealtimeOffset),
+    to: mapped.filter((entry) => entry.directionId === 6).slice(0,3).sort(byRealtimeOffset)
   }
 }
 
@@ -44,11 +49,16 @@ const useHvv = (endPoint) => {
 
   React.useEffect(() => {
 
+    if(!(endPoint in SUPPORTED_CALLS)) {
+      console.log(endPoint, 'not supported by HVV connector')
+      return
+    }
+
     let data = { version: 51 }
 
     switch(endPoint) {
 
-      case 'checkName':
+      case SUPPORTED_CALLS.checkName:
         data = { ...data,
           theName: {
             name: 'AK Wandsbek',
@@ -58,13 +68,13 @@ const useHvv = (endPoint) => {
         }
         break
 
-      case 'departureList':
+      case SUPPORTED_CALLS.departureList:
         const now = DateTime.now()
         data = { ...data,
           station: akWandsbek,
           time: { date: now.toFormat('dd.MM.yyyy'), time: now.toFormat('HH:mm') },
-          maxList: 6,
-          maxTimeOffset: 60,
+          maxList: 20,
+          maxTimeOffset: 200,
           useRealtime: true
         }
         break
@@ -76,7 +86,7 @@ const useHvv = (endPoint) => {
 
     callApi(endPoint, data)
       .then((response) => {
-        if (endPoint ==='departureList') {
+        if (endPoint === SUPPORTED_CALLS.departureList) {
           set(transformData(response.data))
         } else {
           set(response.data)
