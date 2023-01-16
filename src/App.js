@@ -4,6 +4,7 @@ import Week from './components/week'
 import Sidebar from './components/sidebar'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
+import usePhysicalButtons from './utils/use-physical-buttons'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -28,14 +29,14 @@ const Div = styled.div`
 
 function App() {
 
-  //const [ isLoading, toggleLoading ] = React.useState(false)
+  const pin = usePhysicalButtons()
 
   return (
     <Div>
       <GlobalStyle/>
       <div className={'main'}>
         <Week />
-        <Sidebar />
+        <Sidebar pin={pin} />
       </div>
     <ToastContainer />
     </Div>
