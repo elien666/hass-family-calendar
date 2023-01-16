@@ -10,11 +10,14 @@ const usePhysicalButtons = () => {
 
     if (data.type === 'button') {
       set(data.pin)
+      // Reset PIN to 0 in 250 ms, if PIN has not changed in the meantime
+      setInterval(() => set((pin) => (
+        pin === data.pin ? 0 : pin
+      )), 250)
     } else {
       console.log('Got message from buttons server', data)
     }
   }
-
   const connect = () => {
     const socket = new WebSocket("ws://:5678/")
 

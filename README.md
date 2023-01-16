@@ -1,3 +1,13 @@
+# Family Calendar
+
+A magic mirror dashboard which can be used without a mirror:
+
+- Calendar
+- Weather
+- Garage Door
+- Washing machine status
+- HVV departures
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
