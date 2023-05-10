@@ -122,7 +122,7 @@ const Icon = ({ icon }) => {
 
 const Label = ({ icon }) => <div>{weatherIconToPresentation[icon].label}</div>
 
-const Weather = () => {
+const Weather = ({ pin }) => {
 
   const data = useWeatherData()
   const [ showWeather, toggle ] = React.useState(false)
@@ -142,8 +142,8 @@ const Weather = () => {
 
   // Toggle weather on keypress
   React.useEffect(() => {
-    if (keyWeather) toggle(v => !v)
-  }, [keyWeather]) // Only fire when key is pressed
+    if (keyWeather || pin === 17) toggle(v => !v)
+  }, [ keyWeather, pin ]) // Only fire when key or button is pressed
 
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) return ''
 
