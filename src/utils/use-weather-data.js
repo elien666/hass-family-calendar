@@ -3,7 +3,7 @@ import useTimeout from './use-timeout'
 import axios from 'axios'
 import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCloud, WiDayCloudy, WiNightPartlyCloudy } from 'weather-icons-react'
 
-const API_KEY = 'qMHi6qXYKU26CX2Ve3HUV7hq4ou61OI53WmgbtsW'
+const API_KEY = ''
 const LATITUDE = 53.570
 const LONGITUDE = 10.091
 

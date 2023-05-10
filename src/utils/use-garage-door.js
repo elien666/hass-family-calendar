@@ -4,13 +4,14 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
+import { HASS_HOST } from "./config";
 
 const ACCESS_TOKEN = ''
 const ENTITTY_ID = 'cover.00241d89947150'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
-const url = `http://homeassistant.local:8123/api/states/${ENTITTY_ID}`
+const url = `${HASS_HOST}/api/states/${ENTITTY_ID}`
 
 const useGarageDoor = () => {
 
@@ -26,7 +27,7 @@ const useGarageDoor = () => {
   React.useEffect(() => {
     (async () => {
       const auth = createLongLivedTokenAuth(
-        'http://homeassistant.local:8123',
+        HASS_HOST,
         ACCESS_TOKEN
       );
 
@@ -57,7 +58,7 @@ const useGarageDoor = () => {
 export const toggleGarageDoor = (isLoading) => {
   isLoading(true)
   setInterval(() => isLoading(false), 3000)
-  axios.post('http://homeassistant.local:8123/api/services/cover/toggle', {
+  axios.post(`${HASS_HOST}/api/services/cover/toggle`, {
     entity_id: 'cover.00241d89947150'
   })
 }

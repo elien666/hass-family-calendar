@@ -4,10 +4,11 @@ import axios from 'axios'
 import qs from 'qs'
 import { mdiDelete, mdiCake } from '@mdi/js'
 import useTimeout from './use-timeout'
+import { HASS_HOST } from "./config";
 
 axios.defaults.headers.common['Authorization'] = 'Bearer '
 
-const host = (name) => `http://homeassistant.local:8123/api/calendars/${name}`
+const host = (name) => `${HASS_HOST}/api/calendars/${name}`
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
 const calendars = [

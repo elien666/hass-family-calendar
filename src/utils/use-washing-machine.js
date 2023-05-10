@@ -4,13 +4,14 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
+import { HASS_HOST } from "./config";
 
 const ACCESS_TOKEN = ''
-const ENTITTY_ID = 'input_select.wasching_machine_status'
+const ENTITTY_ID = 'input_select.wasching_machine_neu_status'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
-const url = `http://homeassistant.local:8123/api/states/${ENTITTY_ID}`
+const url = `${HASS_HOST}/api/states/${ENTITTY_ID}`
 
 const useWashingMachine = () => {
 
@@ -26,7 +27,7 @@ const useWashingMachine = () => {
   React.useEffect(() => {
     (async () => {
       const auth = createLongLivedTokenAuth(
-        'http://homeassistant.local:8123',
+        HASS_HOST,
         ACCESS_TOKEN
       );
 
