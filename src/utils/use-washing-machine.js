@@ -7,20 +7,29 @@ import axios from 'axios'
 import { HASS_HOST } from "./config";
 
 const ACCESS_TOKEN = ''
-const ENTITTY_ID = 'input_select.wasching_machine_neu_status'
+const ENTITY_ID_NEU = 'input_select.wasching_machine_neu_status'
+const ENTITY_ID_ALT = 'input_select.washing_machine_alt_status'
+const ENTITY_ID_DRYER = 'input_select.dryer_status'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
-const url = `${HASS_HOST}/api/states/${ENTITTY_ID}`
+const url = `${HASS_HOST}/api/states/${ENTITY_ID_NEU}`
+
+const toPresentation = {
+  done: { label: 'Fertig', animate: false },
+  off: { label: 'Aus', animate: false },
+  standby: { label: 'Standby', animate: false },
+  running: { label: 'Läuft …', animate: true }
+}
 
 const useWashingMachine = () => {
 
-  const [ state, setState ] = React.useState('off')
+  const [ state, setState ] = React.useState(toPresentation['off'])
 
   React.useEffect(() => {
     axios(url)
       .then((response) => {
-        setState(response.data.state)
+        setState(toPresentation[response.data.state])
       })
   }, [])
 
@@ -34,7 +43,7 @@ const useWashingMachine = () => {
       const connection = await createConnection({ auth });
 
       const trigger = (result) => {
-        setState(result.variables.trigger.to_state.state)
+        setState(toPresentation[result.variables.trigger.to_state.state])
       }
 
       const unsubscribe = await connection.subscribeMessage(trigger, {
@@ -42,7 +51,7 @@ const useWashingMachine = () => {
         "trigger":
           {
             "platform": "state",
-            "entity_id": ENTITTY_ID,
+            "entity_id": ENTITY_ID_NEU,
           }
       })
 
