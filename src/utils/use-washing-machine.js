@@ -13,24 +13,81 @@ const ENTITY_ID_DRYER = 'input_select.dryer_status'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
-const url = `${HASS_HOST}/api/states/${ENTITY_ID_NEU}`
+const urlPattern = ( entity ) => `${HASS_HOST}/api/states/${entity}`
 
-const toPresentation = {
+const mapToPresentation = {
   done: { label: 'Fertig', animate: false },
   off: { label: 'Aus', animate: false },
   standby: { label: 'Standby', animate: false },
   running: { label: 'Läuft …', animate: true }
 }
 
-const useWashingMachine = () => {
+const mapToValue = {
+  off: 0,
+  standby: 2,
+  running: 16,
+  done: 256
+}
 
-  const [ state, setState ] = React.useState(toPresentation['off'])
+const useWashingMachine = () => {
+  const machineNew = useSubscription(ENTITY_ID_NEU)
+  const machineOld = useSubscription(ENTITY_ID_ALT)
+  const dryer = useSubscription(ENTITY_ID_DRYER)
+
+  const [ state, setState ] = React.useState(mapToPresentation['off'])
 
   React.useEffect(() => {
-    axios(url)
+    const sum = mapToValue[machineNew] + mapToValue[machineOld] + mapToValue[dryer]
+
+    // Sum === 0 -> All off
+    if (sum === 0) {
+      setState(mapToPresentation['off'])
+    }
+
+    // Sum > 0 < 16 -> at least one machine is in standby
+    else if (sum < 16) {
+      setState(mapToPresentation['standby'])
+    }
+
+    // Sum > 16 < 256 -> at least one machine is running
+    else if (sum < 256) {
+      setState(mapToPresentation['running'])
+    }
+
+    // Else if sum is divisible by 256 -> all machines are done or off
+    else if (sum % 256 === 0) {
+      setState(mapToPresentation['done'])
+    }
+
+    // Else if rest of sum mod 256 is divisible by 16 -> running
+    else if (sum % 256 % 16 === 0) {
+      setState(mapToPresentation['running'])
+    }
+
+    // Else if rest of mod of 256 is divisble by 2 -> machines are either done or standy -> done
+    else if (sum % 256 % 2 === 0) {
+      setState(mapToPresentation['done'])
+    }
+
+    // Else a mchine is done, one is standby and one is running -> running
+    else {
+      setState(mapToPresentation['running'])
+    }
+  }, [ machineOld, machineNew, dryer ])
+
+  return state
+}
+
+const useSubscription = ( entity ) => {
+
+  const [ state, setState ] = React.useState('off')
+
+  React.useEffect(() => {
+    axios(urlPattern(entity))
       .then((response) => {
-        setState(toPresentation[response.data.state])
+        setState(response.data.state)
       })
+  // eslint-disable-next-line
   }, [])
 
   React.useEffect(() => {
@@ -43,7 +100,7 @@ const useWashingMachine = () => {
       const connection = await createConnection({ auth });
 
       const trigger = (result) => {
-        setState(toPresentation[result.variables.trigger.to_state.state])
+        setState(result.variables.trigger.to_state.state)
       }
 
       const unsubscribe = await connection.subscribeMessage(trigger, {
@@ -51,13 +108,14 @@ const useWashingMachine = () => {
         "trigger":
           {
             "platform": "state",
-            "entity_id": ENTITY_ID_NEU,
+            "entity_id": entity,
           }
       })
 
       return (() => unsubscribe())
 
     })();
+  // eslint-disable-next-line
   }, [])
 
   return state
