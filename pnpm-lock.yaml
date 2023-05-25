@@ -2,8 +2,8 @@ lockfileVersion: '6.0'
 
 dependencies:
   '@mdi/js':
-    specifier: ^7.1.96
-    version: 7.1.96
+    specifier: ^7.2.96
+    version: 7.2.96
   '@mdi/react':
     specifier: ^1.6.1
     version: 1.6.1
@@ -17,8 +17,8 @@ dependencies:
     specifier: ^13.5.0
     version: 13.5.0(@testing-library/dom@9.3.0)
   axios:
-    specifier: ^1.2.2
-    version: 1.2.2
+    specifier: ^1.4.0
+    version: 1.4.0
   buffer:
     specifier: ^6.0.3
     version: 6.0.3
@@ -38,8 +38,8 @@ dependencies:
     specifier: ^2.0.6
     version: 2.0.6(@types/express@4.17.17)
   luxon:
-    specifier: ^3.2.0
-    version: 3.2.0
+    specifier: ^3.3.0
+    version: 3.3.0
   merry-timeline:
     specifier: ^0.5.0
     version: 0.5.0
@@ -2024,8 +2024,8 @@ packages:
     resolution: {integrity: sha512-Hcv+nVC0kZnQ3tD9GVu5xSMR4VVYOteQIr/hwFPVEvPdlXqgGEuRjiheChHgdM+JyqdgNcmzZOX/tnl0JOiI7A==}
     dev: false
 
-  /@mdi/js@7.1.96:
-    resolution: {integrity: sha512-wlrJs6Ryhaa5CqhK3FjTfMRnb/s7HeLkKMFqwQySkK86cdN1TGdzpSM3O4tsmzCA1dYBeTbXvOwSE/Y42cUrvA==}
+  /@mdi/js@7.2.96:
+    resolution: {integrity: sha512-paR9M9ZT7rKbh2boksNUynuSZMHhqRYnEZOm/KrZTjQ4/FzyhjLHuvw/8XYzP+E7fS4+/Ms/82EN1pl/OFsiIA==}
     dev: false
 
   /@mdi/react@1.6.1:
@@ -3247,8 +3247,8 @@ packages:
     engines: {node: '>=4'}
     dev: false
 
-  /axios@1.2.2:
-    resolution: {integrity: sha512-bz/J4gS2S3I7mpN/YZfGFTqhXTYzRho8Ay38w2otuuDR322KzFIWm/4W2K6gIwvWaws5n+mnb7D1lN9uD+QH6Q==}
+  /axios@1.4.0:
+    resolution: {integrity: sha512-S4XCWMEmzvo64T9GfvQDOXgYRDJ/wsSZc7Jvdgx5u1sd0JwsuPLqb3SYmusag+edF6ziyMensPVqLTSc1PiSEA==}
     dependencies:
       follow-redirects: 1.15.2
       form-data: 4.0.0
@@ -7256,8 +7256,8 @@ packages:
       yallist: 4.0.0
     dev: false
 
-  /luxon@3.2.0:
-    resolution: {integrity: sha512-Namj3XqoJjFekq/JHQEaaAv4zyE/fyyDBrMEBnIL2s/X54SC8W5Ea0uej1TRXUArWec8OojsAVsGBYhNRjpMVw==}
+  /luxon@3.3.0:
+    resolution: {integrity: sha512-An0UCfG/rSiqtAIiBPO0Y9/zAnHUZxAMiCpTd5h2smgsj7GGmcenvrvww2cqNA8/4A5ZrD1gJpHN2mIHZQF+Mg==}
     engines: {node: '>=12'}
     dev: false
 
