@@ -36,7 +36,7 @@ const usePhysicalButtons = () => {
 
   React.useEffect(() => {
     const socket = connect()
-    return () => { console.log('AA'); socket.close() }
+    return () => socket.close()
     // eslint-disable-next-line
   }, [])
 
