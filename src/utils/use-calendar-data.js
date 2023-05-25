@@ -72,9 +72,11 @@ const loadAll = (startDate, data, setData, toggleLoading) => {
       .catch((err) => {
         console.log('Could not load calendar', err)
       })
+      .then(() => {
+        setData(newData)
+      })
       .finally(() => {
         toggleLoading(false)
-        setData(newData)
       })
   } catch (err) {
     console.log(err)
