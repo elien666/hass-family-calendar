@@ -10,7 +10,7 @@ export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'che
 const callApi = (endPoint, data) => (
   axios({
     method: 'post',
-    url: `/gti/public/${endPoint}`,
+    url: `./gti/public/${endPoint}`,
     data: data,
     headers: {
       'Accept': 'application/json',

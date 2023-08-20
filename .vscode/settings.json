@@ -1,0 +1,18 @@
+{
+    "deploy": {
+        "targets": [
+            {
+                "type": "local",
+                "name": "Homeassistant",
+                "description": "Locally mounted Hopmeassistand folder",
+                "dir": "/Volumes/addons/family_calendar",
+                "mappings": [
+                    {
+                        "source": "/add-on/",
+                        "target": "/"
+                    }
+                ]
+            }
+        ]
+    }
+}

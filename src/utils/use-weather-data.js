@@ -20,7 +20,7 @@ export const weatherIconToPresentation = {
   'partly-cloudy-night': { icon: WiNightPartlyCloudy, label: 'Teils bewölkt', color: '#d5dae2' }
 }
 
-const url = () => `/forecast/${API_KEY}/${LATITUDE},${LONGITUDE}?&units=si&exclude=minutely`
+const url = () => `./forecast/${API_KEY}/${LATITUDE},${LONGITUDE}?&units=si&exclude=minutely`
 
 const useWeatherData = (toggleLoading) => {
   const [ data, setData ] = React.useState([])
