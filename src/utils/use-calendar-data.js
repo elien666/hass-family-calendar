@@ -57,9 +57,10 @@ const loadAll = (startDate, data, setData, toggleLoading) => {
   const newData = dateRange.map((date) => ({ date, allDay: [], events: []}))
 
   // Immediately show new dates, if startDate is new
+  /*
   if (data.length === 0 || (!data[0].date.hasSame(newData[0].date, 'day'))) {
     setData(newData)
-  }
+  }*/
 
   // Fetch data
   try {
