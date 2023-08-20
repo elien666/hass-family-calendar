@@ -60,11 +60,11 @@ const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
         <Icon path={mdiChevronLeft}
               size={'32px'}
               color='#ffffff'
-              onClick={nextWeek}/>
+              onClick={previousWeek}/>
         <Icon path={mdiChevronRight}
               size={'32px'}
               color='#ffffff'
-              onClick={previousWeek}/>
+              onClick={nextWeek}/>
         <button onClick={startWeekWithToday}>Today</button>
       </div>
 
