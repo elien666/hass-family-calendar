@@ -14,16 +14,20 @@ const GlobalStyle = createGlobalStyle`
     background-color: #1c1c1c;
     color: #ffffff;
   }
+
+  #root {
+    min-width: 100vw;
+  }
 `
 
 const Div = styled.div`
   padding: 0 12px;
-  overflow: hidden;
+  overflow: scroll;
+  min-width: 100vw;
 
   .main {
     display: grid;
     grid-template-columns: 1fr 300px;
-    height: 100vh;
   }
 `
 
