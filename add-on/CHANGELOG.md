@@ -1,5 +1,7 @@
-# [1.0.11] - 2024-01-23
+### [1.0.12] - 2024-01-23
 
-##  Fixed
+__Improved__
 
-- Problem with very small screens
+- Weeks always start on Monday
+- Improved responsive display
+- Added ability to click on weather

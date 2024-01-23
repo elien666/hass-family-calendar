@@ -9,6 +9,10 @@ const Div = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+
+  @media only screen and (max-width: 1200px) {
+    //display: none;
+  }
   
   > * + * {
     margin-top: 24px;
@@ -19,19 +23,27 @@ const Div = styled.div`
     font-weight: 400;
   }
   
-  .two-cols {
-    display: flex;
-    
-    > * {
-      width: 50%;
-    }
-    
-    > *:nth-child(1) {
-      padding-right: 6px;
-    }
+  @media only screen and (min-width: 1201px) {
+    .two-cols {
+      display: flex;
+      
+      > * {
+        width: 50%;
+      }
+      
+      > *:nth-child(1) {
+        padding-right: 6px;
+      }
 
-    > *:nth-child(2) {
-      padding-left: 6px;
+      > *:nth-child(2) {
+        padding-left: 6px;
+      }
+    }
+  }
+
+  @media only screen and (max-width: 1200px) {
+    .two-cols {
+      display: block;
     }
   }
 `

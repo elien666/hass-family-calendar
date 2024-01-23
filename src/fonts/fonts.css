@@ -1,0 +1,15 @@
+@font-face {
+    font-family: "Digital Dismay";
+    font-display: fallback;
+    src: url("Digital Dismay.otf") format("opentype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Shantell Sans";
+    font-display: fallback;
+    src: url("ShantellSans-VariableFont_BNCE,INFM,SPAC,wght.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}

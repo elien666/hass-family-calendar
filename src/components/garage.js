@@ -25,6 +25,12 @@ const StatusDiv = styled.div`
     margin-left: 1rem;
   }
 
+  @media only screen and (max-width: 1200px) {
+    span {
+      display: none;
+    }
+  }
+
   &.animate {
     &::after {
       content: '';

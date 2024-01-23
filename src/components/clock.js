@@ -3,9 +3,11 @@ import { DateTime } from 'luxon'
 import styled from 'styled-components'
 
 const Div = styled.div`
-  font-family: "Luckiest Guy", sans-serif;
+  font-family: "Digital Dismay";
   font-size: 76px;
   margin: 30px 0 10px 0;
+  color: #fff;
+
   span {
     animation: blinking 2s steps(2, start) infinite;
   }

@@ -20,12 +20,11 @@ const Div = styled.div`
 
   .schedule {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     grid-template-rows: repeat(2, max-content) 1fr;
     grid-column-gap: 12px;
     flex-grow: 1;
 
-    padding: 0 12px;
     background-color: #2f2f2f;
     border-radius: 4px;
 
@@ -38,6 +37,9 @@ const Div = styled.div`
       text-align: center;
       margin-bottom: 0;
       padding-bottom: 12px;
+    }
+
+    .caption {
       border-bottom: solid 1px #a1a0a0;
     }
 
@@ -95,10 +97,15 @@ const Div = styled.div`
 
 const Week = () => {
 
-  const [ startDate, setStartDate ] = React.useState(DateTime.now())
-  const data = useCalendarData(startDate, setStartDate)
+  const [ startDate, setStartDate ] = React.useState(undefined)
+  const data = useCalendarData(startDate)
   const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
-
+  
+  React.useEffect(() => {
+    startWeekWithToday()
+    // eslint-disable-next-line
+  }, [])
+  
   return (
     <Div>
       <Header nextWeek={nextWeek} previousWeek={previousWeek}
@@ -106,14 +113,14 @@ const Week = () => {
       <div className={'schedule'}>
 
         {/* First row: Captions */}
-        {data.slice(0,5).map((day, index) => (
-          <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) })}>
+        {data.slice(0,7).map((day, index) => (
+          <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) }, 'caption')}>
             <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
           </div>
         ))}
 
         {/* Second row: Full day events */}
-        {data.slice(0,5).map((day, index) => (
+        {data.slice(0,7).map((day, index) => (
           <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
             {day.allDay.map((event, index) => (
               <div key={index} className={'allDayEvent'}>
@@ -125,7 +132,7 @@ const Week = () => {
         ))}
 
         {/* Third row: Events */}
-        {data.slice(0,5).map((day, index) => (
+        {data.slice(0,7).map((day, index) => (
           <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
             {day.events.map((event, index) => (
               <div key={index} className={'event'}>

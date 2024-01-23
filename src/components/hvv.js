@@ -57,7 +57,7 @@ const Div = styled.div`
 const Departure = ({ line, direction, realtimeOffset }) => (
     <div className={'departure'}>
       <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
-      <div>{direction}</div>
+      {/*<div>{direction}</div>*/}
       <div>
         {realtimeOffset  === 0 ? 'Jetzt' : <>in {realtimeOffset} '</>}
       </div>

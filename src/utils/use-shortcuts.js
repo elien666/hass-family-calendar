@@ -2,6 +2,14 @@ import React from 'react'
 import { DateTime } from 'luxon'
 import useKeyPress from './use-key-press'
 
+const lastMonday = () => {
+  let today = new Date();
+  let dayOfWeek = today.getDay();
+  let difference = (dayOfWeek + 6) % 7; // Calculate the difference to Monday
+  let mondayDate = new Date(today.setDate(today.getDate() - difference));
+  return DateTime.fromJSDate(mondayDate)
+}
+
 const useShortcuts = (setStartDate) => {
 
   // Go to next week
@@ -21,7 +29,7 @@ const useShortcuts = (setStartDate) => {
   }, [keyPrevious]) // Only fire when relevant key press changes
 
   // Start week with today
-  const startWeekWithToday = () => setStartDate(DateTime.now())
+  const startWeekWithToday = () => setStartDate(lastMonday())
   const keyToday = useKeyPress('t')
   React.useEffect(() => {
     if (keyToday) startWeekWithToday()

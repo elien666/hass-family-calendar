@@ -5,6 +5,7 @@ import Sidebar from './components/sidebar'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import usePhysicalButtons from './utils/use-physical-buttons'
+import './fonts/fonts.css'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -17,6 +18,7 @@ const GlobalStyle = createGlobalStyle`
 
   #root {
     min-width: 100vw;
+    box-sizing: border-box;
   }
 `
 
@@ -24,10 +26,17 @@ const Div = styled.div`
   padding: 0 12px;
   overflow: scroll;
   min-width: 100vw;
+  box-sizing: border-box;
 
   .main {
     display: grid;
     grid-template-columns: 1fr 300px;
+  }
+
+  @media only screen and (max-width: 1200px) {
+    .main {
+      grid-template-columns: 1fr 150px;
+    }
   }
 `
 
