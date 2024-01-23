@@ -22,7 +22,7 @@ const Div = styled.div`
 
   .main {
     display: grid;
-    grid-template-columns: 80% 1fr;
+    grid-template-columns: 1fr 300px;
     height: 100vh;
   }
 `

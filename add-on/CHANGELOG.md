@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2024-01-23
+
+### Fixed
+
+- Problem with loading over https
+
+## [1.0.9] - 2023-08-20
+
+### Fixed
+
+- Problem with loading calendar data
+
 ## [1.0.8] - 2023-08-20
 
 ### Added

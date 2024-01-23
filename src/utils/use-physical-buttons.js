@@ -19,19 +19,25 @@ const usePhysicalButtons = () => {
     }
   }
   const connect = () => {
-    const socket = new WebSocket("ws://:5678/")
+    try {
+      const socket = new WebSocket("ws://:5678/")
 
-    // Set event handlers.
-    socket.onopen = () => console.log('Connected to buttons server')
-    socket.onmessage = (e) => handleMessage(e.data)
-    socket.onclose = () => {
-      console.log('Connection to buttons server closed')
-      setConnection(null)
+      // Set event handlers.
+      socket.onopen = () => console.log('Connected to buttons server')
+      socket.onmessage = (e) => handleMessage(e.data)
+      socket.onclose = () => {
+        console.log('Connection to buttons server closed')
+        setConnection(false)
+      }
+      socket.onerror = (e) => console.log('Buttons server error', e)
+
+      setConnection(socket)
+      return socket
+    } catch (error) {
+      console.error('Could not establish connection to button server', error)
+      setConnection(false)
+      return null
     }
-    socket.onerror = (e) => console.log('Buttons server error', e)
-
-    setConnection(socket)
-    return socket
   }
 
   React.useEffect(() => {
@@ -40,10 +46,15 @@ const usePhysicalButtons = () => {
     // eslint-disable-next-line
   }, [])
 
+  // Try reconnecting every 5 seconds, fail permanently after 10 tries
+  const [counter, setCounter] = React.useState(0)
   React.useEffect(() => {
-    if (connection === null) {
+    if (connection === false && counter < 10) {
+      setCounter(i => i++)
       const interval = setInterval(connect, 5000)
       return () => clearInterval(interval)
+    } else if (counter >= 10) {
+      console.error('Giving up on trying to connect to button server')
     }
     // eslint-disable-next-line
   }, [ connection ])

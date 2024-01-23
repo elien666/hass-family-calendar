@@ -20,7 +20,7 @@ const Div = styled.div`
 
   .schedule {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     grid-template-rows: repeat(2, max-content) 1fr;
     grid-column-gap: 12px;
     flex-grow: 1;
@@ -106,14 +106,14 @@ const Week = () => {
       <div className={'schedule'}>
 
         {/* First row: Captions */}
-        {data.map((day, index) => (
+        {data.slice(0,5).map((day, index) => (
           <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) })}>
             <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
           </div>
         ))}
 
         {/* Second row: Full day events */}
-        {data.map((day, index) => (
+        {data.slice(0,5).map((day, index) => (
           <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
             {day.allDay.map((event, index) => (
               <div key={index} className={'allDayEvent'}>
@@ -125,7 +125,7 @@ const Week = () => {
         ))}
 
         {/* Third row: Events */}
-        {data.map((day, index) => (
+        {data.slice(0,5).map((day, index) => (
           <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
             {day.events.map((event, index) => (
               <div key={index} className={'event'}>
