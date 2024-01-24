@@ -20,6 +20,14 @@ const Div = styled.div`
     justify-content: flex-end;
     height: 100px;
 
+    @media only screen and (max-width: 1200px) {
+      height: auto;
+     
+      h2 {
+        font-size: 42px;
+      }
+    }
+
     h2 {
       margin: 0;
       padding: 0;

@@ -8,6 +8,11 @@ const Div = styled.div`
   margin: 30px 0 10px 0;
   color: #fff;
 
+  @media only screen and (max-width: 1200px) {
+    font-size: 42px;
+    margin: 0;
+  }
+
   span {
     animation: blinking 2s steps(2, start) infinite;
   }

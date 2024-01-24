@@ -10,6 +10,10 @@ const Div = styled.div`
   justify-content: space-between;
   align-items: center;
   height: 100px;
+
+  @media only screen and (max-width: 1200px) {
+    height: auto;
+  }
   
   svg.indicator {
     margin-left: 1rem;

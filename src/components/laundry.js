@@ -11,6 +11,13 @@ const Div = styled.div`
   h2 {
     margin: 1.5rem 0 1rem;
     padding: 0;
+    font-size: 26px;
+  }
+
+  @media only screen and (max-width: 1200px) {
+    h2 {
+      display: none;
+    }
   }
   
   .status {

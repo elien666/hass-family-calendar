@@ -1,5 +1,5 @@
-### [1.0.13] - 2024-01-24
+### [1.0.14] - 2024-01-24
 
 __Improved__
 
-- Add-on is accessible to all users
+- Lots of fixes with responsive design for small screens

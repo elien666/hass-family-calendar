@@ -11,7 +11,7 @@ const Div = styled.div`
   justify-content: space-between;
 
   @media only screen and (max-width: 1200px) {
-    //display: none;
+    justify-content: flex-start;
   }
   
   > * + * {
@@ -23,27 +23,23 @@ const Div = styled.div`
     font-weight: 400;
   }
   
-  @media only screen and (min-width: 1201px) {
-    .two-cols {
-      display: flex;
-      
-      > * {
-        width: 50%;
-      }
-      
-      > *:nth-child(1) {
-        padding-right: 6px;
-      }
+  .two-cols {
+    display: flex;
 
-      > *:nth-child(2) {
-        padding-left: 6px;
-      }
+    @media only screen and (max-width: 1200px) {
+      margin-top: 3rem;
     }
-  }
+    
+    > * {
+      width: 50%;
+    }
+    
+    > *:nth-child(1) {
+      padding-right: 6px;
+    }
 
-  @media only screen and (max-width: 1200px) {
-    .two-cols {
-      display: block;
+    > *:nth-child(2) {
+      padding-left: 6px;
     }
   }
 `

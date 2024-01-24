@@ -41,6 +41,12 @@ const Div = styled.div`
 
     .caption {
       border-bottom: solid 1px #a1a0a0;
+
+      @media only screen and (max-width: 1200px) {
+        h2 {
+          font-size: 12px;
+        }
+      }
     }
 
     .event, .allDayEvent {
@@ -52,6 +58,13 @@ const Div = styled.div`
         margin: 0 0 6px 0;
         display: flex;
         align-items: flex-start;
+      }
+
+      @media only screen and (max-width: 1200px) {
+        h3 {
+          font-size: 12px;
+        }
+        font-size: 14px;
       }
 
       svg {
