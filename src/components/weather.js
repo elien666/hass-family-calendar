@@ -15,7 +15,6 @@ timeago.register('de', de);
 const Div = styled.div`
 
   cursor: pointer;
-  user-select: none;
 
   .headline {
     display: flex;
