@@ -12,3 +12,4 @@ arch:
 ingress: true
 ingress_port: 80
 panel_icon: mdi:calendar-week
+panel_admin: false
