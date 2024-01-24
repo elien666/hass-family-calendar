@@ -15,6 +15,7 @@ timeago.register('de', de);
 const Div = styled.div`
 
   cursor: pointer;
+  user-select: none;
 
   .headline {
     display: flex;
@@ -43,13 +44,17 @@ const Div = styled.div`
   }
 
   .values {
-    text-align: right;
-    font-weight: 700;
+    margin-top: 2rem;
     line-height: 1.5rem;
 
     span {
       font-weight: 100;
       color: #a1a0a0;
+    }
+
+    .table {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
     }
   }
 
@@ -162,19 +167,20 @@ const Weather = ({ pin }) => {
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) return ''
 
   return (
-    <Div onClick={() => toggle(true)}>
-      <div className={'headline'}>
-        <Icon icon={data.currently.icon}/>
-        <h2>{Math.round(data.currently.temperature)}°</h2>
-      </div>
-      <div className={'forecast'}>
-        {[3,6,9,12].map((i, index) => (
-          <Forecast key={index} data={data.hourly.data[i]} />
-        ))}
+    <Div>
+      <div onClick={() => toggle(true)}>
+        <div className={'headline'}>
+          <Icon icon={data.currently.icon}/>
+          <h2>{Math.round(data.currently.temperature)}°</h2>
+        </div>
+        <div className={'forecast'}>
+          {[3,6,9,12].map((i, index) => (
+            <Forecast key={index} data={data.hourly.data[i]} />
+          ))}
+        </div>
       </div>
       <Overlay visible={showWeather} onClick={() => toggle(false)}>
-        <div className={'full-weather'} onClick={() => toggle(false)}>
-          <h2>Wetter Vorhersage</h2>
+        <div className={'full-weather'}>
           <div className={'detail-header'}>
             <div>
               <div className={'headline'}>
@@ -185,8 +191,10 @@ const Weather = ({ pin }) => {
                 </h2>
               </div>
             </div>
-            <div className={'values'}>
-              <h3>{weatherIconToPresentation[data.daily.data[0].icon].label}</h3>
+            <h3>{weatherIconToPresentation[data.daily.data[0].icon].label}</h3>
+          </div>
+          <div className={'values'}>
+            <div className={'table'}>
               <div><span>Gefühlt:</span> {Math.round(data.daily.data[0].apparentTemperatureHigh)}° C</div>
               <div><span>Luftfeuchtigkeit:</span> {Math.round(data.daily.data[0].humidity * 100)} %</div>
               <div><span>Wind:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>

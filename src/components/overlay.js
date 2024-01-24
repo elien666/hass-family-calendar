@@ -47,7 +47,7 @@ const Div = styled.div`
 const Overlay = ({ visible, children, onClick }) => {
 
  return (
-   <Div className={clsx({ visible })}>
+   <Div className={clsx({ visible })} onClick={onClick}>
      <div className={'content'} onClick={(event) => event.stopPropagation()}>
       <div className='close'><Icon path={mdiClose} size={2} onClick={onClick}/></div>
        {children}
