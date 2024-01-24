@@ -1,12 +1,10 @@
 import styled from 'styled-components'
 import Icon from '@mdi/react'
 import React from 'react'
-import { mdiWashingMachine } from '@mdi/js'
 import useWashingMachine from '../utils/use-washing-machine'
 import clsx from 'clsx'
 import Overlay from './overlay'
 import { mapToPresentation } from '../utils/use-washing-machine'
-import { mdiCheck } from '@mdi/js'
 
 const Div = styled.div`
   padding-bottom: 12px;
@@ -27,6 +25,7 @@ const Div = styled.div`
     display: flex;
     align-items: center;
     position: relative;
+    cursor: pointer;
 
     span {
       margin-left: 1rem;

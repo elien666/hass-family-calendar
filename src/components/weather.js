@@ -14,6 +14,8 @@ timeago.register('de', de);
 
 const Div = styled.div`
 
+  cursor: pointer;
+
   .headline {
     display: flex;
     align-items: center;
