@@ -134,8 +134,6 @@ const Icon = ({ icon }) => {
   return <presentation.icon size={60} color={'#ffffff'} />
 }
 
-const Label = ({ icon }) => <div>{weatherIconToPresentation[icon].label}</div>
-
 const Weather = ({ pin }) => {
 
   const data = useWeatherData()

@@ -6,6 +6,8 @@ import Header from './header'
 import React from 'react'
 import useCalendarData from '../utils/use-calendar-data'
 import useShortcuts from '../utils/use-shortcuts'
+import useSwipe from '../utils/useSwipe'
+import { ThreeDots } from 'react-loader-spinner'
 
 const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
 
@@ -106,6 +108,15 @@ const Div = styled.div`
       font-weight: 600;
     }
   }
+  
+  .loading {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background-color: #2f2f2f;
+    justify-content: center;
+  }
 `
 
 const Week = () => {
@@ -118,51 +129,69 @@ const Week = () => {
     startWeekWithToday()
     // eslint-disable-next-line
   }, [])
+
+  const swipeHandlers = useSwipe({
+    onSwipedLeft: () => nextWeek(),
+    onSwipedRight: () => previousWeek()
+  })
   
   return (
-    <Div>
+    <Div {...swipeHandlers}>
       <Header nextWeek={nextWeek} previousWeek={previousWeek}
               startWeekWithToday={startWeekWithToday}/>
       <div className={'schedule'}>
+          {/* First row: Captions */}
+          {data.slice(0,7).map((day, index) => (
+            <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) }, 'caption')}>
+              <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
+            </div>
+          ))}
 
-        {/* First row: Captions */}
-        {data.slice(0,7).map((day, index) => (
-          <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) }, 'caption')}>
-            <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
-          </div>
-        ))}
-
-        {/* Second row: Full day events */}
-        {data.slice(0,7).map((day, index) => (
-          <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
-            {day.allDay.map((event, index) => (
-              <div key={index} className={'allDayEvent'}>
-                {event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>}
-                {event.summary}
-              </div>
-            ))}
-          </div>
-        ))}
-
-        {/* Third row: Events */}
-        {data.slice(0,7).map((day, index) => (
-          <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
-            {day.events.map((event, index) => (
-              <div key={index} className={'event'}>
-                <h3>
+          {/* Second row: Full day events */}
+          {data.slice(0,7).map((day, index) => (
+            <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
+              {day.allDay.map((event, index) => (
+                <div key={index} className={'allDayEvent'}>
                   {event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>}
-                  {formatDateTime(event.start.dateTime)} - {formatDateTime(event.end.dateTime)}
-                </h3>
-                <div>
                   {event.summary}
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              ))}
+            </div>
+          ))}
+
+          {/* Third row: Events */}
+          {data.slice(0,7).map((day, index) => (
+            <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
+              {day.events.map((event, index) => (
+                <div key={index} className={'event'}>
+                  <h3>
+                    {event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>}
+                    {formatDateTime(event.start.dateTime)} - {formatDateTime(event.end.dateTime)}
+                  </h3>
+                  <div>
+                    {event.summary}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
       </div>
+      {data.length === 0 && (
+        <div className='loading'>
+          <ThreeDots
+            visible={true}
+            height="80"
+            width="80"
+            color="#c1c1c1"
+            radius="9"
+            ariaLabel="three-dots-loading"
+            wrapperStyle={{}}
+            wrapperClass=""
+            />
+        </div>
+      )}
     </Div>
-  )
+  ) 
 }
 
 export default Week

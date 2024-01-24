@@ -84,12 +84,15 @@ const loadAll = (startDate, data, setData, toggleLoading) => {
   }
 }
 
+const emptyData = []
+
 const useCalendarData = (startDate) => {
-  const [ data, setData ] = React.useState([])
+  const [ data, setData ] = React.useState(emptyData)
   const timeout = useTimeout(60000, 'Calendar')
 
   React.useEffect(() => {
     if (startDate !== undefined) {
+      setData(emptyData)
       loadAll(startDate, data, setData, () => { return })
     }
   // eslint-disable-next-line
