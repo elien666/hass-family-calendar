@@ -4,6 +4,9 @@ import React from 'react'
 import { mdiWashingMachine } from '@mdi/js'
 import useWashingMachine from '../utils/use-washing-machine'
 import clsx from 'clsx'
+import Overlay from './overlay'
+import { mapToPresentation } from '../utils/use-washing-machine'
+import { mdiCheck } from '@mdi/js'
 
 const Div = styled.div`
   padding-bottom: 12px;
@@ -50,19 +53,43 @@ const Div = styled.div`
       }
     }
   }
+
+  .states {
+    display: flex;
+    grid-template-columns: repeat(3, 1fr);
+    justify-content: space-between;
+
+    > div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  }
 `
 
 const Laundry = () => {
 
-  const status = useWashingMachine()
+  const [ status, states ] = useWashingMachine()
+  const [ showLaundry, toggle ] = React.useState(false)
 
   return (
     <Div className={clsx({ animate: status.animate })}>
       <h2>Wäsche</h2>
-      <div className={'status'}>
-        <Icon path={mdiWashingMachine} size={'2rem'} color='#ffffff'/>
+      <div className={'status'} onClick={() => toggle(true)}>
+        <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
         <span>{status.label}</span>
       </div>
+      <Overlay visible={showLaundry} onClick={() => toggle(false)}>
+        <div className={'states'} onClick={() => toggle(false)}>
+          {states.map((state) => (
+            <div>
+              <div className={clsx({ animate: mapToPresentation[state.state].animate })}><Icon path={mapToPresentation[state.state].icon} size={2}/></div>
+              <div>{mapToPresentation[state.state].label}</div>
+              <div><br />{state.label}</div>
+            </div>
+          ))}
+        </div>
+      </Overlay>
     </Div>
   )
 }

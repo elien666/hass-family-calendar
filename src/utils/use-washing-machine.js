@@ -5,6 +5,7 @@ import {
 import React from 'react'
 import axios from 'axios'
 import { HASS_HOST } from "./config";
+import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 
 const ACCESS_TOKEN = ''
 const ENTITY_ID_NEU = 'input_select.wasching_machine_neu_status'
@@ -15,11 +16,11 @@ axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
 const urlPattern = ( entity ) => `${HASS_HOST}/api/states/${entity}`
 
-const mapToPresentation = {
-  done: { label: 'Fertig', animate: false },
-  off: { label: 'Aus', animate: false },
-  standby: { label: 'Standby', animate: false },
-  running: { label: 'Läuft …', animate: true }
+export const mapToPresentation = {
+  done: { label: 'Fertig', animate: false, icon: mdiWashingMachineAlert },
+  off: { label: 'Aus', animate: false, icon: mdiWashingMachineOff},
+  standby: { label: 'Standby', animate: false, icon: mdiWashingMachine },
+  running: { label: 'Läuft …', animate: true, icon: mdiWashingMachine }
 }
 
 const mapToValue = {
@@ -69,13 +70,17 @@ const useWashingMachine = () => {
       setState(mapToPresentation['done'])
     }
 
-    // Else a mchine is done, one is standby and one is running -> running
+    // Else a machine is done, one is standby and one is running -> running
     else {
       setState(mapToPresentation['running'])
     }
   }, [ machineOld, machineNew, dryer ])
 
-  return state
+  return [ state, [
+    { label: 'Neue Waschmaschine', state: machineNew },
+    { label: 'Alte Waschmaschine', state: machineOld },
+    { label: 'Alte Waschmaschine', state: dryer },
+  ]]
 }
 
 const useSubscription = ( entity ) => {
