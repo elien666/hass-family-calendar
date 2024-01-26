@@ -6,7 +6,7 @@ const Div = styled.div`
   margin-top: 2rem;
 
   svg {
-    height: 32px;
+    height: 16px;
     width: auto;
   }
 
@@ -76,11 +76,11 @@ const Hvv = () => {
           <path d="M0,0V11.7l16.4,7.4L0,26.1V37.8L29.5,23.1V15.5Z" transform="translate(-10368 6294)" fill="#00ff00"/>
         </g>
       </svg>
-      <h3>AK Wandsbek → Wandsbek Markt</h3>
+      <h3>→&nbsp;Wandsbek</h3>
       {data.to?.map((entry, index) => (
         <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
       ))}
-      <h3>AK Wandsbek → Stadtauswärts</h3>
+      <h3>→&nbsp;Stadtauswärts</h3>
       {data.from?.map((entry, index) => (
         <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
       ))}
