@@ -89,10 +89,15 @@ const emptyData = []
 const useCalendarData = (startDate) => {
   const [ data, setData ] = React.useState(emptyData)
   const timeout = useTimeout(60000, 'Calendar')
+  const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
 
   React.useEffect(() => {
     if (startDate !== undefined) {
-      setData(emptyData)
+      if (currentStartDate !== startDate) {
+        // Start date was changed, show loading animation
+        setData(emptyData)
+        setCurrentStartDate(startDate)
+      } // else reload in background
       loadAll(startDate, data, setData, () => { return })
     }
   // eslint-disable-next-line
