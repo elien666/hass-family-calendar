@@ -38,7 +38,7 @@ const Div = styled.div`
     }
   }
 
-  &.animate {
+  .animate {
     svg {
       animation: rotate 2s linear infinite;
     }
@@ -54,15 +54,24 @@ const Div = styled.div`
   }
 
   .states {
-    display: flex;
+    display: grid;
     grid-template-columns: repeat(3, 1fr);
     justify-content: space-between;
+    column-gap: 2rem;
 
     > div {
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding: .4rem 1rem;
+      background-color: #262626;
+      border-radius: 12px;
+  }
     }
+  }
+  .subtitle {
+    margin: 1rem 0 0 0;
+    font-size: 1.2rem;
   }
 `
 
@@ -72,10 +81,12 @@ const Laundry = () => {
   const [ showLaundry, toggle ] = React.useState(false)
 
   return (
-    <Div className={clsx({ animate: status.animate })}>
+    <Div>
       <h2>Wäsche</h2>
       <div className={'status'} onClick={() => toggle(true)}>
-        <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
+        <div className={clsx({ animate: status.animate })}>
+          <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
+        </div>
         <span>{status.label}</span>
       </div>
       <Overlay visible={showLaundry} onClick={() => toggle(false)}>
@@ -84,7 +95,7 @@ const Laundry = () => {
             <div>
               <div className={clsx({ animate: mapToPresentation[state.state].animate })}><Icon path={mapToPresentation[state.state].icon} size={2}/></div>
               <div>{mapToPresentation[state.state].label}</div>
-              <div><br />{state.label}</div>
+              <div className='subtitle'>{state.label}</div>
             </div>
           ))}
         </div>

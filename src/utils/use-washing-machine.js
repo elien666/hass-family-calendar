@@ -79,7 +79,7 @@ const useWashingMachine = () => {
   return [ state, [
     { label: 'Neue Waschmaschine', state: machineNew },
     { label: 'Alte Waschmaschine', state: machineOld },
-    { label: 'Alte Waschmaschine', state: dryer },
+    { label: 'Trockner', state: dryer },
   ]]
 }
 
