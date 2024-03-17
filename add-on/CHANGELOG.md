@@ -1,11 +1,5 @@
-### 1.0.16 - 2024-01-26
+**1.0.17 - 2024-03-17**
 
 __Fixed__
 
-- Laundry spinning icons
-
-__Improved__
-
-- HVV section design streamlined
-- Weather overlay
-- Calendar data background loading
+- Disabled usage of physical buttons, which are not available

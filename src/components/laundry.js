@@ -91,8 +91,8 @@ const Laundry = () => {
       </div>
       <Overlay visible={showLaundry} onClick={() => toggle(false)}>
         <div className={'states'}>
-          {states.map((state) => (
-            <div>
+          {states.map((state, index) => (
+            <div key={index}>
               <div className={clsx({ animate: mapToPresentation[state.state].animate })}><Icon path={mapToPresentation[state.state].icon} size={2}/></div>
               <div>{mapToPresentation[state.state].label}</div>
               <div className='subtitle'>{state.label}</div>
