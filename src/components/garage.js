@@ -2,13 +2,15 @@ import React from 'react'
 import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
-import useGarageDoor, { toggleGarageDoor } from '../utils/use-garage-door'
+import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
 import useKeyPress from '../utils/use-key-press'
 import { toast } from 'react-toastify'
+import Overlay from './overlay'
 import clsx from 'clsx'
 
 const Div = styled.div`
   padding-bottom: 12px;
+  cursor: pointer;
   
   h2 {
     margin: 1.5rem 0 1rem;
@@ -21,6 +23,24 @@ const Div = styled.div`
       display: none;
     }
   }
+
+  .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      > div { 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        justify-self: center;
+        border: solid 3px rgba(255,255,255,.5);
+        border-radius: 12px;
+        width: 150px;
+        height: 150px;
+        font-size: 24px;
+        background-color: rgba(255,255,255,.1);
+        cursor: pointer;
+      }
+    }
 `
 
 const StatusDiv = styled.div`
@@ -103,9 +123,10 @@ const showToast = (promise, garageDoor) => (
 
 const Garage = () => {
 
-  const garageDoor = useGarageDoor()
+  const [ garageDoor, error ] = useGarageDoor()
   const [ garageInMotion, setGarageInMotion ] = React.useState(undefined)
   const [ animate, setAnimate ] = React.useState(false)
+  const [ showControls, toggle ] = React.useState(false)
 
   React.useEffect(() => {
     if (garageDoor === 'unknown') {
@@ -132,10 +153,44 @@ const Garage = () => {
     }
   }, [keyGarage]) // Only fire when key is pressed
 
+  const controlGarage = (action) => {
+    toggle(false)
+    switch (action) {
+      case 'open':
+        openGarageDoor(setAnimate)
+        break
+      case 'close':
+        closeGarageDoor(setAnimate)
+        break;
+      default:
+        // 
+    }
+  }
+
+  React.useEffect(() => {
+    if (error !== false) {
+      toggle(true)
+    }
+  }, [error])
+
   return (
     <Div>
       <h2>Garage</h2>
-      <Status garageDoor={garageDoor} animate={animate} />
+      <div onClick={() => toggle(true)}>
+        <Status garageDoor={garageDoor} animate={animate} />
+      </div> 
+      <Overlay visible={showControls} onClick={() => toggle(false)}>
+        <div className={'controls'}>
+          {error !== false && (
+            <div>
+              <h3>Fehler!</h3>
+              <div>{error}</div>
+            </div>
+          )}
+          <div onClick={() => controlGarage('open')}>Öffnen</div>
+          <div onClick={() => controlGarage('close')}>Schließen</div>
+        </div>
+      </Overlay>
     </Div>
   )
 }

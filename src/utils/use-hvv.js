@@ -7,7 +7,7 @@ import useTimeout from './use-timeout'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
-const callApi = (endPoint, data) => (
+const callApi = async (endPoint, data) => (
   axios({
     method: 'post',
     url: `./gti/public/${endPoint}`,
@@ -16,7 +16,7 @@ const callApi = (endPoint, data) => (
       'Accept': 'application/json',
       'Content-Type': 'application/json;charset=UTF-8',
       'geofox-auth-user': '',
-      'geofox-auth-signature': createSignature(data),
+      'geofox-auth-signature': await createSignature(data),
       'Authorization': undefined,
     }
   })

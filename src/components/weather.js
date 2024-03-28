@@ -5,12 +5,12 @@ import useKeyPress from '../utils/use-key-press'
 import React from 'react'
 import Overlay from './overlay'
 import merryTimeline from 'merry-timeline'
-import TimeAgo from 'timeago-react'
-import * as timeago from 'timeago.js'
-import de from 'timeago.js/lib/lang/de'
+import TimeAgo from 'react-timeago'
+import de from 'react-timeago/lib/language-strings/de'
+import buildFormatter from 'react-timeago/lib/formatters/buildFormatter'
 
-// register it.
-timeago.register('de', de);
+// register DE language
+const formatter = buildFormatter(de)
 
 const Div = styled.div`
 
@@ -213,7 +213,7 @@ const Weather = ({ pin }) => {
             ))}
           </div>
           <div className={'info'}>
-            Aktualisiert <TimeAgo datetime={DateTime.fromSeconds(data.currently.time).toJSDate()} locale={'de'} />
+            Aktualisiert <TimeAgo date={DateTime.fromSeconds(data.currently.time).toJSDate()} formatter={formatter} />
           </div>
         </div>
       </Overlay>
