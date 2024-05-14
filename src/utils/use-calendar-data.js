@@ -24,20 +24,36 @@ const loadCalendarInto = (calendar, start, end, data) => (
   axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }))
     .then((response) => {
       response.data.forEach((event) => {
-        // Find bucket
+        // Find day offsets
         const eventStart = 'dateTime' in event.start
           ? DateTime.fromISO(event.start.dateTime)
           : DateTime.fromSQL(event.start.date)
-        const bucket = Math.floor(eventStart.diff(start, 'days').as('days'))
+        let offsetDayEnd = undefined
+        if ('dateTime' in event.end) {
+          offsetDayEnd = Math.floor(DateTime.fromISO(event.end.dateTime).diff(start, 'days').as('days'))
+        } else {
+          // Full day events always have the end date set to the following day,
+          // so we need to subtract '1' for the right offset
+          offsetDayEnd = Math.floor(DateTime.fromSQL(event.end.date).diff(start, 'days').as('days')) - 1
+        }
+        const offsetDayStart = Math.floor(eventStart.diff(start, 'days').as('days'))
+        
+        // Limit end to length
+        if (offsetDayEnd >= data.length) {
+          offsetDayEnd = data.length - 1
+        }
 
         // Add to bucket
         const type = 'dateTime' in event.start ? 'events' : 'allDay'
 
-        if (bucket >= 0 && bucket < data.length) {
-          data[bucket][type] = [
-            ...data[bucket][type],
-            { ...event, icon: calendar.icon }
-          ]
+        if (offsetDayStart >= 0 && offsetDayStart < data.length) {
+          // Add event to each day from offset start to offset end
+          for (let i = offsetDayStart; i <= offsetDayEnd; i++) {
+            data[i][type] = [
+              ...data[i][type],
+              { ...event, icon: calendar.icon }
+            ]
+          }
         } else {
           // Only enable for debugging
           // console.log('Ignoring event', bucket, type, ':', event)
