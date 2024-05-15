@@ -1,5 +1,5 @@
-**1.0.19 - 2024-05-14**
+**1.0.22 - 2024-05-15**
 
-__Improvements__
+__Fixed__
 
-- Properly display multi-day events
+- Cache control nginx

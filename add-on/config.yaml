@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.0.19"
+version: "1.0.23"
 slug: "family_calendar"
 init: false
 arch:
@@ -13,4 +13,4 @@ ingress: true
 ingress_port: 80
 panel_icon: mdi:calendar-week
 panel_admin: false
-panel_title: Kalendar
+panel_title: Kalender
