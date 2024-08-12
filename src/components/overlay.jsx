@@ -26,8 +26,13 @@ const Div = styled.div`
     border-radius: 24px;
     width: 80vw;
     padding: 12px 24px;
-    position: relative;
     border: solid 12px rgba(255,255,255,.1);
+    max-height: calc(90vh - 6rem);
+    overflow-y: scroll;
+
+    &.fullsize {
+      width: 90vw;
+    }
     
     h2 {
       margin: 0;
@@ -36,22 +41,22 @@ const Div = styled.div`
   }
   .close {
     position: absolute;
-    right: -1rem;
-    top: -4rem;
+    right: 2rem;
+    top: 1rem;
     text-align: right;
     cursor: pointer;
     margin: 0 0 2rem 0;
   }
 `
 
-const Overlay = ({ visible, children, onClick }) => {
+const Overlay = ({ visible, children, onClick, fullsize = false }) => {
 
  return (
    <Div className={clsx({ visible })} onClick={onClick}>
-     <div className={'content'} onClick={(event) => event.stopPropagation()}>
-      <div className='close'><Icon path={mdiClose} size={2} onClick={onClick}/></div>
-       {children}
-     </div>
+    <div className='close'><Icon path={mdiClose} size={2} onClick={onClick}/></div>
+    <div className={clsx('content', { fullsize })} onClick={(event) => event.stopPropagation()}>  
+      {children}
+    </div>
    </Div>
  )
 }

@@ -1,5 +1,5 @@
-**1.0.22 - 2024-05-15**
+**1.0.25 - 2024-08-08**
 
-__Fixed__
+__Improved__
 
-- Cache control nginx
+- Design for everyday calendar
