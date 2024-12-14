@@ -7,7 +7,7 @@ import axios from 'axios'
 import { HASS_HOST } from "./config";
 
 const ACCESS_TOKEN = ''
-const ENTITTY_ID = 'cover.00241d89947150'
+const ENTITTY_ID = 'cover.garagentor'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
