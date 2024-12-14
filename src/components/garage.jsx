@@ -1,5 +1,5 @@
 import React from 'react'
-import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant } from '@mdi/js'
+import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
@@ -89,12 +89,13 @@ const StatusDiv = styled.div`
 `
 
 const toPresentation = (state) => {
+  console.log("STATE", state)
   const map = {
     'unknown': { label: 'In Bewegung oder halb-offen', icon: mdiGarageAlertVariant },
     'open': { label: 'Offen', icon: mdiGarageOpenVariant },
     'closed': { label: 'Geschlossen', icon: mdiGarageVariant }
   }
-  return map[state]
+  return map[state] || { label: 'Unavailable', icon: mdiCloudQuestionOutline }
 }
 
 const Status = ({ garageDoor, animate = false }) => (

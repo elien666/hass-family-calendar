@@ -1,5 +1,5 @@
-**1.0.25 - 2024-08-08**
+**1.0.26 - 2024-12-14**
 
-__Improved__
+__Fixed__
 
-- Design for everyday calendar
+- Unavailable state for garagedoor and more robustness
