@@ -89,7 +89,6 @@ const StatusDiv = styled.div`
 `
 
 const toPresentation = (state) => {
-  console.log("STATE", state)
   const map = {
     'unknown': { label: 'In Bewegung oder halb-offen', icon: mdiGarageAlertVariant },
     'open': { label: 'Offen', icon: mdiGarageOpenVariant },
