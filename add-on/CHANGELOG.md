@@ -1,6 +1,10 @@
-**1.0.26 - 2024-12-14**
+**1.0.27 - 2025-05-15**
+
+__New__
+
+- Show doorbell video streams when visitor is at door
 
 __Fixed__
 
-- Unavailable state for garagedoor and more robustness
-- Fixed entity ID for garagedoor
+- Removed debug messages
+- Everyday calendar store is now working again
