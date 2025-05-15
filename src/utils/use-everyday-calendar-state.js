@@ -20,7 +20,11 @@ const useEverydayCalendar = () => {
   React.useEffect(() => {
     axios(url)
       .then((response) => {
-        setStore(response.data.attributes.store)
+        if(response.data.attributes.store !== undefined) {
+          setStore(response.data.attributes.store)
+        } else {
+          setStore([])
+        }
       })
   }, [])
 
