@@ -1,5 +1,5 @@
-**1.0.28 - 2025-05-16**
+**1.0.29 - 2025-05-17**
 
-__New__
+__Fixed__
 
-- Added delay to closing of doorbell cam overlay
+- Moved from HLS to WebRTC for video streams

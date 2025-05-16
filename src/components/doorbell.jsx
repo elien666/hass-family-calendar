@@ -1,5 +1,4 @@
 import React from 'react'
-import ReactPlayer from 'react-player'
 import useDoorbell from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
@@ -14,7 +13,20 @@ const Container = styled.div`
     .grid {
         display: flex;
 
-        
+        iframe {
+
+            border: none;
+
+            &.portrait {
+                width: 360px;
+                height: 480px;
+            }
+
+            &.landscape {
+                width: 420px;
+                height: 240px;
+            }
+        }
 
         > div {
             display: flex;
@@ -83,16 +95,13 @@ const Doorbell = () => {
                 {/*<h3 onClick={() => setState(state => state === 'on' ? 'off' : 'on')}>Besucher an der Tür</h3>*/}
                 <h3>Besucher an der Tür</h3>
 
-                <div className='grid'>
+                <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
                     <div>
-                        <ReactPlayer url='http://192.168.188.126:8888/tuerklingel_sub/index.m3u8' 
-                            muted={true} playing={true} width="360px" height="480px" />
+                        <iframe className="portrait" src="http://192.168.188.126:8889/tuerklingel_sub" scrolling="no"></iframe>
                     </div>
                     <div>
-                        <ReactPlayer url='http://192.168.188.126:8888/eingang/index.m3u8' 
-                            muted={true} playing={true} width="420px" height="240px"/>
-                        <ReactPlayer url='http://192.168.188.126:8888/weg/index.m3u8' 
-                            muted={true} playing={true} width="420px" height="240px" />
+                        <iframe className="landscape" src="http://192.168.188.126:8889/eingang" scrolling="no"></iframe>
+                        <iframe className="landscape" src="http://192.168.188.126:8889/weg" scrolling="no"></iframe>
                     </div>
                 </div>                
             </Container>
