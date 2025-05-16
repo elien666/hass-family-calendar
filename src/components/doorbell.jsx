@@ -3,6 +3,7 @@ import useDoorbell from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
+import WhepVideo from './whep-video'
 
 const Container = styled.div`
 
@@ -18,8 +19,7 @@ const Container = styled.div`
             border: none;
 
             &.portrait {
-                width: 360px;
-                height: 480px;
+                
             }
 
             &.landscape {
@@ -79,7 +79,7 @@ const Doorbell = () => {
     }, [ cancelId, state, setProgress, setCancelId ])
 
     return (
-        <Overlay visible={showDoorCams} onClick={() => toggle(false)}>
+        <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
             <Container>
             
                 <ProgressBar
@@ -91,17 +91,17 @@ const Doorbell = () => {
                     transitionDuration={transitionDuration}
                     transitionTimingFunction='linear'
                 />
-            
-                {/*<h3 onClick={() => setState(state => state === 'on' ? 'off' : 'on')}>Besucher an der Tür</h3>*/}
-                <h3>Besucher an der Tür</h3>
 
                 <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
                     <div>
-                        <iframe className="portrait" src="http://192.168.188.126:8889/tuerklingel_sub" scrolling="no"></iframe>
+                        <WhepVideo src="http://192.168.188.126:8889/tuerklingel_sub/whep" 
+                            muted={true} controls={false} autoPlay={true} width='360' height='480' />
                     </div>
                     <div>
-                        <iframe className="landscape" src="http://192.168.188.126:8889/eingang" scrolling="no"></iframe>
-                        <iframe className="landscape" src="http://192.168.188.126:8889/weg" scrolling="no"></iframe>
+                        <WhepVideo src="http://192.168.188.126:8889/eingang/whep" 
+                            muted={true} controls={false} autoPlay={true} width='420' height='240px' />
+                        <WhepVideo src="http://192.168.188.126:8889/weg/whep" 
+                            muted={true} controls={false} autoPlay={true} width='420' height='240px' />
                     </div>
                 </div>                
             </Container>

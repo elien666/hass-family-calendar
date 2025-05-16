@@ -8,11 +8,11 @@ module.exports = function(app) {
       changeOrigin: true,
     })
   )
-    .use(
-      '/gti',
-      createProxyMiddleware({
-        target: 'http://gti.geofox.de',
-        changeOrigin: true,
-      })
-    )
+  .use(
+    '/gti',
+    createProxyMiddleware({
+      target: 'http://gti.geofox.de',
+      changeOrigin: true,
+    })
+  )
 }

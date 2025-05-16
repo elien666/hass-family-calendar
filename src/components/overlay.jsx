@@ -32,6 +32,9 @@ const Div = styled.div`
 
     &.fullsize {
       width: 90vw;
+      max-height: calc(100vh - 1rem);
+      border-width: 2px;
+      padding: 4px 6px;
     }
     
     h2 {
