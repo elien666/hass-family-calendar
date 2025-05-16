@@ -14,6 +14,9 @@ importers:
       '@mdi/react':
         specifier: ^1.6.1
         version: 1.6.1
+      '@ramonak/react-progress-bar':
+        specifier: ^5.4.0
+        version: 5.4.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       axios:
         specifier: ^1.6.8
         version: 1.6.8
@@ -346,6 +349,12 @@ packages:
 
   '@mdi/react@1.6.1':
     resolution: {integrity: sha512-4qZeDcluDFGFTWkHs86VOlHkm6gnKaMql13/gpIcUQ8kzxHgpj31NuCkD8abECVfbULJ3shc7Yt4HJ6Wu6SN4w==}
+
+  '@ramonak/react-progress-bar@5.4.0':
+    resolution: {integrity: sha512-3MJ0TKPw7xhearDuO6egIRQrvuERoLn6CVc2hKnw89iEegUL6DzMY7Rptmz2KaHjK0zbev+PGyyvDW+IK4FJBg==}
+    peerDependencies:
+      react: ^16.0.0 || ^17 || ^18 || ^19
+      react-dom: ^16.0.0 || ^17 || ^18 || ^19
 
   '@rollup/rollup-android-arm-eabi@4.13.1':
     resolution: {integrity: sha512-4C4UERETjXpC4WpBXDbkgNVgHyWfG3B/NKY46e7w5H134UDOFqUJKpsLm0UYmuupW+aJmRgeScrDNfvZ5WV80A==}
@@ -1124,6 +1133,11 @@ snapshots:
   '@mdi/react@1.6.1':
     dependencies:
       prop-types: 15.8.1
+
+  '@ramonak/react-progress-bar@5.4.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
 
   '@rollup/rollup-android-arm-eabi@4.13.1':
     optional: true

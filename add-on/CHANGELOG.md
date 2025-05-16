@@ -1,10 +1,5 @@
-**1.0.27 - 2025-05-15**
+**1.0.28 - 2025-05-16**
 
 __New__
 
-- Show doorbell video streams when visitor is at door
-
-__Fixed__
-
-- Removed debug messages
-- Everyday calendar store is now working again
+- Added delay to closing of doorbell cam overlay
