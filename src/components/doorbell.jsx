@@ -5,6 +5,9 @@ import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import WhepVideo from './whep-video'
 
+// Duration to keep overlay open, afer door ring event stopped
+const DELAY_IN_MS = 45000
+
 const Container = styled.div`
 
     h3 {
@@ -42,8 +45,6 @@ const Container = styled.div`
 `
 
 const Doorbell = () => {
-
-    const DELAY_IN_MS = 10000
 
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()

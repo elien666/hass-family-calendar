@@ -1,5 +1,5 @@
-**1.0.29 - 2025-05-17**
+**1.0.30 - 2025-05-18**
 
 __Fixed__
 
-- Moved from HLS to WebRTC for video streams
+- Increased delay to keep door cam overlay open
