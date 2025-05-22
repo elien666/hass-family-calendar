@@ -1,9 +1,9 @@
-import React from 'react'
 import Icon from '@mdi/react'
 import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
 import styled from 'styled-components'
 import clsx from 'clsx'
 import Clock from './clock'
+import Doorbell from '../components/doorbell'
 
 const Div = styled.div`
   display: flex;
@@ -70,6 +70,7 @@ const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
               color='#ffffff'
               onClick={nextWeek}/>
         <button onClick={startWeekWithToday}>Today</button>
+        <Doorbell />
       </div>
 
       <Clock />

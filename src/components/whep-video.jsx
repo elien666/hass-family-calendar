@@ -1,11 +1,11 @@
 import React from 'react'
 import useWhepStream from '../utils/use-whep-stream';
 
-const WhepVideo = ({ src, ...params }) => {
+const WhepVideo = ({ src, show, ...params }) => {
 
     const ref = React.useRef();
 
-    useWhepStream(src, ref)
+    useWhepStream(src, show, ref)
 
     return (
         <video ref={ref} {...params} />

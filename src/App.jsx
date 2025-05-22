@@ -6,7 +6,6 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 //import usePhysicalButtons from './utils/use-physical-buttons'
 import './fonts/fonts.css'
-import Doorbell from './components/doorbell'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -53,7 +52,6 @@ function App() {
         <Sidebar pin={pin} />
       </div>
     <ToastContainer />
-    <Doorbell />
     </Div>
   )
 }

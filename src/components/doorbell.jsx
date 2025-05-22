@@ -48,7 +48,6 @@ const Doorbell = () => {
 
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()
-    //const [ state, setState ] = React.useState('on')
     const [ cancelId, setCancelId ] = React.useState(undefined)
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
@@ -80,33 +79,36 @@ const Doorbell = () => {
     }, [ cancelId, state, setProgress, setCancelId ])
 
     return (
-        <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
-            <Container>
-            
-                <ProgressBar
-                    completed={progress}
-                    height={10}
-                    bgColor={cancelId === undefined ? 'none' : '#c0bfbf'}
-                    isLabelVisible={false}
-                    baseBgColor=""
-                    transitionDuration={transitionDuration}
-                    transitionTimingFunction='linear'
-                />
+        <>
+            <button onClick={() => toggle(v => !v)}>CCTV</button>
+            <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
+                <Container>
+                
+                    <ProgressBar
+                        completed={progress}
+                        height={10}
+                        bgColor={cancelId === undefined ? 'none' : '#c0bfbf'}
+                        isLabelVisible={false}
+                        baseBgColor=""
+                        transitionDuration={transitionDuration}
+                        transitionTimingFunction='linear'
+                    />
 
-                <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
-                    <div>
-                        <WhepVideo src="http://192.168.188.126:8889/tuerklingel_sub/whep" 
-                            muted={true} controls={false} autoPlay={true} width='360' height='480' />
-                    </div>
-                    <div>
-                        <WhepVideo src="http://192.168.188.126:8889/eingang/whep" 
-                            muted={true} controls={false} autoPlay={true} width='420' height='240px' />
-                        <WhepVideo src="http://192.168.188.126:8889/weg/whep" 
-                            muted={true} controls={false} autoPlay={true} width='420' height='240px' />
-                    </div>
-                </div>                
-            </Container>
-        </Overlay>
+                    <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
+                        <div> 
+                        <WhepVideo src="http://192.168.188.10:8889/tuerklingel_sub/whep" show={showDoorCams}
+                            muted={true} controls={false} autoPlay={true} width='360' height='480' />                   
+                        </div>
+                        <div>
+                        <WhepVideo src="http://192.168.188.10:8889/eingang/whep" show={showDoorCams}
+                                muted={true} controls={false} autoPlay={true} width='420' height='240px' />
+                        <WhepVideo src="http://192.168.188.10:8889/weg/whep" show={showDoorCams}
+                                muted={true} controls={false} autoPlay={true} width='420' height='240px' />
+                        </div>
+                    </div>                
+                </Container>
+            </Overlay>
+        </>
     )
 }
 
