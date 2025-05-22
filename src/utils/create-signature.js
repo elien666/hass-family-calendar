@@ -1,24 +1,10 @@
+import hmacSha1 from 'crypto-js/hmac-sha1'
+import Base64 from 'crypto-js/enc-base64'
+
 const secret = ''
 
 async function createSignature(body) {
-  const enc = new TextEncoder('utf-8');
-  const algorithm = { name: "HMAC", hash: "SHA-1" };
-
-  const key = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(secret),
-      algorithm,
-      false,
-      ["sign", "verify"]
-  );
-
-  const signature = await crypto.subtle.sign(
-      algorithm.name,
-      key,
-      enc.encode(JSON.stringify(body))
-  );
-
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return Base64.stringify(hmacSha1(JSON.stringify(body), secret))
 }
 
 export default createSignature
