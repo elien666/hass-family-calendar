@@ -1,5 +1,9 @@
-**1.0.30 - 2025-05-18**
+**1.1.0 - 2025-05-22**
+
+__New__
+
+- Improved CSS layout
 
 __Fixed__
 
-- Increased delay to keep door cam overlay open
+- Issues with nginx and pirateweather by migrating to apache httpd
