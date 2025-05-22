@@ -22,7 +22,7 @@ const Div = styled.div`
 
   .schedule {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     grid-template-rows: repeat(2, max-content) 1fr;
     grid-column-gap: 12px;
     flex-grow: 1;
@@ -55,11 +55,16 @@ const Div = styled.div`
       padding: 6px 12px;
       border-radius: 4px;
       background-color: #356957;
+      word-break: break-word;
+      font-size: 0.9rem;
 
       h3 {
-        margin: 0 0 6px 0;
+        margin: 6px 0 0 0;
         display: flex;
         align-items: flex-start;
+        font-size: 0.8rem;
+        font-weight: normal;
+        color: #ffffff6b
       }
 
       @media only screen and (max-width: 1200px) {
@@ -134,6 +139,12 @@ const Week = () => {
     onSwipedLeft: () => nextWeek(),
     onSwipedRight: () => previousWeek()
   })
+
+  const dateOptions = {
+    weekday: 'short',
+    month: 'numeric',   
+    day: 'numeric'   
+  };
   
   return (
     <Div {...swipeHandlers}>
@@ -143,7 +154,7 @@ const Week = () => {
           {/* First row: Captions */}
           {data.slice(0,7).map((day, index) => (
             <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) }, 'caption')}>
-              <h2>{day.date.toLocaleString(DateTime.DATE_MED_WITH_WEEKDAY)}</h2>
+              <h2>{day.date.toLocaleString(dateOptions)}</h2>
             </div>
           ))}
 
@@ -152,7 +163,7 @@ const Week = () => {
             <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
               {day.allDay.map((event, index) => (
                 <div key={index} className={'allDayEvent'}>
-                  {event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>}
+                  {/*event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>*/}
                   {event.summary}
                 </div>
               ))}
@@ -164,13 +175,13 @@ const Week = () => {
             <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
               {day.events.map((event, index) => (
                 <div key={index} className={'event'}>
+                  <div>
+                    {event.summary}
+                  </div>
                   <h3>
                     {event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>}
                     {formatDateTime(event.start.dateTime)} - {formatDateTime(event.end.dateTime)}
                   </h3>
-                  <div>
-                    {event.summary}
-                  </div>
                 </div>
               ))}
             </div>

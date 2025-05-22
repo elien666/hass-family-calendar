@@ -19,7 +19,7 @@ const Div = styled.div`
   }
   
   h2 {
-    font-size: 32px;
+    font-size: 1.3rem;
     font-weight: 400;
   }
   

@@ -11,12 +11,6 @@ import clsx from 'clsx'
 const Div = styled.div`
   padding-bottom: 12px;
   cursor: pointer;
-  
-  h2 {
-    margin: 1.5rem 0 1rem;
-    padding: 0;
-    font-size: 26px;
-  }
 
   @media only screen and (max-width: 1200px) {
     h2 {
