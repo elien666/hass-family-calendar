@@ -5,6 +5,7 @@ import {
 import React from 'react'
 import axios from 'axios'
 import { HASS_HOST } from "./config";
+import telegramDebug from './telegram-debug';
 
 const ACCESS_TOKEN = ''
 const ENTITY_ID = 'binary_sensor.tuerklingel_besucher'
@@ -39,6 +40,14 @@ const useDoorbell = () => {
       }
     
       const connection = await createConnection({ auth });
+
+      const eventHandler = (event) => (connection, data) => {
+        telegramDebug('doorbell', `${event} - ` + JSON.stringify(data))
+      }
+
+      connection.addEventListener("ready", eventHandler('ready'));
+      connection.addEventListener("disconnected", eventHandler('disconnected'));
+      connection.addEventListener("reconnect-error", eventHandler('reconnect-error'));
     
       const trigger = (result) => {
         setState(result.variables.trigger.to_state.state)

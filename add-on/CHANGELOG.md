@@ -7,3 +7,5 @@ __New__
 __Fixed__
 
 - Issues with nginx and pirateweather by migrating to apache httpd
+- Doorcam Videos
+- HVV over non SSL
