@@ -1,11 +1,5 @@
-**1.1.0 - 2025-05-22**
+**1.1.1 - 2025-05-27**
 
 __New__
 
-- Improved CSS layout
-
-__Fixed__
-
-- Issues with nginx and pirateweather by migrating to apache httpd
-- Doorcam Videos
-- HVV over non SSL
+- Auto reload to re-establish connection every 3 hours

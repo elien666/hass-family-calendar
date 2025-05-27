@@ -6,6 +6,7 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 //import usePhysicalButtons from './utils/use-physical-buttons'
 import './fonts/fonts.css'
+import useReload from './utils/use-reload'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -43,6 +44,8 @@ const Div = styled.div`
 function App() {
 
   const pin = undefined// usePhysicalButtons()
+  
+  useReload()
 
   return (
     <Div>
