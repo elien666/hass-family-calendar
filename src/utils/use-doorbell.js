@@ -7,7 +7,8 @@ import axios from 'axios'
 import { HASS_HOST } from "./config";
 
 const ACCESS_TOKEN = ''
-const ENTITY_ID = 'binary_sensor.tuerklingel_besucher'
+//const ENTITY_ID = 'binary_sensor.tuerklingel_besucher'
+const ENTITY_ID = 'binary_sensor.tuerklingel_person'
 
 axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
 
