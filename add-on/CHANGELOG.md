@@ -1,5 +1,5 @@
-**1.1.1 - 2025-05-27**
+**1.2.0 - 2025-06-20**
 
 __New__
 
-- Auto reload to re-establish connection every 3 hours
+- Unlatch front door when clicking on CCTV cams

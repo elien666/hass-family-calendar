@@ -1,5 +1,5 @@
 import React from 'react'
-import useDoorbell from "../utils/use-doorbell"
+import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
@@ -9,6 +9,8 @@ import WhepVideo from './whep-video'
 const DELAY_IN_MS = 45000
 
 const Container = styled.div`
+
+    position: relative;
 
     h3 {
         margin-top: 6px;
@@ -41,6 +43,19 @@ const Container = styled.div`
             flex-direction: column;
             align-items: center;
         }
+    }
+
+    .open-door {
+        position: absolute;
+        top: 38%;
+        left: 38%;
+        background-color: rgba(127, 32, 34, 0.5);
+        width: 25%;
+        height: 25%;
+        display: grid;
+        justify-content: center;
+        align-content: center;
+        border-radius: 24px;
     }
 `
 
@@ -78,11 +93,22 @@ const Doorbell = () => {
         }
     }, [ cancelId, state, setProgress, setCancelId ])
 
+    const [ showOpenDoor, setShowOpenDoor ] = React.useState(false)
+    const openDoor = () => {
+        unlatchFrontDoor();
+        setShowOpenDoor(true)
+    }
+    React.useEffect(() => {
+        if (showOpenDoor) {
+            setTimeout(() => setShowOpenDoor(false), 1000)
+        }
+    }, [ showOpenDoor ])
+
     return (
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
             <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
-                <Container>
+                <Container onClick={() => openDoor()}>
                 
                     <ProgressBar
                         completed={progress}
@@ -101,11 +127,18 @@ const Doorbell = () => {
                         </div>
                         <div>
                         <WhepVideo src="http://192.168.188.10:8889/eingang/whep" show={showDoorCams}
-                                muted={true} controls={false} autoPlay={true} width='420' height='240px' />
+                                muted={true} controls={false} autoPlay={true} width='100%' />
                         <WhepVideo src="http://192.168.188.10:8889/weg/whep" show={showDoorCams}
-                                muted={true} controls={false} autoPlay={true} width='420' height='240px' />
+                                muted={true} controls={false} autoPlay={true} width='100%' height='240px' />
                         </div>
-                    </div>                
+                    </div>    
+                    {showOpenDoor && (
+                    
+                    <div className='open-door'>
+                        Tür öffnet sich
+                    </div>
+
+                    )}            
                 </Container>
             </Overlay>
         </>

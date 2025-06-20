@@ -64,4 +64,11 @@ const useDoorbell = () => {
 
 }
 
+export const unlatchFrontDoor = () => {
+  console.log('Ulatchiung doot')
+  axios.post(`${HASS_HOST}/api/services/button/press`, {
+    "entity_id": "button.haustur_unlatch_2"
+  })
+}
+
 export default useDoorbell
