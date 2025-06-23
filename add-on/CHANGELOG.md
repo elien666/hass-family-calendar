@@ -1,5 +1,6 @@
-**1.2.0 - 2025-06-20**
+**1.2.1 - 2025-06-23**
 
-__New__
+__Fixed__
 
-- Unlatch front door when clicking on CCTV cams
+- Overlay close inaccessible, especially on CCTV screen
+- Weather data displayed incorrectly and ugly
