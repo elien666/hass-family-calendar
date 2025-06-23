@@ -197,8 +197,8 @@ const Weather = ({ pin }) => {
               <div><span>Gefühlt:</span> {Math.round(data.daily.data[0].apparentTemperatureHigh)}° C</div>
               <div><span>Luftfeuchtigkeit:</span> {Math.round(data.daily.data[0].humidity * 100)} %</div>
               <div><span>Wind:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
-              <div><span>Bewölkung:</span> {data.daily.data[0].cloudCover * 100} %</div>
-              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 1000} %</div>
+              <div><span>Bewölkung:</span> {Math.round(data.daily.data[0].cloudCover * 100)} %</div>
+              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 100} %</div>
               <div><span>UV Index:</span> {data.daily.data[0].uvIndex}</div>
               <div><span>Luftdruck:</span> {Math.round(data.daily.data[0].pressure)}</div>
               <div><span>Windgeschwindigkeit:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
