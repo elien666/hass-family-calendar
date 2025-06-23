@@ -108,7 +108,7 @@ const Doorbell = () => {
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
             <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
-                <Container onClick={() => openDoor()}>
+                <Container>
                 
                     <ProgressBar
                         completed={progress}
@@ -121,14 +121,14 @@ const Doorbell = () => {
                     />
 
                     <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
-                        <div> 
-                        <WhepVideo src="http://192.168.188.10:8889/tuerklingel_sub/whep" show={showDoorCams}
-                            muted={true} controls={false} autoPlay={true} width='360' height='480' />                   
+                        <div onClick={() => openDoor()}> 
+                            <WhepVideo src="http://192.168.188.10:8889/tuerklingel_sub/whep" show={showDoorCams}
+                                muted={true} controls={false} autoPlay={true} width='360' height='480' />                   
                         </div>
-                        <div>
-                        <WhepVideo src="http://192.168.188.10:8889/eingang/whep" show={showDoorCams}
+                        <div onClick={() => openDoor()}>
+                            <WhepVideo src="http://192.168.188.10:8889/eingang/whep" show={showDoorCams}
                                 muted={true} controls={false} autoPlay={true} width='100%' />
-                        <WhepVideo src="http://192.168.188.10:8889/weg/whep" show={showDoorCams}
+                            <WhepVideo src="http://192.168.188.10:8889/weg/whep" show={showDoorCams}
                                 muted={true} controls={false} autoPlay={true} width='100%' height='240px' />
                         </div>
                     </div>    

@@ -49,6 +49,14 @@ const Div = styled.div`
     text-align: right;
     cursor: pointer;
     margin: 0 0 2rem 0;
+    border-radius: 31px;
+    width: 62px;
+    height: 62px;
+    display: grid;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+    background-color: rgba(255,255,255,.2);
   }
 `
 
