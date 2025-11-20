@@ -1,5 +1,6 @@
 import styled from 'styled-components'
 import useWeatherData, { weatherIconToPresentation } from '../utils/use-weather-data'
+import { WEATHER_API_KEY } from '../utils/config'
 import { DateTime } from 'luxon'
 import useKeyPress from '../utils/use-key-press'
 import React, { memo, useMemo, useCallback } from 'react'
@@ -142,6 +143,10 @@ const Icon = ({ icon }) => {
 }
 
 const Weather = ({ pin }) => {
+  // Don't render if weather is not configured
+  if (!WEATHER_API_KEY) {
+    return null
+  }
 
   const data = useWeatherData()
   const [ showWeather, toggle ] = React.useState(false)

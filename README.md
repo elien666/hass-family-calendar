@@ -59,47 +59,48 @@ A magic mirror dashboard for Home Assistant which can be used without a mirror:
 - `pnpm run build` - Build for production (outputs to `add-on/dist`)
 - `pnpm run serve` - Preview production build
 
-## Environment Variables
+## Configuration
 
-All sensitive configuration has been moved to environment variables. Create a `.env` file in the root directory based on `.env.example`.
+### Local Development
 
-### Required Variables
+For local development, create a `.env` file in the root directory based on `.env.example` with the following variables:
 
-#### Home Assistant Configuration
+#### Required for Local Development
+
 - `VITE_HASS_HOST` - Your Home Assistant instance URL (e.g., `https://your-instance.ui.nabu.casa`)
 - `VITE_HASS_ACCESS_TOKEN` - Long-lived access token from Home Assistant
 
-#### Weather API
-- `VITE_WEATHER_API_KEY` - Pirate Weather API key
-- `VITE_WEATHER_LATITUDE` - Latitude for weather location (default: 53.570)
-- `VITE_WEATHER_LONGITUDE` - Longitude for weather location (default: 10.091)
+#### Optional Features (disable if not set)
 
-#### Geofox API (HVV Departures)
-- `VITE_GEOFOX_SECRET` - Geofox API secret key
+- `VITE_WEATHER_API_KEY` - Pirate Weather API key (disables weather feature if not set)
+- `VITE_WEATHER_LATITUDE` - Latitude for weather location
+- `VITE_WEATHER_LONGITUDE` - Longitude for weather location
+- `VITE_GEOFOX_SECRET` - Geofox API secret key (disables HVV departures if not set)
 - `VITE_GEOFOX_USER` - Geofox API username
-
-### Optional Variables
-
-#### Telegram Bot (for debugging)
 - `VITE_TELEGRAM_BOT_TOKEN` - Telegram bot token (optional)
 - `VITE_TELEGRAM_CHAT_ID` - Telegram chat ID for notifications (optional)
+- `VITE_BUTTONS_WS_URL` - WebSocket URL for physical button integration (optional)
+- `VITE_ENTITY_GARAGE_DOOR` - Garage door entity ID (disables garage feature if not set)
+- `VITE_ENTITY_WASHING_MACHINE_NEW` - New washing machine status entity
+- `VITE_ENTITY_WASHING_MACHINE_OLD` - Old washing machine status entity
+- `VITE_ENTITY_DRYER` - Dryer status entity
+- `VITE_ENTITY_DOORBELL` - Doorbell sensor entity
+- `VITE_ENTITY_DOORBELL_BUTTON` - Doorbell unlatch button entity
+- `VITE_ENTITY_EVERYDAY_CALENDAR` - Everyday calendar sensor entity
 
-#### Physical Buttons
-- `VITE_BUTTONS_WS_URL` - WebSocket URL for physical button integration (optional, default: `ws://:5678/`)
+### Home Assistant Add-on Configuration
 
-### Home Assistant Entity IDs
+When running as a Home Assistant add-on, configuration is managed through the Home Assistant UI:
 
-Configure these to match your Home Assistant entity names:
+1. **HASS_HOST and HASS_ACCESS_TOKEN**: Not required when running in HA. The add-on automatically uses relative URLs and ingress authentication.
+2. **All other properties**: Optional. If not configured, the respective feature will be disabled.
+   - Weather feature requires `weather_api_key`, `weather_latitude`, `weather_longitude`
+   - HVV departures require `geofox_user` and `geofox_secret`
+   - Entity-based features require their respective entity IDs
 
-- `VITE_ENTITY_GARAGE_DOOR` - Garage door entity (default: `cover.garagentor`)
-- `VITE_ENTITY_WASHING_MACHINE_NEW` - New washing machine status (default: `input_select.wasching_machine_neu_status`)
-- `VITE_ENTITY_WASHING_MACHINE_OLD` - Old washing machine status (default: `input_select.washing_machine_alt_status`)
-- `VITE_ENTITY_DRYER` - Dryer status (default: `input_select.dryer_status`)
-- `VITE_ENTITY_DOORBELL` - Doorbell sensor (default: `binary_sensor.tuerklingel_person`)
-- `VITE_ENTITY_DOORBELL_BUTTON` - Doorbell unlatch button (default: `button.haustur_unlatch_2`)
-- `VITE_ENTITY_EVERYDAY_CALENDAR` - Everyday calendar sensor (default: `sensor.everyday_calendar`)
+See `add-on/README.md` for detailed add-on configuration instructions.
 
-### Getting Your Home Assistant Token
+### Getting Your Home Assistant Token (for local development)
 
 1. Go to your Home Assistant profile
 2. Scroll down to "Long-Lived Access Tokens"
@@ -112,12 +113,15 @@ Configure these to match your Home Assistant entity names:
 
 This project is designed to be deployed as a Home Assistant add-on. The build output goes to `add-on/dist` which is served by Apache.
 
-See `add-on/README.md` for add-on specific documentation.
+**Configuration**: When running as a HA add-on, configure options through the Home Assistant UI. HASS_HOST and HASS_ACCESS_TOKEN are automatically handled by the add-on (not required). All other options are optional - unset options will disable their respective features.
+
+See `add-on/README.md` for detailed add-on configuration instructions.
 
 ### Build Notes
 
 - The build uses Vite for fast development and optimized production builds
-- All environment variables must be prefixed with `VITE_` to be accessible in the browser
+- For local development, environment variables must be prefixed with `VITE_` to be accessible in the browser
+- For HA add-on deployment, configuration is injected at runtime via `config.js`
 - The `merry-timeline` package requires a postinstall fix (automated via `scripts/fix-merry-timeline.js`)
 
 ## Development Notes

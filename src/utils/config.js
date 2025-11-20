@@ -1,20 +1,52 @@
-// Environment variables
-export const HASS_HOST = import.meta.env.VITE_HASS_HOST
-export const HASS_ACCESS_TOKEN = import.meta.env.VITE_HASS_ACCESS_TOKEN
-export const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY
-export const WEATHER_LATITUDE = import.meta.env.VITE_WEATHER_LATITUDE
-export const WEATHER_LONGITUDE = import.meta.env.VITE_WEATHER_LONGITUDE
-export const GEOFOX_SECRET = import.meta.env.VITE_GEOFOX_SECRET
-export const GEOFOX_USER = import.meta.env.VITE_GEOFOX_USER
-export const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN
-export const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID
-export const BUTTONS_WS_URL = import.meta.env.VITE_BUTTONS_WS_URL
+// Get runtime config from window.APP_CONFIG (injected by HA add-on) or fallback to build-time env vars
+const getConfig = (key, defaultValue = undefined) => {
+  // Check for runtime config from HA add-on first
+  if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG[key] !== undefined) {
+    const value = window.APP_CONFIG[key]
+    // Return empty string as-is, but convert undefined/null to empty string for consistency
+    return value === null || value === undefined ? defaultValue : value
+  }
+  // Fallback to build-time environment variables
+  const envValue = import.meta.env[`VITE_${key}`]
+  return envValue !== undefined ? envValue : defaultValue
+}
 
-// Entity IDs
-export const ENTITY_GARAGE_DOOR = import.meta.env.VITE_ENTITY_GARAGE_DOOR
-export const ENTITY_WASHING_MACHINE_NEW = import.meta.env.VITE_ENTITY_WASHING_MACHINE_NEW
-export const ENTITY_WASHING_MACHINE_OLD = import.meta.env.VITE_ENTITY_WASHING_MACHINE_OLD
-export const ENTITY_DRYER = import.meta.env.VITE_ENTITY_DRYER
-export const ENTITY_DOORBELL = import.meta.env.VITE_ENTITY_DOORBELL
-export const ENTITY_DOORBELL_BUTTON = import.meta.env.VITE_ENTITY_DOORBELL_BUTTON
-export const ENTITY_EVERYDAY_CALENDAR = import.meta.env.VITE_ENTITY_EVERYDAY_CALENDAR
+// Home Assistant configuration
+// In HA add-on mode, HASS_HOST is empty string for relative URLs, HASS_ACCESS_TOKEN is empty (ingress handles auth)
+// For local dev, these should be set via .env
+export const HASS_HOST = getConfig('HASS_HOST', '')
+export const HASS_ACCESS_TOKEN = getConfig('HASS_ACCESS_TOKEN', '')
+
+// Weather API configuration (optional - feature disabled if not set)
+export const WEATHER_API_KEY = getConfig('WEATHER_API_KEY')
+export const WEATHER_LATITUDE = getConfig('WEATHER_LATITUDE')
+export const WEATHER_LONGITUDE = getConfig('WEATHER_LONGITUDE')
+
+// Geofox API configuration (optional - feature disabled if not set)
+export const GEOFOX_SECRET = getConfig('GEOFOX_SECRET')
+export const GEOFOX_USER = getConfig('GEOFOX_USER')
+
+// Telegram configuration (optional - feature disabled if not set)
+export const TELEGRAM_BOT_TOKEN = getConfig('TELEGRAM_BOT_TOKEN')
+export const TELEGRAM_CHAT_ID = getConfig('TELEGRAM_CHAT_ID')
+
+// Physical buttons WebSocket URL (optional - feature disabled if not set)
+export const BUTTONS_WS_URL = getConfig('BUTTONS_WS_URL')
+
+// Entity IDs (optional - feature disabled if not set)
+export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
+export const ENTITY_WASHING_MACHINE_NEW = getConfig('ENTITY_WASHING_MACHINE_NEW')
+export const ENTITY_WASHING_MACHINE_OLD = getConfig('ENTITY_WASHING_MACHINE_OLD')
+export const ENTITY_DRYER = getConfig('ENTITY_DRYER')
+export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
+export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
+export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
+
+// Helper function to build HA API URLs
+// When HASS_HOST is empty (HA add-on mode), use relative URLs
+export const buildHaUrl = (path) => {
+  if (!HASS_HOST) {
+    return path.startsWith('/') ? path : `/${path}`
+  }
+  return `${HASS_HOST}${path.startsWith('/') ? path : `/${path}`}`
+}

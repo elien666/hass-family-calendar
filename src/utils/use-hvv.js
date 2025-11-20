@@ -4,7 +4,7 @@ import axios from 'axios'
 import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
-import { GEOFOX_USER } from './config'
+import { GEOFOX_USER, GEOFOX_SECRET } from './config'
 import logger from './logger'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
@@ -49,7 +49,15 @@ const useHvv = (endPoint) => {
   const [ responseData, set ] = React.useState([])
   const timeout = useTimeout(60000) // 60 seconds
 
+  // Check if Geofox is configured
+  const isConfigured = GEOFOX_USER && GEOFOX_SECRET
+
   React.useEffect(() => {
+
+    // Skip if not configured
+    if (!isConfigured) {
+      return
+    }
 
     if(!(endPoint in SUPPORTED_CALLS)) {
       logger.warn(endPoint, 'not supported by HVV connector')
@@ -98,7 +106,7 @@ const useHvv = (endPoint) => {
         logger.error('Error calling Geofox API', error)
       })
 
-  }, [endPoint, timeout])
+  }, [endPoint, timeout, isConfigured])
 
   return responseData
 

@@ -24,7 +24,15 @@ const useWeatherData = (toggleLoading) => {
   const [ data, setData ] = React.useState([])
   const timer = useTimeout(60000 * 10, 'Weather') // 1 hour in ms
 
+  // Check if weather is configured
+  const isConfigured = WEATHER_API_KEY && WEATHER_LATITUDE && WEATHER_LONGITUDE
+
   React.useEffect(() => {
+    // Skip if not configured
+    if (!isConfigured) {
+      if(toggleLoading) toggleLoading(false)
+      return
+    }
 
     if(toggleLoading) toggleLoading(true)
 
@@ -38,7 +46,7 @@ const useWeatherData = (toggleLoading) => {
       .finally(() => { if(toggleLoading) toggleLoading(false) })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ timer, toggleLoading ])
+  }, [ timer, toggleLoading, isConfigured ])
 
   return data
 }
