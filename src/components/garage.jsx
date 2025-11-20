@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react'
-import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline } from '@mdi/js'
+import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline, mdiArrowUp, mdiArrowDown } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
@@ -7,6 +7,7 @@ import useKeyPress from '../utils/use-key-press'
 import { toast } from 'react-toastify'
 import Overlay from './overlay'
 import clsx from 'clsx'
+import logger from '../utils/logger'
 
 const Div = styled.div`
   padding-bottom: 12px;
@@ -86,7 +87,12 @@ const toPresentation = (state) => {
   const map = {
     'unknown': { label: 'In Bewegung oder halb-offen', icon: mdiGarageAlertVariant },
     'open': { label: 'Offen', icon: mdiGarageOpenVariant },
-    'closed': { label: 'Geschlossen', icon: mdiGarageVariant }
+    'closed': { label: 'Geschlossen', icon: mdiGarageVariant },
+    'opening': { label: 'Öffnet', icon: mdiArrowUp },
+    'closing': { label: 'Schließt', icon: mdiArrowDown }
+  }
+  if (!map[state]) {
+    logger.warn('Garage door state is not recognized:', state, 'Available states: unknown, open, closed, opening, closing')
   }
   return map[state] || { label: 'Unavailable', icon: mdiCloudQuestionOutline }
 }
@@ -123,7 +129,10 @@ const Garage = () => {
   const [ showControls, toggle ] = React.useState(false)
 
   React.useEffect(() => {
-    if (garageDoor === 'unknown') {
+    // Check if garage door is in motion (unknown, opening, or closing)
+    const isInMotion = garageDoor === 'unknown' || garageDoor === 'opening' || garageDoor === 'closing'
+    
+    if (isInMotion) {
       if(!garageInMotion) {
         // Set garageInMotion to resolve function of promise
         const promise = new Promise((resolve) => {
