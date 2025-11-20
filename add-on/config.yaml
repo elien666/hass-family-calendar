@@ -15,24 +15,6 @@ panel_icon: mdi:calendar-week
 panel_admin: false
 panel_title: Kalender
 homeassistant_api: true
-options:
-  hass_host: null
-  hass_access_token: null
-  weather_api_key: null
-  weather_latitude: null
-  weather_longitude: null
-  geofox_secret: null
-  geofox_user: null
-  telegram_bot_token: null
-  telegram_chat_id: null
-  buttons_ws_url: null
-  entity_garage_door: null
-  entity_washing_machine_new: null
-  entity_washing_machine_old: null
-  entity_dryer: null
-  entity_doorbell: null
-  entity_doorbell_button: null
-  entity_everyday_calendar: null
 schema:
   hass_host: str?
   hass_access_token: password?

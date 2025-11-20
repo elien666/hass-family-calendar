@@ -78,23 +78,68 @@ jobs:
         id: update-changelog
         shell: bash
         run: |
-          # Get full commit message
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          
           # Get current date
           CURRENT_DATE=$(date +%Y-%m-%d)
           
           # Get new version from previous step
           NEW_VERSION="${{ steps.update-version.outputs.new_version }}"
+          CURRENT_VERSION="${{ steps.update-version.outputs.current_version }}"
           
-          # Create new changelog entry in the same format as existing entries
-          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$COMMIT_MSG\n"
+          # Extract the last version date from CHANGELOG.md
+          LAST_VERSION_LINE=$(grep -m 1 "^\*\*" add-on/CHANGELOG.md || echo "")
+          LAST_VERSION_DATE=""
           
-          # Prepend to CHANGELOG.md
-          echo -e "$NEW_ENTRY$(cat add-on/CHANGELOG.md)" > add-on/CHANGELOG.md.tmp
-          mv add-on/CHANGELOG.md.tmp add-on/CHANGELOG.md
+          if [ -n "$LAST_VERSION_LINE" ]; then
+            # Extract date from the last version line (format: **VERSION - DATE**)
+            LAST_VERSION_DATE=$(echo "$LAST_VERSION_LINE" | sed -n 's/.*\*\*[^ ]* - \([0-9-]*\)\*\*.*/\1/p')
+          fi
           
+          # Get all commits since the last version (not just the latest commit)
+          COMMITS=""
+          if [ -n "$LAST_VERSION_DATE" ]; then
+            # Get commits since the last version date, excluding merge commits
+            # Use --no-merges to exclude all merge commits
+            COMMITS=$(git log --since="$LAST_VERSION_DATE" --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
+          fi
+          
+          # If no commits found by date or empty, get recent commits as fallback
+          if [ -z "$COMMITS" ] || [ -z "$(echo "$COMMITS" | grep -v '^$' | head -1)" ]; then
+            # Fallback: get last 100 commits excluding merges
+            COMMITS=$(git log --pretty=format:"%s" --no-merges -100 2>/dev/null || echo "")
+          fi
+          
+          # Filter out "Merge pull request" and other merge-related messages
+          # Also filter out automated build commits and changelog/version bump commits
+          FILTERED_COMMITS=$(echo "$COMMITS" | \
+            grep -v -i "merge pull request" | \
+            grep -v -i "merge branch" | \
+            grep -v -i "merge remote" | \
+            grep -v "^Merge " | \
+            grep -v "chore: build addon" | \
+            grep -v "Update CHANGELOG" | \
+            grep -v "Bump version" | \
+            grep -v "^$" | \
+            awk '!seen[$0]++' | \
+            head -100 || echo "")
+          
+          # If still no commits found, use a default message
+          if [ -z "$FILTERED_COMMITS" ] || [ -z "$(echo "$FILTERED_COMMITS" | grep -v '^$' | head -1)" ]; then
+            FILTERED_COMMITS="Version $NEW_VERSION"
+          fi
+          
+          # Format commits as a bulleted list
+          FORMATTED_COMMITS=$(echo "$FILTERED_COMMITS" | sed 's/^/- /')
+          
+          # Create new changelog entry
+          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS\n"
+          
+          # Replace the entire content of CHANGELOG.md with the new entry
+          # This replaces the content instead of just prepending the latest commit
+          echo -e "$NEW_ENTRY" > add-on/CHANGELOG.md
+          
+          COMMIT_COUNT=$(echo "$FILTERED_COMMITS" | grep -v '^$' | wc -l | tr -d ' ')
           echo "Updated add-on/CHANGELOG.md with new entry for version $NEW_VERSION"
+          echo "Included $COMMIT_COUNT commits (excluding merge commits and automated messages)"
 
       - name: Build frontend
         run: pnpm run build
