@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, buildHaUrl } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 
@@ -13,7 +13,7 @@ if (HASS_ACCESS_TOKEN) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
 }
 
-const urlPattern = ( entity ) => `${HASS_HOST}/api/states/${entity}`
+const urlPattern = ( entity ) => entity ? buildHaUrl(`/api/states/${entity}`) : null
 
 export const mapToPresentation = {
   done: { label: 'Fertig', animate: false, icon: mdiWashingMachineAlert },
@@ -86,8 +86,17 @@ const useSubscription = ( entity ) => {
 
   const [ state, setState ] = React.useState('off')
 
+  // Check if entity is configured
+  const isConfigured = entity && (HASS_HOST || HASS_ACCESS_TOKEN)
+  const url = urlPattern(entity)
+
   React.useEffect(() => {
-    axios(urlPattern(entity))
+    // Skip if not configured
+    if (!isConfigured || !url) {
+      return
+    }
+
+    axios(url)
       .then((response) => {
         setState(response.data.state)
       })
@@ -95,7 +104,7 @@ const useSubscription = ( entity ) => {
         logger.error(`Failed to fetch state for ${entity}:`, err)
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity])
+  }, [entity, isConfigured, url])
 
   React.useEffect(() => {
     let connection = null
@@ -103,16 +112,22 @@ const useSubscription = ( entity ) => {
     let isMounted = true
 
     async function setupConnection() {
-      if (!HASS_ACCESS_TOKEN) {
-        logger.error('HASS_ACCESS_TOKEN is not configured')
+      // Skip if not configured
+      if (!isConfigured || !entity) {
+        return
+      }
+
+      const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
+      const token = HASS_ACCESS_TOKEN || ''
+      
+      // Skip WebSocket connection if no token
+      if (!token) {
+        logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
         return
       }
       
       try {
-        const auth = createLongLivedTokenAuth(
-          HASS_HOST,
-          HASS_ACCESS_TOKEN
-        );
+        const auth = createLongLivedTokenAuth(host, token)
 
         connection = await createConnection({ auth });
 
@@ -147,7 +162,7 @@ const useSubscription = ( entity ) => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity])
+  }, [entity, isConfigured])
 
   return state
 

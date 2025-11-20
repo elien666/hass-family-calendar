@@ -14,3 +14,40 @@ ingress_port: 80
 panel_icon: mdi:calendar-week
 panel_admin: false
 panel_title: Kalender
+homeassistant_api: true
+options:
+  hass_host: null
+  hass_access_token: null
+  weather_api_key: null
+  weather_latitude: null
+  weather_longitude: null
+  geofox_secret: null
+  geofox_user: null
+  telegram_bot_token: null
+  telegram_chat_id: null
+  buttons_ws_url: null
+  entity_garage_door: null
+  entity_washing_machine_new: null
+  entity_washing_machine_old: null
+  entity_dryer: null
+  entity_doorbell: null
+  entity_doorbell_button: null
+  entity_everyday_calendar: null
+schema:
+  hass_host: str?
+  hass_access_token: password?
+  weather_api_key: password?
+  weather_latitude: float?
+  weather_longitude: float?
+  geofox_secret: password?
+  geofox_user: str?
+  telegram_bot_token: password?
+  telegram_chat_id: str?
+  buttons_ws_url: url?
+  entity_garage_door: str?
+  entity_washing_machine_new: str?
+  entity_washing_machine_old: str?
+  entity_dryer: str?
+  entity_doorbell: str?
+  entity_doorbell_button: str?
+  entity_everyday_calendar: str?

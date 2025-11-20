@@ -4,7 +4,7 @@ import axios from 'axios'
 import qs from 'qs'
 import { mdiDelete, mdiCake } from '@mdi/js'
 import useTimeout from './use-timeout'
-import { HASS_HOST, HASS_ACCESS_TOKEN } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl } from "./config"
 import logger from './logger'
 
 // Set authorization header if token is available
@@ -12,7 +12,7 @@ if (HASS_ACCESS_TOKEN) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
 }
 
-const host = (name) => `${HASS_HOST}/api/calendars/${name}`
+const host = (name) => buildHaUrl(`/api/calendars/${name}`)
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
 const calendars = [

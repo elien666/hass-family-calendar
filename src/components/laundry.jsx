@@ -2,6 +2,7 @@ import styled from 'styled-components'
 import Icon from '@mdi/react'
 import React, { memo, useCallback } from 'react'
 import useWashingMachine from '../utils/use-washing-machine'
+import { ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER } from '../utils/config'
 import clsx from 'clsx'
 import Overlay from './overlay'
 import { mapToPresentation } from '../utils/use-washing-machine'
@@ -60,9 +61,9 @@ const Div = styled.div`
       padding: .4rem 1rem;
       background-color: #262626;
       border-radius: 12px;
-  }
     }
   }
+  
   .subtitle {
     margin: 1rem 0 0 0;
     font-size: 1.2rem;
@@ -70,6 +71,10 @@ const Div = styled.div`
 `
 
 const Laundry = () => {
+  // Don't render if no laundry entities are configured
+  if (!ENTITY_WASHING_MACHINE_NEW && !ENTITY_WASHING_MACHINE_OLD && !ENTITY_DRYER) {
+    return null
+  }
 
   const [ status, states ] = useWashingMachine()
   const [ showLaundry, toggle ] = React.useState(false)

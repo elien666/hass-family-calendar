@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, buildHaUrl } from "./config"
 import logger from './logger'
 
 // Set authorization header if token is available
@@ -12,13 +12,21 @@ if (HASS_ACCESS_TOKEN) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
 }
 
-const url = `${HASS_HOST}/api/states/${ENTITY_EVERYDAY_CALENDAR}`
+const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`) : null
 
 const useEverydayCalendar = () => {
 
   const [ store, setStore ] = React.useState(null)
 
+  // Check if configured
+  const isConfigured = ENTITY_EVERYDAY_CALENDAR && (HASS_HOST || HASS_ACCESS_TOKEN)
+
   React.useEffect(() => {
+    // Skip if not configured
+    if (!isConfigured || !url) {
+      return
+    }
+
     axios(url)
       .then((response) => {
         if(response.data.attributes.store !== undefined) {
@@ -32,13 +40,14 @@ const useEverydayCalendar = () => {
         setStore([])
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isConfigured, url])
 
   return store
 
 }
 
 export const storeData = (data) => {
+  if (!url) return
   axios.post(url, {
     state: new Date(),
     attributes: { store: data }
