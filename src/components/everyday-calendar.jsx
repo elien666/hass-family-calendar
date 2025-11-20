@@ -2,6 +2,7 @@ import React from 'react'
 import clsx from "clsx"
 import styled from "styled-components"
 import useEverydayCalendar, { storeData } from '../utils/use-everyday-calendar-state'
+import { ENTITY_EVERYDAY_CALENDAR } from '../utils/config'
 import { ThreeDots } from 'react-loader-spinner'
 
 const Div = styled.div` 
@@ -60,6 +61,11 @@ const Dot = ({ on, month, day }) => {
 }
 
 const EverydayCalendar = () => {
+    // Don't render if everyday calendar is not configured
+    if (!ENTITY_EVERYDAY_CALENDAR) {
+        return null
+    }
+
     const current_year = new Date().getFullYear()
 
     const days = []

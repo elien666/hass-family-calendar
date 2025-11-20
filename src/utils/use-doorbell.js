@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, buildHaUrl } from "./config"
 import logger from './logger'
 
 // Set authorization header if token is available
@@ -12,14 +12,22 @@ if (HASS_ACCESS_TOKEN) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
 }
 
-const url = `${HASS_HOST}/api/states/${ENTITY_DOORBELL}`
+const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
 
 const useDoorbell = () => {
 
   const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
+  // Check if doorbell is configured
+  const isConfigured = ENTITY_DOORBELL && (HASS_HOST || HASS_ACCESS_TOKEN)
+
   React.useEffect(() => {
+    // Skip if not configured
+    if (!isConfigured || !url) {
+      return
+    }
+
     axios(url)
       .then((response) => {
         setState(response.data.state)
@@ -29,22 +37,30 @@ const useDoorbell = () => {
         setError(err instanceof Error ? err.message : String(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isConfigured, url])
 
   React.useEffect(() => {
     let connection = null
     let isMounted = true
 
     async function connect() {
+      // Skip if not configured
+      if (!isConfigured || !ENTITY_DOORBELL) {
+        return
+      }
+
       let auth
       try {
-        if (!HASS_ACCESS_TOKEN) {
-          throw new Error('HASS_ACCESS_TOKEN is not configured')
+        const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
+        const token = HASS_ACCESS_TOKEN || ''
+        
+        // Skip WebSocket connection if no token
+        if (!token) {
+          logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
+          return
         }
-        auth = createLongLivedTokenAuth(
-          HASS_HOST,
-          HASS_ACCESS_TOKEN
-        );
+        
+        auth = createLongLivedTokenAuth(host, token)
         if (isMounted) setError(false)
       } catch (err) {
         if (isMounted) setError(err instanceof Error ? err.message : String(err))
@@ -82,14 +98,15 @@ const useDoorbell = () => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isConfigured])
 
   return [ state, error ]
 
 }
 
 export const unlatchFrontDoor = () => {
-  axios.post(`${HASS_HOST}/api/services/button/press`, {
+  if (!ENTITY_DOORBELL_BUTTON) return
+  axios.post(buildHaUrl('/api/services/button/press'), {
     "entity_id": ENTITY_DOORBELL_BUTTON
   })
 }

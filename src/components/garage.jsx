@@ -3,6 +3,7 @@ import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloud
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
+import { ENTITY_GARAGE_DOOR } from '../utils/config'
 import useKeyPress from '../utils/use-key-press'
 import { toast } from 'react-toastify'
 import Overlay from './overlay'
@@ -122,6 +123,10 @@ const showToast = (promise, garageDoor) => (
 )
 
 const Garage = () => {
+  // Don't render if garage door is not configured
+  if (!ENTITY_GARAGE_DOOR) {
+    return null
+  }
 
   const [ garageDoor, error ] = useGarageDoor()
   const [ garageInMotion, setGarageInMotion ] = React.useState(undefined)

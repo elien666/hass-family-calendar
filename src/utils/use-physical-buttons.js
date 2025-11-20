@@ -26,6 +26,13 @@ const usePhysicalButtons = () => {
     }
   }
   const connect = () => {
+    // Skip if not configured
+    if (!BUTTONS_WS_URL) {
+      logger.debug('Buttons WS URL not configured, skipping connection')
+      setConnection(false)
+      return null
+    }
+
     try {
       const socket = new WebSocket(BUTTONS_WS_URL)
 
@@ -48,6 +55,11 @@ const usePhysicalButtons = () => {
   }
 
   React.useEffect(() => {
+    // Only connect if configured
+    if (!BUTTONS_WS_URL) {
+      return
+    }
+
     const socket = connect()
     return () => {
       if (socket) socket.close()
@@ -61,6 +73,11 @@ const usePhysicalButtons = () => {
   // Try reconnecting every 5 seconds, fail permanently after 10 tries
   const [counter, setCounter] = React.useState(0)
   React.useEffect(() => {
+    // Skip if not configured
+    if (!BUTTONS_WS_URL) {
+      return
+    }
+
     if (connection === false && counter < 10) {
       setCounter(i => i + 1)
       const interval = setInterval(connect, 5000)

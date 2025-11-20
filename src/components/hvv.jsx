@@ -1,6 +1,7 @@
 import React, { memo } from 'react'
 import styled from 'styled-components'
 import useHvv, { SUPPORTED_CALLS } from '../utils/use-hvv'
+import { GEOFOX_USER, GEOFOX_SECRET } from '../utils/config'
 
 const Div = styled.div`
   margin-top: 2rem;
@@ -65,6 +66,10 @@ const Departure = memo(({ line, direction, realtimeOffset }) => (
   ))
 
 const Hvv = () => {
+  // Don't render if Geofox is not configured
+  if (!GEOFOX_USER || !GEOFOX_SECRET) {
+    return null
+  }
 
   const data = useHvv(SUPPORTED_CALLS.departureList)
 
