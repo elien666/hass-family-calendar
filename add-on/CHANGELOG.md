@@ -1,3 +1,6 @@
+**2.1 - 2025-11-20**
+
+fix: update pnpm version to 10 in CI to support lockfile v9
 **2.0 - 2025-11-20**
 
 __New__
