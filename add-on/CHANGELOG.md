@@ -1,3 +1,8 @@
+**2.2 - 2025-11-20**
+
+Merge pull request #1 from elien666/develop
+
+Refactor configuration management and improve feature handling in the…
 **2.1 - 2025-11-20**
 
 fix: update pnpm version to 10 in CI to support lockfile v9
