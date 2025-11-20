@@ -1,0 +1,126 @@
+name: Build Home Assistant Add-on
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for commit messages
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Update version in config.yaml
+        id: update-version
+        shell: bash
+        run: |
+          # Read current version from config.yaml
+          CURRENT_VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Parse version parts
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          # Determine if version has patch component
+          if [ -z "$PATCH" ]; then
+            # MAJOR.MINOR format - increment minor (e.g., 2.0 -> 2.1)
+            NEW_VERSION="$MAJOR.$((MINOR + 1))"
+          else
+            # MAJOR.MINOR.PATCH format - increment patch (e.g., 2.0.1 -> 2.0.2)
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+          
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Update config.yaml
+          sed -i "s/^version: \".*\"/version: \"$NEW_VERSION\"/" add-on/config.yaml
+          echo "Updated add-on/config.yaml with version $NEW_VERSION"
+
+      - name: Update CHANGELOG.md
+        id: update-changelog
+        shell: bash
+        run: |
+          # Get full commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          
+          # Get current date
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          
+          # Get new version from previous step
+          NEW_VERSION="${{ steps.update-version.outputs.new_version }}"
+          
+          # Create new changelog entry in the same format as existing entries
+          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$COMMIT_MSG\n"
+          
+          # Prepend to CHANGELOG.md
+          echo -e "$NEW_ENTRY$(cat add-on/CHANGELOG.md)" > add-on/CHANGELOG.md.tmp
+          mv add-on/CHANGELOG.md.tmp add-on/CHANGELOG.md
+          
+          echo "Updated add-on/CHANGELOG.md with new entry for version $NEW_VERSION"
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Check for changes
+        id: git-check
+        shell: bash
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Check if there are any changes
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to commit"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected"
+            git status
+          fi
+
+      - name: Commit and push changes
+        if: steps.git-check.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          git add add-on/config.yaml add-on/CHANGELOG.md add-on/dist
+          git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }} [skip ci]"
+          git push origin main
+

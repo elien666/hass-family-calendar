@@ -9,8 +9,7 @@
 /coverage
 
 # build
-
-/add-on/dist
+# /add-on/dist - commented out to allow CI to commit built files
 
 # misc
 .DS_Store
