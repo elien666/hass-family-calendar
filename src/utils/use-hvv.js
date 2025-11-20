@@ -4,6 +4,8 @@ import axios from 'axios'
 import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
+import { GEOFOX_USER } from './config'
+import logger from './logger'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
@@ -15,7 +17,7 @@ const callApi = async (endPoint, data) => (
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json;charset=UTF-8',
-      'geofox-auth-user': '',
+      'geofox-auth-user': GEOFOX_USER,
       'geofox-auth-signature': await createSignature(data),
       'Authorization': undefined,
     }
@@ -50,7 +52,7 @@ const useHvv = (endPoint) => {
   React.useEffect(() => {
 
     if(!(endPoint in SUPPORTED_CALLS)) {
-      console.log(endPoint, 'not supported by HVV connector')
+      logger.warn(endPoint, 'not supported by HVV connector')
       return
     }
 
@@ -93,7 +95,7 @@ const useHvv = (endPoint) => {
         }
     })
       .catch((error) => {
-        console.log('Error calling Geofox API', error)
+        logger.error('Error calling Geofox API', error)
       })
 
   }, [endPoint, timeout])

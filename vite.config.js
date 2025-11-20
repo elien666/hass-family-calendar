@@ -13,6 +13,6 @@ export default defineConfig(() => {
             '/forecast': 'https://api.pirateweather.net',
             '/gti': 'http://gti.geofox.de'
         }
-    }
+    },
   };
 });

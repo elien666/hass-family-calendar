@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo, useCallback } from 'react'
 import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
@@ -136,7 +136,7 @@ const Garage = () => {
       garageInMotion.resolve(garageDoor)
       setGarageInMotion(undefined)
     }
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [garageDoor]) // Only fire when garage status is changed
 
   const keyGarage = useKeyPress('g')
@@ -145,9 +145,10 @@ const Garage = () => {
       // Send toggle action to Home Assistant
       toggleGarageDoor(setAnimate)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyGarage]) // Only fire when key is pressed
 
-  const controlGarage = (action) => {
+  const controlGarage = useCallback((action) => {
     toggle(false)
     switch (action) {
       case 'open':
@@ -159,12 +160,13 @@ const Garage = () => {
       default:
         // 
     }
-  }
+  }, [setAnimate])
 
   React.useEffect(() => {
     if (error !== false) {
       toggle(true)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error])
 
   return (
@@ -178,7 +180,7 @@ const Garage = () => {
           {error !== false && (
             <div>
               <h3>Fehler!</h3>
-              <div>{error}</div>
+              <div>{error instanceof Error ? error.message : String(error)}</div>
             </div>
           )}
           <div onClick={() => controlGarage('open')}>Öffnen</div>
@@ -189,4 +191,4 @@ const Garage = () => {
   )
 }
 
-export default Garage
+export default memo(Garage)

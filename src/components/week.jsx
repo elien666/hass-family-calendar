@@ -3,7 +3,7 @@ import Icon from '@mdi/react'
 import styled from 'styled-components'
 import clsx from 'clsx'
 import Header from './header'
-import React from 'react'
+import React, { useMemo } from 'react'
 import useCalendarData from '../utils/use-calendar-data'
 import useShortcuts from '../utils/use-shortcuts'
 import useSwipe from '../utils/useSwipe'
@@ -132,7 +132,7 @@ const Week = () => {
   
   React.useEffect(() => {
     startWeekWithToday()
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const swipeHandlers = useSwipe({
@@ -140,11 +140,14 @@ const Week = () => {
     onSwipedRight: () => previousWeek()
   })
 
-  const dateOptions = {
+  const dateOptions = useMemo(() => ({
     weekday: 'short',
     month: 'numeric',   
     day: 'numeric'   
-  };
+  }), []);
+
+  // Memoize the first 7 days to avoid re-slicing on every render
+  const weekData = useMemo(() => data.slice(0, 7), [data]);
   
   return (
     <Div {...swipeHandlers}>
@@ -152,17 +155,17 @@ const Week = () => {
               startWeekWithToday={startWeekWithToday}/>
       <div className={'schedule'}>
           {/* First row: Captions */}
-          {data.slice(0,7).map((day, index) => (
+          {weekData.map((day, index) => (
             <div key={index} className={clsx({ weekend: isWeekend(day.date), today: isToday(day.date) }, 'caption')}>
               <h2>{day.date.toLocaleString(dateOptions)}</h2>
             </div>
           ))}
 
           {/* Second row: Full day events */}
-          {data.slice(0,7).map((day, index) => (
+          {weekData.map((day, index) => (
             <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
-              {day.allDay.map((event, index) => (
-                <div key={index} className={'allDayEvent'}>
+              {day.allDay.map((event, eventIndex) => (
+                <div key={eventIndex} className={'allDayEvent'}>
                   {/*event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>*/}
                   {event.summary}
                 </div>
@@ -171,10 +174,10 @@ const Week = () => {
           ))}
 
           {/* Third row: Events */}
-          {data.slice(0,7).map((day, index) => (
+          {weekData.map((day, index) => (
             <div key={index} className={clsx('eventRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
-              {day.events.map((event, index) => (
-                <div key={index} className={'event'}>
+              {day.events.map((event, eventIndex) => (
+                <div key={eventIndex} className={'event'}>
                   <div>
                     {event.summary}
                   </div>

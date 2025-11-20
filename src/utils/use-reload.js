@@ -1,4 +1,5 @@
 import React from 'react'
+import logger from './logger'
 
 const Reload = () => {
     
@@ -34,7 +35,7 @@ const Reload = () => {
         const delay = targetTime.getTime() - now.getTime()
 
         // Set the timeout
-        console.log('Reloading page at', timeOfDay ,'in', Math.floor(delay / 1000 / 60), 'minutes')
+        logger.log('Reloading page at', timeOfDay ,'in', Math.floor(delay / 1000 / 60), 'minutes')
         const timeoutId = setTimeout(callback, delay)
 
         return timeoutId
@@ -42,21 +43,27 @@ const Reload = () => {
 
     // Example Usage:
     const reload = () => {
-        console.log("Timeout reached! ")
+        logger.log("Timeout reached! ")
         window.location.reload(true)
     }
 
     React.useLayoutEffect(() => {
+        const timeouts = [
+            setTimeOfDayTimeout(reload, '00:00'),
+            setTimeOfDayTimeout(reload, '03:00'),
+            setTimeOfDayTimeout(reload, '06:00'),
+            setTimeOfDayTimeout(reload, '09:00'),
+            setTimeOfDayTimeout(reload, '12:00'),
+            setTimeOfDayTimeout(reload, '15:00'),
+            setTimeOfDayTimeout(reload, '18:00'),
+            setTimeOfDayTimeout(reload, '21:00')
+        ]
 
-        setTimeOfDayTimeout(reload, '00:00')
-        setTimeOfDayTimeout(reload, '03:00')
-        setTimeOfDayTimeout(reload, '06:00')
-        setTimeOfDayTimeout(reload, '09:00')
-        setTimeOfDayTimeout(reload, '12:00')
-        setTimeOfDayTimeout(reload, '15:00')
-        setTimeOfDayTimeout(reload, '18:00')
-        setTimeOfDayTimeout(reload, '21:00')    
-
+        return () => {
+            timeouts.forEach(timeoutId => {
+                if (timeoutId) clearTimeout(timeoutId)
+            })
+        }
     }, [])
 
 }

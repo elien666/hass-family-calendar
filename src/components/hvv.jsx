@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import styled from 'styled-components'
 import useHvv, { SUPPORTED_CALLS } from '../utils/use-hvv'
 
@@ -54,7 +54,7 @@ const Div = styled.div`
   }
 `
 
-const Departure = ({ line, direction, realtimeOffset }) => (
+const Departure = memo(({ line, direction, realtimeOffset }) => (
     <div className={'departure'}>
       <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
       {/*<div>{direction}</div>*/}
@@ -62,7 +62,7 @@ const Departure = ({ line, direction, realtimeOffset }) => (
         {realtimeOffset  === 0 ? 'Jetzt' : <>in {realtimeOffset} '</>}
       </div>
     </div>
-  )
+  ))
 
 const Hvv = () => {
 
@@ -88,4 +88,4 @@ const Hvv = () => {
   )
 }
 
-export default Hvv
+export default memo(Hvv)

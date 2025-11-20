@@ -4,14 +4,15 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR } from "./config"
+import logger from './logger'
 
-const ACCESS_TOKEN = ''
-const ENTITTY_ID = 'sensor.everyday_calendar'
+// Set authorization header if token is available
+if (HASS_ACCESS_TOKEN) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
+}
 
-axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
-
-const url = `${HASS_HOST}/api/states/${ENTITTY_ID}`
+const url = `${HASS_HOST}/api/states/${ENTITY_EVERYDAY_CALENDAR}`
 
 const useEverydayCalendar = () => {
 
@@ -26,6 +27,11 @@ const useEverydayCalendar = () => {
           setStore([])
         }
       })
+      .catch((err) => {
+        logger.error('Failed to fetch everyday calendar state:', err)
+        setStore([])
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return store

@@ -1,1 +1,20 @@
-export const HASS_HOST = ''
+// Environment variables with fallbacks for development
+export const HASS_HOST = import.meta.env.VITE_HASS_HOST || ''
+export const HASS_ACCESS_TOKEN = import.meta.env.VITE_HASS_ACCESS_TOKEN || ''
+export const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY || ''
+export const WEATHER_LATITUDE = import.meta.env.VITE_WEATHER_LATITUDE || '53.570'
+export const WEATHER_LONGITUDE = import.meta.env.VITE_WEATHER_LONGITUDE || '10.091'
+export const GEOFOX_SECRET = import.meta.env.VITE_GEOFOX_SECRET || ''
+export const GEOFOX_USER = import.meta.env.VITE_GEOFOX_USER || ''
+export const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || ''
+export const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID || ''
+export const BUTTONS_WS_URL = import.meta.env.VITE_BUTTONS_WS_URL || 'ws://:5678/'
+
+// Entity IDs
+export const ENTITY_GARAGE_DOOR = import.meta.env.VITE_ENTITY_GARAGE_DOOR || 'cover.garagentor'
+export const ENTITY_WASHING_MACHINE_NEW = import.meta.env.VITE_ENTITY_WASHING_MACHINE_NEW || 'input_select.wasching_machine_neu_status'
+export const ENTITY_WASHING_MACHINE_OLD = import.meta.env.VITE_ENTITY_WASHING_MACHINE_OLD || 'input_select.washing_machine_alt_status'
+export const ENTITY_DRYER = import.meta.env.VITE_ENTITY_DRYER || 'input_select.dryer_status'
+export const ENTITY_DOORBELL = import.meta.env.VITE_ENTITY_DOORBELL || 'binary_sensor.tuerklingel_person'
+export const ENTITY_DOORBELL_BUTTON = import.meta.env.VITE_ENTITY_DOORBELL_BUTTON || 'button.haustur_unlatch_2'
+export const ENTITY_EVERYDAY_CALENDAR = import.meta.env.VITE_ENTITY_EVERYDAY_CALENDAR || 'sensor.everyday_calendar'

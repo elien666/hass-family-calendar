@@ -1,3 +1,4 @@
+import React, { memo } from 'react'
 import styled from 'styled-components'
 import Weather from './weather'
 import Hvv from './hvv'
@@ -57,4 +58,4 @@ const Sidebar = ({ pin }) => {
   )
 }
 
-export default Sidebar
+export default memo(Sidebar)

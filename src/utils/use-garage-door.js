@@ -4,14 +4,15 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR } from "./config"
+import logger from './logger'
 
-const ACCESS_TOKEN = ''
-const ENTITTY_ID = 'cover.garagentor'
+// Set authorization header if token is available
+if (HASS_ACCESS_TOKEN) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
+}
 
-axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
-
-const url = `${HASS_HOST}/api/states/${ENTITTY_ID}`
+const url = `${HASS_HOST}/api/states/${ENTITY_GARAGE_DOOR}`
 
 const useGarageDoor = () => {
 
@@ -23,40 +24,64 @@ const useGarageDoor = () => {
       .then((response) => {
         setState(response.data.state)
       })
+      .catch((err) => {
+        logger.error('Failed to fetch garage door state:', err)
+        setError(err instanceof Error ? err.message : String(err))
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   React.useEffect(() => {
+    let connection = null
+    let isMounted = true
+
     async function connect() {
       let auth
       try {
+        if (!HASS_ACCESS_TOKEN) {
+          throw new Error('HASS_ACCESS_TOKEN is not configured')
+        }
         auth = createLongLivedTokenAuth(
           HASS_HOST,
-          ACCESS_TOKEN
+          HASS_ACCESS_TOKEN
         );
-        setError(false)
+        if (isMounted) setError(false)
       } catch (err) {
-        setError(err)
+        if (isMounted) setError(err instanceof Error ? err.message : String(err))
+        return
       }
     
-      const connection = await createConnection({ auth });
+      try {
+        connection = await createConnection({ auth });
     
-      const trigger = (result) => {
-        setState(result.variables.trigger.to_state.state)
-      }
-    
-      await connection.subscribeMessage(trigger, {
-        "type": "subscribe_trigger",
-        "trigger":
-          {
-            "platform": "state",
-            "entity_id": ENTITTY_ID,
+        const trigger = (result) => {
+          if (isMounted) {
+            setState(result.variables.trigger.to_state.state)
           }
-      })
+        }
     
-      return connection
+        await connection.subscribeMessage(trigger, {
+          "type": "subscribe_trigger",
+          "trigger":
+            {
+              "platform": "state",
+              "entity_id": ENTITY_GARAGE_DOOR,
+            }
+        })
+      } catch (err) {
+        if (isMounted) setError(err instanceof Error ? err.message : String(err))
+      }
     }
 
     connect()
+    
+    return () => {
+      isMounted = false
+      if (connection) {
+        connection.close()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return [ state, error ]
@@ -65,25 +90,34 @@ const useGarageDoor = () => {
 
 export const toggleGarageDoor = (isLoading) => {
   isLoading(true)
-  setInterval(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(`${HASS_HOST}/api/services/cover/toggle`, {
-    entity_id: 'cover.00241d89947150'
+    entity_id: ENTITY_GARAGE_DOOR
+  }).finally(() => {
+    clearTimeout(timeoutId)
+    isLoading(false)
   })
 }
 
 export const openGarageDoor = (isLoading) => {
   isLoading(true)
-  setInterval(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(`${HASS_HOST}/api/services/cover/open_cover`, {
-    entity_id: 'cover.00241d89947150'
+    entity_id: ENTITY_GARAGE_DOOR
+  }).finally(() => {
+    clearTimeout(timeoutId)
+    isLoading(false)
   })
 }
 
 export const closeGarageDoor = (isLoading) => {
   isLoading(true)
-  setInterval(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(`${HASS_HOST}/api/services/cover/close_cover`, {
-    entity_id: 'cover.00241d89947150'
+    entity_id: ENTITY_GARAGE_DOOR
+  }).finally(() => {
+    clearTimeout(timeoutId)
+    isLoading(false)
   })
 }
 

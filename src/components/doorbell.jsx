@@ -70,28 +70,34 @@ const Doorbell = () => {
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
             // Turn off with delay
-            setCancelId(window.setTimeout(() => {
+            const timeoutId = window.setTimeout(() => {
                 toggle(false)
                 setCancelId(undefined)
-            }, DELAY_IN_MS))
+            }, DELAY_IN_MS)
+            setCancelId(timeoutId)
             setTransitionDuration(DELAY_IN_MS + 'ms')
             setProgress(0)
+            return () => {
+                if (timeoutId) window.clearTimeout(timeoutId)
+            }
         } else if (state === 'on') {
             setTransitionDuration(0)
             setProgress(100)
             toggle(true)
         }
-    }, [ state, setCancelId ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ state, showDoorCams ])
 
     // Cancel timeout, if new doorbell event happens during timeout
     React.useEffect(() => {
         if (state === 'on' && cancelId !== undefined) {
-            window.clearInterval(cancelId)
+            window.clearTimeout(cancelId)
             setTransitionDuration(0)
             setProgress(100)
             setCancelId(undefined)
         }
-    }, [ cancelId, state, setProgress, setCancelId ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ cancelId, state ])
 
     const [ showOpenDoor, setShowOpenDoor ] = React.useState(false)
     const openDoor = () => {
@@ -100,7 +106,8 @@ const Doorbell = () => {
     }
     React.useEffect(() => {
         if (showOpenDoor) {
-            setTimeout(() => setShowOpenDoor(false), 1000)
+            const timeoutId = setTimeout(() => setShowOpenDoor(false), 1000)
+            return () => clearTimeout(timeoutId)
         }
     }, [ showOpenDoor ])
 

@@ -84,12 +84,14 @@ const EverydayCalendar = () => {
         if (dataStore !== null) {
             on[1](dataStore)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ dataStore ])
 
     React.useEffect(() => {
         if (on[0] !== undefined) {
             storeData(on[0])
         }        
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ on[0] ])
 
     return on[0] !== undefined ? (

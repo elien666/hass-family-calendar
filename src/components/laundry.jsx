@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import Icon from '@mdi/react'
-import React from 'react'
+import React, { memo, useCallback } from 'react'
 import useWashingMachine from '../utils/use-washing-machine'
 import clsx from 'clsx'
 import Overlay from './overlay'
@@ -73,17 +73,20 @@ const Laundry = () => {
 
   const [ status, states ] = useWashingMachine()
   const [ showLaundry, toggle ] = React.useState(false)
+  
+  const openLaundry = useCallback(() => toggle(true), [])
+  const closeLaundry = useCallback(() => toggle(false), [])
 
   return (
     <Div>
       <h2>Wäsche</h2>
-      <div className={'status'} onClick={() => toggle(true)}>
+      <div className={'status'} onClick={openLaundry}>
         <div className={clsx({ animate: status.animate })}>
           <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
         </div>
         <span>{status.label}</span>
       </div>
-      <Overlay visible={showLaundry} onClick={() => toggle(false)}>
+      <Overlay visible={showLaundry} onClick={closeLaundry}>
         <div className={'states'}>
           {states.map((state, index) => (
             <div key={index}>
@@ -98,4 +101,4 @@ const Laundry = () => {
   )
 }
 
-export default Laundry
+export default memo(Laundry)

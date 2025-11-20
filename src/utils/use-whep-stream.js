@@ -1,5 +1,6 @@
 import React from 'react'
 import MediaMTXWebRTCReader from './MediaMTXWebRTCReader'
+import logger from './logger'
 
 const useWhepStream = (url, visible, ref) => {
 
@@ -10,22 +11,29 @@ const useWhepStream = (url, visible, ref) => {
             const reader = new MediaMTXWebRTCReader({
                     url: url,
                     onError: (err) => {
-                        console.log('Cannot load WHEP stream: ', url, err)
+                        logger.error('Cannot load WHEP stream: ', url, err)
                     },
                     onTrack: (evt) => {
                         ref.current.srcObject = evt.streams[0]
                         setStream(reader)
                     },
                 })
+            return () => {
+                if (reader) {
+                    reader.close()
+                }
             }
-    }, [ ref, stream, visible ])
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ url, visible, stream ])
 
     React.useEffect(() => {
         if (!visible && stream) {
             stream.close()
             setStream(undefined)
         }
-    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ visible, stream ])
 
 }
 

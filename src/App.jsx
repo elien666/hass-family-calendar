@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css'
 //import usePhysicalButtons from './utils/use-physical-buttons'
 import './fonts/fonts.css'
 import useReload from './utils/use-reload'
+import ErrorBoundary from './components/ErrorBoundary'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -48,14 +49,20 @@ function App() {
   useReload()
 
   return (
-    <Div>
-      <GlobalStyle/>
-      <div className={'main'}>
-        <Week />
-        <Sidebar pin={pin} />
-      </div>
-    <ToastContainer />
-    </Div>
+    <ErrorBoundary>
+      <Div>
+        <GlobalStyle/>
+        <div className={'main'}>
+          <ErrorBoundary>
+            <Week />
+          </ErrorBoundary>
+          <ErrorBoundary>
+            <Sidebar pin={pin} />
+          </ErrorBoundary>
+        </div>
+        <ToastContainer />
+      </Div>
+    </ErrorBoundary>
   )
 }
 

@@ -2,7 +2,7 @@ import styled from 'styled-components'
 import useWeatherData, { weatherIconToPresentation } from '../utils/use-weather-data'
 import { DateTime } from 'luxon'
 import useKeyPress from '../utils/use-key-press'
-import React from 'react'
+import React, { memo, useMemo, useCallback } from 'react'
 import Overlay from './overlay'
 import merryTimeline from 'merry-timeline'
 import TimeAgo from 'react-timeago'
@@ -108,7 +108,7 @@ const Div = styled.div`
   }
 `
 
-const Forecast = ({ data, daily=false }) => (
+const Forecast = memo(({ data, daily=false }) => (
   <div>
     <div>
       {!daily && DateTime.fromSeconds(data.time).toLocaleString(DateTime.TIME_24_SIMPLE)}
@@ -122,18 +122,19 @@ const Forecast = ({ data, daily=false }) => (
     <div>{Math.round(data.precipProbability * 100)} %</div>
     <div>{(data.precipIntensity * 100).toFixed(1)} mm</div>
   </div>
-)
+))
 
-const convertTo24hMerryTimeline = (data) => (
-  data.hourly.data.slice(0,24).map((data) => (
+const convertTo24hMerryTimeline = (data) => {
+  if (!data || !data.hourly || !data.hourly.data) return []
+  return data.hourly.data.slice(0,24).map((data) => (
     {
-      'color': weatherIconToPresentation[ data.icon ].color,
-      'text': weatherIconToPresentation[ data.icon ].label,
+      'color': weatherIconToPresentation[ data.icon ]?.color || '#ffffff',
+      'text': weatherIconToPresentation[ data.icon ]?.label || '',
       'annotation': `${Math.round(data.temperature)}°`,
       'time': data.time
     }
   ))
-)
+}
 
 const Icon = ({ icon }) => {
   const presentation = weatherIconToPresentation[icon]
@@ -147,38 +148,55 @@ const Weather = ({ pin }) => {
   const keyWeather = useKeyPress('w')
   const merryWeatherNext24h = React.useRef()
 
+  const toggleWeather = useCallback(() => toggle(v => !v), [])
+  const openWeather = useCallback(() => toggle(true), [])
+
+  const timelineData = useMemo(() => convertTo24hMerryTimeline(data), [data])
+  
+  // Move all useMemo calls before any early returns to avoid hooks order violation
+  const forecastHours = useMemo(() => [3,6,9,12], [])
+  const forecastDays = useMemo(() => [1,2,3,4,5,6,7], [])
+
   React.useEffect(() => {
     // Next 24 hours
-    if (!merryWeatherNext24h.current) return
+    if (!merryWeatherNext24h.current || !data || !data.hourly || timelineData.length === 0) return
     const options = { timezone: "Europe/Berlin" };
     const timeLine = document.createElement('div')
     merryWeatherNext24h.current.textContent = ''
     merryWeatherNext24h.current.appendChild(timeLine)
-    merryTimeline(timeLine, convertTo24hMerryTimeline(data), options);
+    merryTimeline(timeLine, timelineData, options);
 
-  }, [merryWeatherNext24h, data])
+    return () => {
+      if (merryWeatherNext24h.current) {
+        merryWeatherNext24h.current.textContent = ''
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineData])
 
   // Toggle weather on keypress
   React.useEffect(() => {
-    if (keyWeather || pin === 17) toggle(v => !v)
+    if (keyWeather || pin === 17) toggleWeather()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ keyWeather, pin ]) // Only fire when key or button is pressed
 
+  // Early return AFTER all hooks
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) return ''
 
   return (
     <Div>
-      <div onClick={() => toggle(true)}>
+      <div onClick={openWeather}>
         <div className={'headline'}>
           <Icon icon={data.currently.icon}/>
           <h2>{Math.round(data.currently.temperature)}°</h2>
         </div>
         <div className={'forecast'}>
-          {[3,6,9,12].map((i, index) => (
+          {forecastHours.map((i, index) => (
             <Forecast key={index} data={data.hourly.data[i]} />
           ))}
         </div>
       </div>
-      <Overlay visible={showWeather} onClick={() => toggle(false)}>
+      <Overlay visible={showWeather} onClick={toggleWeather}>
         <div className={'full-weather'}>
           <div className={'detail-header'}>
             <div>
@@ -208,7 +226,7 @@ const Weather = ({ pin }) => {
           <div ref={merryWeatherNext24h}/>
           <h3>Die nächste Woche</h3>
           <div className={'forecast'}>
-            {[1,2,3,4,5,6,7].map((i, index) => (
+            {forecastDays.map((i, index) => (
               <Forecast key={index} data={data.daily.data[i]} daily />
             ))}
           </div>
@@ -221,4 +239,4 @@ const Weather = ({ pin }) => {
   )
 }
 
-export default Weather
+export default memo(Weather)

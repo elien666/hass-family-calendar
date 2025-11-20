@@ -1,3 +1,4 @@
+import React, { memo } from 'react'
 import Icon from '@mdi/react'
 import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
 import styled from 'styled-components'
@@ -83,4 +84,4 @@ const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
   )
 }
 
-export default Header
+export default memo(Header)

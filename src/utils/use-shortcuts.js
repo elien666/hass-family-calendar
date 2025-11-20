@@ -17,7 +17,7 @@ const useShortcuts = (setStartDate) => {
   const keyNext = useKeyPress('ArrowRight')
   React.useEffect(() => {
     if (keyNext) nextWeek()
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyNext]) // Only fire when relevant key press changes
 
   // Go to previous week
@@ -25,7 +25,7 @@ const useShortcuts = (setStartDate) => {
   const keyPrevious = useKeyPress('ArrowLeft')
   React.useEffect(() => {
     if (keyPrevious) previousWeek()
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyPrevious]) // Only fire when relevant key press changes
 
   // Start week with today
@@ -33,7 +33,7 @@ const useShortcuts = (setStartDate) => {
   const keyToday = useKeyPress('t')
   React.useEffect(() => {
     if (keyToday) startWeekWithToday()
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyToday]) // Only fire when relevant key press changes
 
   return { nextWeek, previousWeek, startWeekWithToday }

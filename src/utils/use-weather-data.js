@@ -2,10 +2,8 @@ import React from 'react'
 import useTimeout from './use-timeout'
 import axios from 'axios'
 import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCloud, WiDayCloudy, WiNightPartlyCloudy } from 'weather-icons-react'
-
-const API_KEY = ''
-const LATITUDE = 53.570
-const LONGITUDE = 10.091
+import { WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE } from './config'
+import logger from './logger'
 
 export const weatherIconToPresentation = {
   'clear-day': { icon: WiDaySunny, label: 'Klar', color: '#eeeef5' },
@@ -20,7 +18,7 @@ export const weatherIconToPresentation = {
   'partly-cloudy-night': { icon: WiNightPartlyCloudy, label: 'Teils bewölkt', color: '#d5dae2' }
 }
 
-const url = () => `./forecast/${API_KEY}/${LATITUDE},${LONGITUDE}?&units=si&exclude=minutely`
+const url = () => `./forecast/${WEATHER_API_KEY}/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?&units=si&exclude=minutely`
 
 const useWeatherData = (toggleLoading) => {
   const [ data, setData ] = React.useState([])
@@ -35,10 +33,11 @@ const useWeatherData = (toggleLoading) => {
         setData(response.data)
       })
       .catch((err) => {
-        console.log('Could not load weather data', err)
+        logger.error('Could not load weather data', err)
       })
       .finally(() => { if(toggleLoading) toggleLoading(false) })
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ timer, toggleLoading ])
 
   return data

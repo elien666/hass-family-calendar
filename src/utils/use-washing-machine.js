@@ -4,15 +4,14 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
+import logger from './logger'
 
-const ACCESS_TOKEN = ''
-const ENTITY_ID_NEU = 'input_select.wasching_machine_neu_status'
-const ENTITY_ID_ALT = 'input_select.washing_machine_alt_status'
-const ENTITY_ID_DRYER = 'input_select.dryer_status'
-
-axios.defaults.headers.common['Authorization'] = `Bearer ${ACCESS_TOKEN}`
+// Set authorization header if token is available
+if (HASS_ACCESS_TOKEN) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
+}
 
 const urlPattern = ( entity ) => `${HASS_HOST}/api/states/${entity}`
 
@@ -31,9 +30,9 @@ const mapToValue = {
 }
 
 const useWashingMachine = () => {
-  const machineNew = useSubscription(ENTITY_ID_NEU)
-  const machineOld = useSubscription(ENTITY_ID_ALT)
-  const dryer = useSubscription(ENTITY_ID_DRYER)
+  const machineNew = useSubscription(ENTITY_WASHING_MACHINE_NEW)
+  const machineOld = useSubscription(ENTITY_WASHING_MACHINE_OLD)
+  const dryer = useSubscription(ENTITY_DRYER)
 
   const [ state, setState ] = React.useState(mapToPresentation['off'])
 
@@ -92,36 +91,63 @@ const useSubscription = ( entity ) => {
       .then((response) => {
         setState(response.data.state)
       })
-  // eslint-disable-next-line
-  }, [])
+      .catch((err) => {
+        logger.error(`Failed to fetch state for ${entity}:`, err)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entity])
 
   React.useEffect(() => {
-    (async () => {
-      const auth = createLongLivedTokenAuth(
-        HASS_HOST,
-        ACCESS_TOKEN
-      );
+    let connection = null
+    let unsubscribe = null
+    let isMounted = true
 
-      const connection = await createConnection({ auth });
-
-      const trigger = (result) => {
-        setState(result.variables.trigger.to_state.state)
+    async function setupConnection() {
+      if (!HASS_ACCESS_TOKEN) {
+        logger.error('HASS_ACCESS_TOKEN is not configured')
+        return
       }
+      
+      try {
+        const auth = createLongLivedTokenAuth(
+          HASS_HOST,
+          HASS_ACCESS_TOKEN
+        );
 
-      const unsubscribe = await connection.subscribeMessage(trigger, {
-        "type": "subscribe_trigger",
-        "trigger":
-          {
-            "platform": "state",
-            "entity_id": entity,
+        connection = await createConnection({ auth });
+
+        const trigger = (result) => {
+          if (isMounted) {
+            setState(result.variables.trigger.to_state.state)
           }
-      })
+        }
 
-      return (() => unsubscribe())
+        unsubscribe = await connection.subscribeMessage(trigger, {
+          "type": "subscribe_trigger",
+          "trigger":
+            {
+              "platform": "state",
+              "entity_id": entity,
+            }
+        })
+      } catch (err) {
+        logger.error(`Failed to setup connection for ${entity}:`, err)
+      }
+    }
 
-    })();
-  // eslint-disable-next-line
-  }, [])
+    setupConnection()
+
+    return () => {
+      isMounted = false
+      if (unsubscribe) {
+        unsubscribe()
+      }
+      if (connection) {
+        connection.close()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entity])
 
   return state
 

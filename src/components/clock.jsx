@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo, useCallback } from 'react'
 import { DateTime } from 'luxon'
 import styled from 'styled-components'
 import Overlay from './overlay'
@@ -32,17 +32,20 @@ const Clock = () => {
   const [ now, setNow ] = React.useState(DateTime.now())
   const [ showEverydayCalendar, toggle ] = React.useState(false)
 
+  const openCalendar = useCallback(() => toggle(true), [])
+  const closeCalendar = useCallback(() => toggle(false), [])
+
   React.useEffect(() => {
     const timer = setInterval(() => setNow(DateTime.now()), 1000)
     return () => clearInterval(timer)
-  })
+  }, [])
 
   return (
     <>
-      <Div onClick={() => toggle(true)}>
+      <Div onClick={openCalendar}>
         {now.toFormat('HH')}<span>:</span>{now.toFormat('mm')}
       </Div>
-      <Overlay visible={showEverydayCalendar} onClick={() => toggle(false)} fullsize={true}>
+      <Overlay visible={showEverydayCalendar} onClick={closeCalendar} fullsize={true}>
         <EverydayCalendar />
       </Overlay>
     </>
@@ -50,4 +53,4 @@ const Clock = () => {
 
 }
 
-export default Clock
+export default memo(Clock)

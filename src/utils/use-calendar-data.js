@@ -1,12 +1,16 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { DateTime } from 'luxon'
 import axios from 'axios'
 import qs from 'qs'
 import { mdiDelete, mdiCake } from '@mdi/js'
 import useTimeout from './use-timeout'
-import { HASS_HOST } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN } from "./config"
+import logger from './logger'
 
-axios.defaults.headers.common['Authorization'] = 'Bearer '
+// Set authorization header if token is available
+if (HASS_ACCESS_TOKEN) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
+}
 
 const host = (name) => `${HASS_HOST}/api/calendars/${name}`
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
@@ -21,8 +25,13 @@ const calendars = [
 ]
 
 const loadCalendarInto = (calendar, start, end, data) => (
-  axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }))
+  axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }), {
+    timeout: 10000 // 10 second timeout
+  })
     .then((response) => {
+      if (!response.data || !Array.isArray(response.data)) {
+        return
+      }
       response.data.forEach((event) => {
         // Find day offsets
         const eventStart = 'dateTime' in event.start
@@ -63,40 +72,72 @@ const loadCalendarInto = (calendar, start, end, data) => (
     })
 )
 
-const loadAll = (startDate, data, setData, toggleLoading) => {
+// Simple cache to avoid reloading the same date range
+const calendarCache = new Map()
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+const getCacheKey = (startDate) => {
+  return startDate.toISODate()
+}
+
+const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
   // Set up day buckets
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
   )
   dateRange[6] = startDate.plus({ days: 6 }).endOf('day')
 
+  const cacheKey = getCacheKey(startDate)
+  const cached = calendarCache.get(cacheKey)
+  
+  // Check cache
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    setData(cached.data)
+    return
+  }
+
   const newData = dateRange.map((date) => ({ date, allDay: [], events: []}))
 
-  // Immediately show new dates, if startDate is new
-  /*
-  if (data.length === 0 || (!data[0].date.hasSame(newData[0].date, 'day'))) {
-    setData(newData)
-  }*/
-
   // Fetch data
+  const abortController = new AbortController()
+  if (cacheRef.current) {
+    cacheRef.current.abort()
+  }
+  cacheRef.current = abortController
+
   try {
     toggleLoading(true)
+    // Batch all calendar requests in parallel
     const loading = calendars.map((calendar) => (
       loadCalendarInto(calendar, dateRange[0], dateRange[6], newData)
     ))
 
     Promise.all(loading)
-      .catch((err) => {
-        console.log('Could not load calendar', err)
-      })
       .then(() => {
-        setData(newData)
+        if (!abortController.signal.aborted) {
+          // Cache the result
+          calendarCache.set(cacheKey, {
+            data: newData,
+            timestamp: Date.now()
+          })
+          setData(newData)
+        }
+      })
+      .catch((err) => {
+        if (!abortController.signal.aborted) {
+          logger.error('Could not load calendar', err)
+        }
       })
       .finally(() => {
-        toggleLoading(false)
+        if (!abortController.signal.aborted) {
+          toggleLoading(false)
+        }
       })
   } catch (err) {
-    console.log(err)
+    if (!abortController.signal.aborted) {
+      logger.error('Error loading calendar data:', err)
+      toggleLoading(false)
+    }
   }
 }
 
@@ -104,20 +145,31 @@ const emptyData = []
 
 const useCalendarData = (startDate) => {
   const [ data, setData ] = React.useState(emptyData)
+  const [ isLoading, setIsLoading ] = React.useState(false)
   const timeout = useTimeout(60000, 'Calendar')
   const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
+  const abortRef = useRef(null)
 
   React.useEffect(() => {
     if (startDate !== undefined) {
-      if (currentStartDate !== startDate) {
+      const isNewDate = currentStartDate === null || !currentStartDate.equals(startDate)
+      
+      if (isNewDate) {
         // Start date was changed, show loading animation
         setData(emptyData)
         setCurrentStartDate(startDate)
-      } // else reload in background
-      loadAll(startDate, data, setData, () => { return })
+      }
+      
+      loadAll(startDate, data, setData, setIsLoading, abortRef)
     }
-  // eslint-disable-next-line
-  }, [startDate, timeout, setData])
+
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, timeout])
 
   return data
 }

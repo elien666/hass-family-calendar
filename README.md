@@ -1,80 +1,128 @@
-# Family Calendar
+# HASS Family Calendar
 
-A magic mirror dashboard which can be used without a mirror:
+A magic mirror dashboard for Home Assistant which can be used without a mirror:
 
-- Calendar
-- Weather
-- Garage Door
+- Calendar integration with multiple Home Assistant calendars
+- Weather forecast (Pirate Weather API)
+- Garage Door status and control
 - Washing machine status
-- HVV departures
+- HVV (Hamburg public transport) departures
+- Doorbell notifications with CCTV integration
+- Everyday calendar tracking
 
-# Getting Started with Create React App
+## Tech Stack
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+- **React 19** with Vite
+- **Styled Components** for styling
+- **Luxon** for date/time handling
+- **Home Assistant JS WebSocket** for real-time updates
+- **Axios** for API requests
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- pnpm (or npm/yarn)
+- Home Assistant instance with API access
+- Weather API key (Pirate Weather)
+- Geofox API credentials (for HVV departures)
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+
+3. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+4. Configure your environment variables in `.env` (see [Environment Variables](#environment-variables) below)
+
+5. Start the development server:
+   ```bash
+   pnpm start
+   ```
+
+6. Build for production:
+   ```bash
+   pnpm run build
+   ```
 
 ## Available Scripts
 
-In the project directory, you can run:
+- `pnpm start` - Start development server (Vite dev server on http://localhost:5173)
+- `pnpm run build` - Build for production (outputs to `add-on/dist`)
+- `pnpm run serve` - Preview production build
 
-### `npm start`
+## Environment Variables
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+All sensitive configuration has been moved to environment variables. Create a `.env` file in the root directory based on `.env.example`.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Required Variables
 
-### `npm test`
+#### Home Assistant Configuration
+- `VITE_HASS_HOST` - Your Home Assistant instance URL (e.g., `https://your-instance.ui.nabu.casa`)
+- `VITE_HASS_ACCESS_TOKEN` - Long-lived access token from Home Assistant
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+#### Weather API
+- `VITE_WEATHER_API_KEY` - Pirate Weather API key
+- `VITE_WEATHER_LATITUDE` - Latitude for weather location (default: 53.570)
+- `VITE_WEATHER_LONGITUDE` - Longitude for weather location (default: 10.091)
 
-### `npm run build`
+#### Geofox API (HVV Departures)
+- `VITE_GEOFOX_SECRET` - Geofox API secret key
+- `VITE_GEOFOX_USER` - Geofox API username
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Optional Variables
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+#### Telegram Bot (for debugging)
+- `VITE_TELEGRAM_BOT_TOKEN` - Telegram bot token (optional)
+- `VITE_TELEGRAM_CHAT_ID` - Telegram chat ID for notifications (optional)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+#### Physical Buttons
+- `VITE_BUTTONS_WS_URL` - WebSocket URL for physical button integration (optional, default: `ws://:5678/`)
 
-### `npm run eject`
+### Home Assistant Entity IDs
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Configure these to match your Home Assistant entity names:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- `VITE_ENTITY_GARAGE_DOOR` - Garage door entity (default: `cover.garagentor`)
+- `VITE_ENTITY_WASHING_MACHINE_NEW` - New washing machine status (default: `input_select.wasching_machine_neu_status`)
+- `VITE_ENTITY_WASHING_MACHINE_OLD` - Old washing machine status (default: `input_select.washing_machine_alt_status`)
+- `VITE_ENTITY_DRYER` - Dryer status (default: `input_select.dryer_status`)
+- `VITE_ENTITY_DOORBELL` - Doorbell sensor (default: `binary_sensor.tuerklingel_person`)
+- `VITE_ENTITY_DOORBELL_BUTTON` - Doorbell unlatch button (default: `button.haustur_unlatch_2`)
+- `VITE_ENTITY_EVERYDAY_CALENDAR` - Everyday calendar sensor (default: `sensor.everyday_calendar`)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Getting Your Home Assistant Token
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+1. Go to your Home Assistant profile
+2. Scroll down to "Long-Lived Access Tokens"
+3. Create a new token
+4. Copy the token to `VITE_HASS_ACCESS_TOKEN` in your `.env` file
 
-## Learn More
+## Deployment
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Home Assistant Add-on
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+This project is designed to be deployed as a Home Assistant add-on. The build output goes to `add-on/dist` which is served by Apache.
 
-### Code Splitting
+See `add-on/README.md` for add-on specific documentation.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### Build Notes
 
-### Analyzing the Bundle Size
+- The build uses Vite for fast development and optimized production builds
+- All environment variables must be prefixed with `VITE_` to be accessible in the browser
+- The `merry-timeline` package requires a postinstall fix (automated via `scripts/fix-merry-timeline.js`)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Development Notes
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- The project uses React 19 with modern hooks
+- Error boundaries are implemented for better error handling
+- Logger utility is used instead of console.log (disabled in production)
+- All API credentials are now environment-based for security
