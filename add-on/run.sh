@@ -21,9 +21,14 @@ json_escape() {
 # Function to output JSON value (string or number)
 output_json_value() {
   local key=$1
-  local value=$2
+  local value="${2:-}"  # Default to empty string if unset
   local is_number=$3
   local always_output=$4
+  
+  # Ensure value is not the string "undefined" or "null"
+  if [ "$value" = "undefined" ] || [ "$value" = "null" ]; then
+    value=""
+  fi
   
   # Always output if always_output is true, or if value is not empty
   if [ "$always_output" = "true" ] || [ -n "$value" ]; then
@@ -37,7 +42,11 @@ output_json_value() {
 }
 
 # Start building the config object
-echo "window.APP_CONFIG = {" > "$CONFIG_FILE"
+# Initialize with empty object to ensure valid JSON even if generation fails
+echo "window.APP_CONFIG = {" > "$CONFIG_FILE" || {
+  echo "Error: Failed to create config file" >&2
+  exit 1
+}
 
 # Detect if running in HA (check for supervisor token or supervisor API)
 IN_HA=false
@@ -53,13 +62,17 @@ if [ "$IN_HA" = true ]; then
 else
   # Outside HA, try to read from config if bashio is available, fallback to empty
   if command -v bashio > /dev/null 2>&1; then
-    HASS_HOST=$(bashio::config 'hass_host' '' 2>/dev/null || echo "")
-    HASS_ACCESS_TOKEN=$(bashio::config 'hass_access_token' '' 2>/dev/null || echo "")
+    HASS_HOST=$(bashio::config 'hass_host' 2>/dev/null || echo "")
+    HASS_ACCESS_TOKEN=$(bashio::config 'hass_access_token' 2>/dev/null || echo "")
   else
     HASS_HOST=""
     HASS_ACCESS_TOKEN=""
   fi
 fi
+
+# Ensure HASS_HOST and HASS_ACCESS_TOKEN are set to empty string if unset or null
+HASS_HOST="${HASS_HOST:-}"
+HASS_ACCESS_TOKEN="${HASS_ACCESS_TOKEN:-}"
 
 # Always output HASS_HOST and HASS_ACCESS_TOKEN (even if empty)
 output_json_value "HASS_HOST" "$HASS_HOST" "false" "true" >> "$CONFIG_FILE"
@@ -86,9 +99,11 @@ CONFIG_VARS=(
 
 for var_spec in "${CONFIG_VARS[@]}"; do
   IFS=':' read -r config_key env_key is_number <<< "$var_spec"
-  if [ "$IN_HA" = true ] && bashio::config.has_value "$config_key" 2>/dev/null; then
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1 && bashio::config.has_value "$config_key" 2>/dev/null; then
     value=$(bashio::config "$config_key" 2>/dev/null || echo "")
-    if [ -n "$value" ]; then
+    # Ensure value is not unset and is not the string "undefined"
+    value="${value:-}"
+    if [ -n "$value" ] && [ "$value" != "undefined" ]; then
       output_json_value "$env_key" "$value" "$is_number" "false" >> "$CONFIG_FILE"
     fi
   fi
@@ -98,6 +113,16 @@ done
 sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 rm -f "${CONFIG_FILE}.bak" 2>/dev/null
 echo "};" >> "$CONFIG_FILE"
+
+# Verify the config file is valid and contains at least HASS_HOST and HASS_ACCESS_TOKEN
+if ! grep -q "HASS_HOST" "$CONFIG_FILE"; then
+  echo "Warning: HASS_HOST not found in config.js, regenerating..." >&2
+  # Regenerate with minimal config
+  echo "window.APP_CONFIG = {" > "$CONFIG_FILE"
+  echo "  HASS_HOST: \"\"," >> "$CONFIG_FILE"
+  echo "  HASS_ACCESS_TOKEN: \"\"" >> "$CONFIG_FILE"
+  echo "};" >> "$CONFIG_FILE"
+fi
 
 # Start Apache (try common paths)
 HTTPD_BIN=""

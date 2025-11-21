@@ -3,7 +3,11 @@ const getConfig = (key, defaultValue = undefined) => {
   // Check for runtime config from HA add-on first
   if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG[key] !== undefined) {
     const value = window.APP_CONFIG[key]
-    // Return empty string as-is, but convert undefined/null to empty string for consistency
+    // Handle string "undefined" or "null" as invalid values
+    if (value === "undefined" || value === "null") {
+      return defaultValue
+    }
+    // Return empty string as-is, but convert undefined/null to defaultValue for consistency
     return value === null || value === undefined ? defaultValue : value
   }
   // Fallback to build-time environment variables
@@ -45,8 +49,10 @@ export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
 // Helper function to build HA API URLs
 // When HASS_HOST is empty (HA add-on mode), use relative URLs
 export const buildHaUrl = (path) => {
-  if (!HASS_HOST) {
+  // Defensive check: treat "undefined" or "null" strings as empty
+  const host = (HASS_HOST === "undefined" || HASS_HOST === "null") ? "" : HASS_HOST
+  if (!host) {
     return path.startsWith('/') ? path : `/${path}`
   }
-  return `${HASS_HOST}${path.startsWith('/') ? path : `/${path}`}`
+  return `${host}${path.startsWith('/') ? path : `/${path}`}`
 }
