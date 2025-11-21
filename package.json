@@ -27,10 +27,14 @@
     "start": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "postinstall": "node scripts/fix-merry-timeline.js"
+    "postinstall": "node scripts/fix-merry-timeline.js",
+    "dev:deploy": "bash scripts/dev-deploy.sh",
+    "dev:deploy:watch": "bash scripts/dev-deploy.sh --watch",
+    "dev:deploy:restart": "bash scripts/dev-deploy.sh --restart"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.1",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "chokidar-cli": "^3.0.0"
   }
 }

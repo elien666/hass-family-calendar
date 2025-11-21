@@ -4,13 +4,10 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl } from "./config"
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
 
@@ -20,7 +17,7 @@ const useGarageDoor = () => {
   const [ error, setError ] = React.useState(false)
 
   // Check if garage door is configured
-  const isConfigured = ENTITY_GARAGE_DOOR && (HASS_HOST || HASS_ACCESS_TOKEN)
+  const isConfigured = ENABLE_GARAGE && ENTITY_GARAGE_DOOR
 
   React.useEffect(() => {
     // Skip if not configured

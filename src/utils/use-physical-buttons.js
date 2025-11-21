@@ -1,5 +1,5 @@
 import React from 'react'
-import { BUTTONS_WS_URL } from './config'
+import { BUTTONS_WS_URL, ENABLE_PHYSICAL_BUTTONS } from './config'
 import logger from './logger'
 
 const usePhysicalButtons = () => {
@@ -27,8 +27,8 @@ const usePhysicalButtons = () => {
   }
   const connect = () => {
     // Skip if not configured
-    if (!BUTTONS_WS_URL) {
-      logger.debug('Buttons WS URL not configured, skipping connection')
+    if (!ENABLE_PHYSICAL_BUTTONS || !BUTTONS_WS_URL) {
+      logger.debug('Physical buttons not enabled or WS URL not configured, skipping connection')
       setConnection(false)
       return null
     }
@@ -56,7 +56,7 @@ const usePhysicalButtons = () => {
 
   React.useEffect(() => {
     // Only connect if configured
-    if (!BUTTONS_WS_URL) {
+    if (!ENABLE_PHYSICAL_BUTTONS || !BUTTONS_WS_URL) {
       return
     }
 
@@ -74,7 +74,7 @@ const usePhysicalButtons = () => {
   const [counter, setCounter] = React.useState(0)
   React.useEffect(() => {
     // Skip if not configured
-    if (!BUTTONS_WS_URL) {
+    if (!ENABLE_PHYSICAL_BUTTONS || !BUTTONS_WS_URL) {
       return
     }
 

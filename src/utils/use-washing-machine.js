@@ -4,14 +4,11 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, buildHaUrl } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, ENABLE_LAUNDRY, buildHaUrl } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const urlPattern = ( entity ) => entity ? buildHaUrl(`/api/states/${entity}`) : null
 
@@ -87,7 +84,7 @@ const useSubscription = ( entity ) => {
   const [ state, setState ] = React.useState('off')
 
   // Check if entity is configured
-  const isConfigured = entity && (HASS_HOST || HASS_ACCESS_TOKEN)
+  const isConfigured = ENABLE_LAUNDRY && entity
   const url = urlPattern(entity)
 
   React.useEffect(() => {

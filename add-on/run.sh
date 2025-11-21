@@ -9,21 +9,67 @@ mkdir -p "$CONFIG_DIR"
 
 # Function to escape JSON string
 json_escape() {
-  printf '%s' "$1" | \
-    sed 's/\\/\\\\/g' | \
-    sed 's/"/\\"/g' | \
-    sed 's/\$/\\$/g' | \
-    sed 's/'"$(printf '\n')"'/\\n/g' | \
-    sed 's/'"$(printf '\r')"'/\\r/g' | \
-    sed 's/'"$(printf '\t')"'/\\t/g'
+  local input="${1:-}"
+  if [ -z "$input" ]; then
+    printf ''
+    return 0
+  fi
+  
+  # Use awk for reliable JSON escaping - avoids sed command substitution issues
+  # The original implementation used $(printf '\n') inside sed patterns which fails
+  local escaped=""
+  if command -v awk > /dev/null 2>&1; then
+    # Use awk with RS='^$' to read entire input as one record
+    # This allows us to properly escape newlines, tabs, etc.
+    escaped=$(printf '%s' "$input" | awk -v RS='^$' '
+      {
+        # Escape backslashes first (must be first)
+        gsub(/\\/, "\\\\")
+        # Escape quotes
+        gsub(/"/, "\\\"")
+        # Escape dollar signs
+        gsub(/\$/, "\\$")
+        # Escape newlines
+        gsub(/\n/, "\\n")
+        # Escape carriage returns
+        gsub(/\r/, "\\r")
+        # Escape tabs
+        gsub(/\t/, "\\t")
+        # Print the result
+        print
+      }' 2>/dev/null)
+    # Fallback if RS='^$' doesn't work (some awk implementations)
+    if [ -z "$escaped" ]; then
+      escaped=$(printf '%s' "$input" | awk '{
+        gsub(/\\/, "\\\\")
+        gsub(/"/, "\\\"")
+        gsub(/\$/, "\\$")
+        printf "%s", $0
+      }' 2>/dev/null)
+    fi
+  fi
+  
+  # Fallback: use sed with simple, guaranteed-to-work expressions
+  # Only escape backslash, quote, and dollar to avoid sed command substitution issues
+  if [ -z "$escaped" ]; then
+    escaped=$(printf '%s' "$input" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' 2>/dev/null)
+  fi
+  
+  # Ensure we always return something, even if escaping failed
+  printf '%s' "${escaped:-$input}"
 }
 
 # Function to output JSON value (string or number)
 output_json_value() {
   local key=$1
-  local value=$2
+  local value="${2:-}"  # Default to empty string if unset
   local is_number=$3
   local always_output=$4
+  
+  # Ensure value is not the string "undefined" or "null"
+  if [ "$value" = "undefined" ] || [ "$value" = "null" ]; then
+    value=""
+  fi
   
   # Always output if always_output is true, or if value is not empty
   if [ "$always_output" = "true" ] || [ -n "$value" ]; then
@@ -37,7 +83,11 @@ output_json_value() {
 }
 
 # Start building the config object
-echo "window.APP_CONFIG = {" > "$CONFIG_FILE"
+# Initialize with empty object to ensure valid JSON even if generation fails
+echo "window.APP_CONFIG = {" > "$CONFIG_FILE" || {
+  echo "Error: Failed to create config file" >&2
+  exit 1
+}
 
 # Detect if running in HA (check for supervisor token or supervisor API)
 IN_HA=false
@@ -53,51 +103,170 @@ if [ "$IN_HA" = true ]; then
 else
   # Outside HA, try to read from config if bashio is available, fallback to empty
   if command -v bashio > /dev/null 2>&1; then
-    HASS_HOST=$(bashio::config 'hass_host' '' 2>/dev/null || echo "")
-    HASS_ACCESS_TOKEN=$(bashio::config 'hass_access_token' '' 2>/dev/null || echo "")
+    HASS_HOST=$(bashio::config 'hass_host' 2>/dev/null || echo "")
+    HASS_ACCESS_TOKEN=$(bashio::config 'hass_access_token' 2>/dev/null || echo "")
   else
     HASS_HOST=""
     HASS_ACCESS_TOKEN=""
   fi
 fi
 
-# Always output HASS_HOST and HASS_ACCESS_TOKEN (even if empty)
-output_json_value "HASS_HOST" "$HASS_HOST" "false" "true" >> "$CONFIG_FILE"
-output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "true" >> "$CONFIG_FILE"
+# Ensure HASS_HOST and HASS_ACCESS_TOKEN are set to empty string if unset or null
+HASS_HOST="${HASS_HOST:-}"
+HASS_ACCESS_TOKEN="${HASS_ACCESS_TOKEN:-}"
 
-# Read other config options only if they are set
-CONFIG_VARS=(
-  "weather_api_key:WEATHER_API_KEY:false"
-  "weather_latitude:WEATHER_LATITUDE:true"
-  "weather_longitude:WEATHER_LONGITUDE:true"
-  "geofox_secret:GEOFOX_SECRET:false"
-  "geofox_user:GEOFOX_USER:false"
-  "telegram_bot_token:TELEGRAM_BOT_TOKEN:false"
-  "telegram_chat_id:TELEGRAM_CHAT_ID:false"
-  "buttons_ws_url:BUTTONS_WS_URL:false"
-  "entity_garage_door:ENTITY_GARAGE_DOOR:false"
-  "entity_washing_machine_new:ENTITY_WASHING_MACHINE_NEW:false"
-  "entity_washing_machine_old:ENTITY_WASHING_MACHINE_OLD:false"
-  "entity_dryer:ENTITY_DRYER:false"
-  "entity_doorbell:ENTITY_DOORBELL:false"
-  "entity_doorbell_button:ENTITY_DOORBELL_BUTTON:false"
-  "entity_everyday_calendar:ENTITY_EVERYDAY_CALENDAR:false"
-)
+# Output HASS_HOST and HASS_ACCESS_TOKEN
+# In ingress mode, DON'T output these when empty - let app fall back to build-time env vars
+# This matches the "broken config.js" behavior that worked
+# Only output if they have actual values
+if [ -n "$HASS_HOST" ]; then
+  output_json_value "HASS_HOST" "$HASS_HOST" "false" "false" >> "$CONFIG_FILE"
+fi
+if [ -n "$HASS_ACCESS_TOKEN" ]; then
+  output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "false" >> "$CONFIG_FILE"
+fi
 
-for var_spec in "${CONFIG_VARS[@]}"; do
-  IFS=':' read -r config_key env_key is_number <<< "$var_spec"
-  if [ "$IN_HA" = true ] && bashio::config.has_value "$config_key" 2>/dev/null; then
-    value=$(bashio::config "$config_key" 2>/dev/null || echo "")
-    if [ -n "$value" ]; then
+# Helper function to check if a config value exists and is not empty
+has_config_value() {
+  local config_key=$1
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    # Try to read the config value
+    local value=$(bashio::config "$config_key" 2>/dev/null || echo "")
+    value="${value:-}"
+    # Return true if value is non-empty and not "undefined" or "null"
+    [ -n "$value" ] && [ "$value" != "undefined" ] && [ "$value" != "null" ]
+  else
+    return 1
+  fi
+}
+
+# Helper function to read and output config value
+read_and_output_config() {
+  local config_key=$1
+  local env_key=$2
+  local is_number=$3
+  
+  # Read the config value
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    local value=$(bashio::config "$config_key" 2>/dev/null || echo "")
+    # Ensure value is not unset and is not the string "undefined" or "null"
+    value="${value:-}"
+    if [ -n "$value" ] && [ "$value" != "undefined" ] && [ "$value" != "null" ]; then
       output_json_value "$env_key" "$value" "$is_number" "false" >> "$CONFIG_FILE"
     fi
   fi
-done
+}
+
+# Determine if features are enabled based on whether their config values are present
+# Note: bashio::config uses dot notation for nested config: "section.key"
+# Weather: enabled if weather_api_key OR (weather_latitude AND weather_longitude) are set
+ENABLE_WEATHER="false"
+if has_config_value "weather.weather_api_key" || (has_config_value "weather.weather_latitude" && has_config_value "weather.weather_longitude"); then
+  ENABLE_WEATHER="true"
+  read_and_output_config "weather.weather_api_key" "WEATHER_API_KEY" "false"
+  read_and_output_config "weather.weather_latitude" "WEATHER_LATITUDE" "true"
+  read_and_output_config "weather.weather_longitude" "WEATHER_LONGITUDE" "true"
+fi
+output_json_value "ENABLE_WEATHER" "$ENABLE_WEATHER" "false" "true" >> "$CONFIG_FILE"
+
+# HVV: enabled if both geofox_user and geofox_secret are set
+ENABLE_HVV="false"
+if has_config_value "hvv.geofox_user" && has_config_value "hvv.geofox_secret"; then
+  ENABLE_HVV="true"
+  read_and_output_config "hvv.geofox_user" "GEOFOX_USER" "false"
+  read_and_output_config "hvv.geofox_secret" "GEOFOX_SECRET" "false"
+fi
+output_json_value "ENABLE_HVV" "$ENABLE_HVV" "false" "true" >> "$CONFIG_FILE"
+
+# Telegram: enabled if both telegram_bot_token and telegram_chat_id are set
+ENABLE_TELEGRAM="false"
+if has_config_value "telegram.telegram_bot_token" && has_config_value "telegram.telegram_chat_id"; then
+  ENABLE_TELEGRAM="true"
+  read_and_output_config "telegram.telegram_bot_token" "TELEGRAM_BOT_TOKEN" "false"
+  read_and_output_config "telegram.telegram_chat_id" "TELEGRAM_CHAT_ID" "false"
+fi
+output_json_value "ENABLE_TELEGRAM" "$ENABLE_TELEGRAM" "false" "true" >> "$CONFIG_FILE"
+
+# Garage: enabled if entity_garage_door is set
+ENABLE_GARAGE="false"
+if has_config_value "garage.entity_garage_door"; then
+  ENABLE_GARAGE="true"
+  read_and_output_config "garage.entity_garage_door" "ENTITY_GARAGE_DOOR" "false"
+fi
+output_json_value "ENABLE_GARAGE" "$ENABLE_GARAGE" "false" "true" >> "$CONFIG_FILE"
+
+# Laundry: enabled if any laundry entity is set
+ENABLE_LAUNDRY="false"
+if has_config_value "laundry.entity_washing_machine_new" || has_config_value "laundry.entity_washing_machine_old" || has_config_value "laundry.entity_dryer"; then
+  ENABLE_LAUNDRY="true"
+  read_and_output_config "laundry.entity_washing_machine_new" "ENTITY_WASHING_MACHINE_NEW" "false"
+  read_and_output_config "laundry.entity_washing_machine_old" "ENTITY_WASHING_MACHINE_OLD" "false"
+  read_and_output_config "laundry.entity_dryer" "ENTITY_DRYER" "false"
+fi
+output_json_value "ENABLE_LAUNDRY" "$ENABLE_LAUNDRY" "false" "true" >> "$CONFIG_FILE"
+
+# Doorbell: enabled if entity_doorbell or entity_doorbell_button is set
+ENABLE_DOORBELL="false"
+if has_config_value "doorbell.entity_doorbell" || has_config_value "doorbell.entity_doorbell_button"; then
+  ENABLE_DOORBELL="true"
+  read_and_output_config "doorbell.entity_doorbell" "ENTITY_DOORBELL" "false"
+  read_and_output_config "doorbell.entity_doorbell_button" "ENTITY_DOORBELL_BUTTON" "false"
+fi
+output_json_value "ENABLE_DOORBELL" "$ENABLE_DOORBELL" "false" "true" >> "$CONFIG_FILE"
+
+# Everyday calendar: enabled if entity_everyday_calendar is set
+ENABLE_EVERYDAY_CALENDAR="false"
+if has_config_value "everyday_calendar.entity_everyday_calendar"; then
+  ENABLE_EVERYDAY_CALENDAR="true"
+  read_and_output_config "everyday_calendar.entity_everyday_calendar" "ENTITY_EVERYDAY_CALENDAR" "false"
+fi
+output_json_value "ENABLE_EVERYDAY_CALENDAR" "$ENABLE_EVERYDAY_CALENDAR" "false" "true" >> "$CONFIG_FILE"
+
+# Physical buttons: enabled if buttons_ws_url is set
+ENABLE_PHYSICAL_BUTTONS="false"
+if has_config_value "physical_buttons.buttons_ws_url"; then
+  ENABLE_PHYSICAL_BUTTONS="true"
+  read_and_output_config "physical_buttons.buttons_ws_url" "BUTTONS_WS_URL" "false"
+fi
+output_json_value "ENABLE_PHYSICAL_BUTTONS" "$ENABLE_PHYSICAL_BUTTONS" "false" "true" >> "$CONFIG_FILE"
 
 # Remove trailing comma from last entry and close the config object
-sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-rm -f "${CONFIG_FILE}.bak" 2>/dev/null
+# Use awk for reliable trailing comma removal across different systems
+if command -v awk > /dev/null 2>&1; then
+  # Use awk to remove trailing comma from the last line
+  awk '{
+    if (NR > 1) print prev
+    prev = $0
+  }
+  END {
+    sub(/,$/, "", prev)
+    print prev
+  }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" 2>/dev/null
+  if [ -f "${CONFIG_FILE}.tmp" ] && [ -s "${CONFIG_FILE}.tmp" ]; then
+    mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" 2>/dev/null || rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  else
+    rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  fi
+else
+  # Fallback: try sed approaches
+  if sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null; then
+    rm -f "${CONFIG_FILE}.bak" 2>/dev/null
+  elif sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null; then
+    # macOS sed
+    :
+  elif sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" 2>/dev/null && [ -f "${CONFIG_FILE}.tmp" ] && [ -s "${CONFIG_FILE}.tmp" ]; then
+    mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" 2>/dev/null || rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  fi
+fi
+rm -f "${CONFIG_FILE}.bak" "${CONFIG_FILE}.tmp" 2>/dev/null
 echo "};" >> "$CONFIG_FILE"
+
+# Verify the config file is valid JSON
+# Don't require HASS_HOST/HASS_ACCESS_TOKEN to be present - let app fall back to build-time env vars
+if ! grep -q "window.APP_CONFIG" "$CONFIG_FILE" || ! grep -q "}" "$CONFIG_FILE"; then
+  echo "Warning: config.js is invalid, regenerating with empty config..." >&2
+  echo "window.APP_CONFIG = {};" > "$CONFIG_FILE"
+fi
 
 # Start Apache (try common paths)
 HTTPD_BIN=""

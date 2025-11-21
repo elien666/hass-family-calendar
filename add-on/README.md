@@ -15,15 +15,61 @@ A full-screen dashboard for Home Assistant displaying calendar events, weather f
 
 ## Installation
 
-1. Add this repository to your Home Assistant add-on store
+### Production Release
+
+1. Add this repository to your Home Assistant add-on store:
+   ```
+   https://github.com/elien666/hass-family-calendar
+   ```
 2. Install the "Familienkalender" add-on
 3. Configure options through the Home Assistant UI (see Configuration below)
 4. Start the add-on
 5. Access via the sidebar panel icon or through the add-on's ingress URL
 
+### Staging Releases
+
+To test the latest development version with incrementing build numbers (e.g., `next-123`):
+
+**Setting up Staging Repository in Home Assistant:**
+
+Home Assistant add-on repositories typically read from the default branch (main). To use staging releases from the `develop` branch, you have several options:
+
+**Option 1: GitHub Raw URL (Recommended)**
+1. In Home Assistant, go to **Settings** → **Add-ons** → **Add-on Store** → **Repositories**
+2. Add the repository URL pointing to the `develop` branch's `repository.yaml`:
+   ```
+   https://raw.githubusercontent.com/elien666/hass-family-calendar/develop/repository.yaml
+   ```
+   Or use the directory URL (HA will automatically look for `repository.yaml`):
+   ```
+   https://raw.githubusercontent.com/elien666/hass-family-calendar/develop
+   ```
+3. Click "Add" and wait for the repository to load
+4. The staging add-on will appear with version numbers like `next-<build>` where `<build>` is the incrementing build number
+
+**Option 2: Direct GitHub Branch URL**
+Some Home Assistant versions support branch-specific URLs:
+```
+https://github.com/elien666/hass-family-calendar/tree/develop
+```
+
+**Option 3: Local Development Server**
+If the above options don't work, you can serve the repository locally:
+1. Clone the repository and checkout the `develop` branch
+2. Serve the repository using a local web server
+3. Add your local server URL to Home Assistant
+
+**Using Staging Releases:**
+- Staging releases are automatically built on every push to the `develop` branch
+- Version format: `next-{build_number}` (e.g., `next-123`)
+- The build number increments automatically with each workflow run
+- Install and configure the staging version as you would the production version
+
+**Important**: Staging releases are for testing purposes only. They may contain unstable features and breaking changes. Always test thoroughly before deploying to production.
+
 ## Configuration
 
-Configure this add-on through the Home Assistant UI. All configuration options are **optional** - unset options will disable their respective features.
+Configure this add-on through the Home Assistant UI using toggle switches to enable individual features. Each feature has a toggle switch that controls its visibility and activation.
 
 ### Home Assistant Connection
 
@@ -32,41 +78,64 @@ Configure this add-on through the Home Assistant UI. All configuration options a
 - Leverages ingress authentication (no token needed)
 - Only configure these if you need to connect to a **different** Home Assistant instance
 
-### Optional Features
+### Feature Toggles
 
-Configure the following options to enable their respective features. If an option is not set, the feature will be **automatically disabled**:
+Each feature can be individually enabled or disabled using toggle switches in the configuration UI. When a feature toggle is enabled, its configuration options become visible. When disabled, the feature is completely inactive and its configuration is ignored.
 
-#### Weather Forecast
-- `weather_api_key` (password) - Pirate Weather API key
-- `weather_latitude` (float) - Latitude for weather location
-- `weather_longitude` (float) - Longitude for weather location
+#### External API Integrations
 
-**Note**: All three weather options must be set to enable the weather feature.
+**Weather Forecast** (`enable_weather`)
+- Enable weather forecast display with current conditions and hourly/daily forecasts via Pirate Weather API
+- When enabled, configure:
+  - `weather_api_key` - Pirate Weather API key for fetching weather data
+  - `weather_latitude` - Latitude coordinate for weather location
+  - `weather_longitude` - Longitude coordinate for weather location
+- **Note**: All three weather options must be set for the feature to work.
 
-#### HVV Departures (Hamburg Public Transport)
-- `geofox_user` (string) - Geofox API username
-- `geofox_secret` (password) - Geofox API secret key
+**HVV Public Transport** (`enable_hvv`)
+- Enable HVV public transport departures display for Hamburg using Geofox API
+- When enabled, configure:
+  - `geofox_user` - Geofox API username for HVV departures
+  - `geofox_secret` - Geofox API secret key for HVV departures
+- **Note**: Both Geofox options must be set for the feature to work.
 
-**Note**: Both Geofox options must be set to enable HVV departures.
+**Telegram Notifications** (`enable_telegram`)
+- Enable Telegram bot notifications
+- When enabled, configure:
+  - `telegram_bot_token` - Telegram bot token for sending notifications
+  - `telegram_chat_id` - Telegram chat ID for receiving notifications
 
-#### Telegram Notifications
-- `telegram_bot_token` (password) - Telegram bot token
-- `telegram_chat_id` (string) - Telegram chat ID for notifications
+#### Home Assistant Entity Integrations
 
-#### Physical Buttons
-- `buttons_ws_url` (url) - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
+**Garage Door** (`enable_garage`)
+- Enable garage door monitoring and control
+- When enabled, configure:
+  - `entity_garage_door` - Entity ID for the garage door cover (e.g., `cover.garagentor`)
 
-#### Home Assistant Entities
+**Laundry Status** (`enable_laundry`)
+- Enable laundry status tracking for washing machines and dryer
+- When enabled, configure one or more of:
+  - `entity_washing_machine_new` - Entity ID for the new washing machine status sensor
+  - `entity_washing_machine_old` - Entity ID for the old washing machine status sensor
+  - `entity_dryer` - Entity ID for the dryer status sensor
 
-Configure entity IDs to match your Home Assistant setup. If an entity is not configured, that feature will be disabled:
+**Doorbell** (`enable_doorbell`)
+- Enable doorbell notifications with CCTV integration
+- When enabled, configure:
+  - `entity_doorbell` - Entity ID for the doorbell binary sensor
+  - `entity_doorbell_button` - Entity ID for the doorbell unlatch button
 
-- `entity_garage_door` (string) - Garage door cover entity (e.g., `cover.garagentor`)
-- `entity_washing_machine_new` (string) - New washing machine status entity
-- `entity_washing_machine_old` (string) - Old washing machine status entity
-- `entity_dryer` (string) - Dryer status entity
-- `entity_doorbell` (string) - Doorbell binary sensor entity
-- `entity_doorbell_button` (string) - Doorbell unlatch button entity
-- `entity_everyday_calendar` (string) - Everyday calendar sensor entity
+**Everyday Calendar** (`enable_everyday_calendar`)
+- Enable everyday calendar visual tracking for daily habits
+- When enabled, configure:
+  - `entity_everyday_calendar` - Entity ID for the everyday calendar sensor
+
+#### Hardware Integration
+
+**Physical Buttons** (`enable_physical_buttons`)
+- Enable physical button integration via WebSocket
+- When enabled, configure:
+  - `buttons_ws_url` - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
 
 ## How It Works
 
@@ -75,9 +144,10 @@ Configure entity IDs to match your Home Assistant setup. If an entity is not con
 Unlike traditional add-ons that use build-time environment variables, this add-on uses **runtime configuration injection**:
 
 1. The add-on's `run.sh` script reads configuration from Home Assistant's add-on options
-2. A `config.js` file is generated at startup with `window.APP_CONFIG` containing only set values
-3. The React application reads from `window.APP_CONFIG` first, falling back to build-time env vars for local development
-4. Features automatically disable if their required configuration is missing
+2. Feature toggles control which configuration options are included in the generated `config.js`
+3. A `config.js` file is generated at startup with `window.APP_CONFIG` containing only enabled features and their configuration
+4. The React application reads from `window.APP_CONFIG` first, falling back to build-time env vars for local development
+5. Features are automatically disabled if their toggle is off or if their required configuration is missing
 
 ### Architecture
 
@@ -90,7 +160,36 @@ Unlike traditional add-ons that use build-time environment variables, this add-o
 
 ## Build & Deployment
 
-The add-on is built from the main project:
+### Production Releases
+
+Production releases are triggered by creating a git tag in the format `v<major>.<minor>.<patch>` (e.g., `v2.3.4`):
+
+1. Create and push a tag: `git tag v2.3.4 && git push origin v2.3.4`
+2. GitHub Actions will automatically:
+   - Extract the version from the tag
+   - Update `add-on/config.yaml` with the tag version
+   - Build the frontend
+   - Update CHANGELOG.md
+   - Commit changes to `main` branch
+   - Create a GitHub Release with release notes from CHANGELOG
+
+### Staging Releases
+
+Staging releases are automatically built on every push to the `develop` branch:
+
+1. Push changes to `develop` branch
+2. GitHub Actions will automatically:
+   - Generate version in format `next-{build_number}` (e.g., `next-123`)
+   - Update `add-on/config.yaml` with the staging version
+   - Build the frontend
+   - Update CHANGELOG.md with staging entry
+   - Commit changes back to `develop` branch
+
+The build number increments automatically with each workflow run using `github.run_number`.
+
+### Manual Build
+
+To build manually:
 
 1. Run `pnpm run build` in the project root
 2. Build output goes to `add-on/dist/`
@@ -107,6 +206,27 @@ The `merry-timeline` dependency (v0.5.0) requires a postinstall fix that is auto
 
 For local development, use the `.env` file approach (see main `README.md`). The add-on configuration system is only active when running as a Home Assistant add-on.
 
+### Quick Development Workflow
+
+When testing changes in your local Home Assistant instance:
+
+1. **Build and deploy**:
+   ```bash
+   pnpm run dev:deploy
+   ```
+
+2. **Watch mode** (automatically rebuilds and deploys on changes):
+   ```bash
+   pnpm run dev:deploy:watch
+   ```
+
+3. **Restart the add-on** from Home Assistant UI or use:
+   ```bash
+   ./scripts/restart-addon.sh --host http://homeassistant.local:8123 --token YOUR_TOKEN
+   ```
+
+See the main `README.md` for detailed development workflow documentation, including VS Code task configuration and environment variable setup.
+
 ### Configuration Changes
 
 After changing configuration in the Home Assistant UI:
@@ -118,7 +238,8 @@ After changing configuration in the Home Assistant UI:
 
 ### Features Not Showing
 
-- Check that required configuration options are set in the add-on configuration
+- Ensure the feature toggle is enabled in the add-on configuration
+- Check that required configuration options are set for the enabled feature
 - Verify entity IDs match your Home Assistant entities exactly
 - Check browser console for configuration errors
 - Restart the add-on after configuration changes
@@ -131,6 +252,7 @@ After changing configuration in the Home Assistant UI:
 
 ### Weather/HVV Not Loading
 
+- Ensure the feature toggle is enabled (e.g., `enable_weather` or `enable_hvv`)
 - Verify API keys are correct and have proper permissions
 - Check that all required options for the feature are configured
 - Review browser console for API errors
