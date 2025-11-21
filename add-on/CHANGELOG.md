@@ -1,3 +1,53 @@
+**next-1 - 2025-11-21**
+
+_Staging build_
+
+- Add feature toggle switches with conditional visibility in HA add-on config
+- feat: implement tag-based releases and staging workflow
+- Fix undefined API URLs and improve config handling
+- Remove deprecated options from config.yaml and update schema for Home Assistant integration
+- fix: update CHANGELOG generation to replace content and filter merge PRs
+- Refactor configuration management and improve feature handling in the HASS Family Calendar add-on. Updated README for clarity on environment variables and local development setup. Enhanced runtime configuration injection for Home Assistant add-on mode, ensuring features are only rendered if properly configured. Added optional entity IDs and improved error handling across components. Updated Dockerfile for better build practices.
+- fix: update pnpm version to 10 in CI to support lockfile v9
+- fix: add packages field to pnpm-workspace.yaml to fix GH build
+- Configure manual chunks to optimize bundle size
+- Remove fallback values from config.js
+- Add GitHub Action for automated addon builds and Home Assistant repository config
+- Add opening and closing states to garage door
+- Remove .env from git tracking
+- Refactor: Security, performance, and code quality improvements
+- Fix issues with weather data display
+- Overlay close button improved layout
+- Added click on CCTV to unlatch front door
+- Changed trigger to person instead of visitor
+- Reload every 3 hours to keep backend connectiopn alive
+- Telegram Debug
+- Fix HVV over non - ssl
+- Fix video cams
+- upgraded to latest libs and fixed weather
+- Cosmetic css changes
+- Doorbell streams
+- Works now
+- Using WebRTC instead of HLS for video streams
+- Added delay to closing of doorbell cam overlay
+- Show doorbell cam on visit
+- Fix everyday calendar
+- Remove debug message
+- Fixed entity ID
+- Fix issue with garage door status
+- Everyday calendar
+- Fixed Vite build relative paths and fixed nginx cache-control
+- Improved visualization for multi-day events
+- Refactored to use Vite
+- Updated all modules to latest version and refactored to native crypto
+- Don't use physical buttons
+- 1.0.16
+- Optimize background loading of calendar w/o flicker
+- Streamlined HVV view
+- Fix issue with spinning laundry icons
+- Release 1.0.15
+- Improved overlay UX
+
 **2.0 - 2025-11-20**
 
 __New__
