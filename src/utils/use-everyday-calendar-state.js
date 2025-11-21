@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, ENABLE_EVERYDAY_CALENDAR, buildHaUrl } from "./config"
 import logger from './logger'
 
 // Set authorization header if token is available
@@ -19,7 +19,7 @@ const useEverydayCalendar = () => {
   const [ store, setStore ] = React.useState(null)
 
   // Check if configured
-  const isConfigured = ENTITY_EVERYDAY_CALENDAR && (HASS_HOST || HASS_ACCESS_TOKEN)
+  const isConfigured = ENABLE_EVERYDAY_CALENDAR && ENTITY_EVERYDAY_CALENDAR
 
   React.useEffect(() => {
     // Skip if not configured

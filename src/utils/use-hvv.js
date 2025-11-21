@@ -4,7 +4,7 @@ import axios from 'axios'
 import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
-import { GEOFOX_USER, GEOFOX_SECRET } from './config'
+import { GEOFOX_USER, GEOFOX_SECRET, ENABLE_HVV } from './config'
 import logger from './logger'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
@@ -50,7 +50,7 @@ const useHvv = (endPoint) => {
   const timeout = useTimeout(60000) // 60 seconds
 
   // Check if Geofox is configured
-  const isConfigured = GEOFOX_USER && GEOFOX_SECRET
+  const isConfigured = ENABLE_HVV && GEOFOX_USER && GEOFOX_SECRET
 
   React.useEffect(() => {
 

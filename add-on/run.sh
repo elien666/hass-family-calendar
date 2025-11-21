@@ -78,36 +78,98 @@ HASS_ACCESS_TOKEN="${HASS_ACCESS_TOKEN:-}"
 output_json_value "HASS_HOST" "$HASS_HOST" "false" "true" >> "$CONFIG_FILE"
 output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "true" >> "$CONFIG_FILE"
 
-# Read other config options only if they are set
-CONFIG_VARS=(
-  "weather_api_key:WEATHER_API_KEY:false"
-  "weather_latitude:WEATHER_LATITUDE:true"
-  "weather_longitude:WEATHER_LONGITUDE:true"
-  "geofox_secret:GEOFOX_SECRET:false"
-  "geofox_user:GEOFOX_USER:false"
-  "telegram_bot_token:TELEGRAM_BOT_TOKEN:false"
-  "telegram_chat_id:TELEGRAM_CHAT_ID:false"
-  "buttons_ws_url:BUTTONS_WS_URL:false"
-  "entity_garage_door:ENTITY_GARAGE_DOOR:false"
-  "entity_washing_machine_new:ENTITY_WASHING_MACHINE_NEW:false"
-  "entity_washing_machine_old:ENTITY_WASHING_MACHINE_OLD:false"
-  "entity_dryer:ENTITY_DRYER:false"
-  "entity_doorbell:ENTITY_DOORBELL:false"
-  "entity_doorbell_button:ENTITY_DOORBELL_BUTTON:false"
-  "entity_everyday_calendar:ENTITY_EVERYDAY_CALENDAR:false"
-)
+# Helper function to check if a toggle is enabled
+is_toggle_enabled() {
+  local toggle_key=$1
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    local toggle_value=$(bashio::config "$toggle_key" 2>/dev/null || echo "false")
+    # Check if toggle is true (handle various true representations)
+    [ "$toggle_value" = "true" ] || [ "$toggle_value" = "1" ] || [ "$toggle_value" = "yes" ]
+  else
+    return 1
+  fi
+}
 
-for var_spec in "${CONFIG_VARS[@]}"; do
-  IFS=':' read -r config_key env_key is_number <<< "$var_spec"
+# Helper function to read and output config value if toggle is enabled
+read_and_output_config() {
+  local toggle_key=$1
+  local config_key=$2
+  local env_key=$3
+  local is_number=$4
+  
+  # Check if toggle is enabled
+  if ! is_toggle_enabled "$toggle_key"; then
+    return 0
+  fi
+  
+  # Read the config value
   if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1 && bashio::config.has_value "$config_key" 2>/dev/null; then
-    value=$(bashio::config "$config_key" 2>/dev/null || echo "")
+    local value=$(bashio::config "$config_key" 2>/dev/null || echo "")
     # Ensure value is not unset and is not the string "undefined"
     value="${value:-}"
     if [ -n "$value" ] && [ "$value" != "undefined" ]; then
       output_json_value "$env_key" "$value" "$is_number" "false" >> "$CONFIG_FILE"
     fi
   fi
+}
+
+# Read and output enable toggle flags (always output, even if false)
+ENABLE_TOGGLES=(
+  "enable_weather:ENABLE_WEATHER"
+  "enable_hvv:ENABLE_HVV"
+  "enable_telegram:ENABLE_TELEGRAM"
+  "enable_garage:ENABLE_GARAGE"
+  "enable_laundry:ENABLE_LAUNDRY"
+  "enable_doorbell:ENABLE_DOORBELL"
+  "enable_everyday_calendar:ENABLE_EVERYDAY_CALENDAR"
+  "enable_physical_buttons:ENABLE_PHYSICAL_BUTTONS"
+)
+
+for toggle_spec in "${ENABLE_TOGGLES[@]}"; do
+  IFS=':' read -r config_key env_key <<< "$toggle_spec"
+  toggle_value="false"
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    toggle_value=$(bashio::config "$config_key" 2>/dev/null || echo "false")
+  fi
+  # Convert to boolean string and always output
+  if [ "$toggle_value" = "true" ] || [ "$toggle_value" = "1" ] || [ "$toggle_value" = "yes" ]; then
+    output_json_value "$env_key" "true" "false" "true" >> "$CONFIG_FILE"
+  else
+    output_json_value "$env_key" "false" "false" "true" >> "$CONFIG_FILE"
+  fi
 done
+
+# Read other config options only if their corresponding toggle is enabled
+# Weather config (requires enable_weather)
+read_and_output_config "enable_weather" "weather_api_key" "WEATHER_API_KEY" "false"
+read_and_output_config "enable_weather" "weather_latitude" "WEATHER_LATITUDE" "true"
+read_and_output_config "enable_weather" "weather_longitude" "WEATHER_LONGITUDE" "true"
+
+# HVV config (requires enable_hvv)
+read_and_output_config "enable_hvv" "geofox_user" "GEOFOX_USER" "false"
+read_and_output_config "enable_hvv" "geofox_secret" "GEOFOX_SECRET" "false"
+
+# Telegram config (requires enable_telegram)
+read_and_output_config "enable_telegram" "telegram_bot_token" "TELEGRAM_BOT_TOKEN" "false"
+read_and_output_config "enable_telegram" "telegram_chat_id" "TELEGRAM_CHAT_ID" "false"
+
+# Garage config (requires enable_garage)
+read_and_output_config "enable_garage" "entity_garage_door" "ENTITY_GARAGE_DOOR" "false"
+
+# Laundry config (requires enable_laundry)
+read_and_output_config "enable_laundry" "entity_washing_machine_new" "ENTITY_WASHING_MACHINE_NEW" "false"
+read_and_output_config "enable_laundry" "entity_washing_machine_old" "ENTITY_WASHING_MACHINE_OLD" "false"
+read_and_output_config "enable_laundry" "entity_dryer" "ENTITY_DRYER" "false"
+
+# Doorbell config (requires enable_doorbell)
+read_and_output_config "enable_doorbell" "entity_doorbell" "ENTITY_DOORBELL" "false"
+read_and_output_config "enable_doorbell" "entity_doorbell_button" "ENTITY_DOORBELL_BUTTON" "false"
+
+# Everyday calendar config (requires enable_everyday_calendar)
+read_and_output_config "enable_everyday_calendar" "entity_everyday_calendar" "ENTITY_EVERYDAY_CALENDAR" "false"
+
+# Physical buttons config (requires enable_physical_buttons)
+read_and_output_config "enable_physical_buttons" "buttons_ws_url" "BUTTONS_WS_URL" "false"
 
 # Remove trailing comma from last entry and close the config object
 sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"

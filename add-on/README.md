@@ -69,7 +69,7 @@ If the above options don't work, you can serve the repository locally:
 
 ## Configuration
 
-Configure this add-on through the Home Assistant UI. All configuration options are **optional** - unset options will disable their respective features.
+Configure this add-on through the Home Assistant UI using toggle switches to enable individual features. Each feature has a toggle switch that controls its visibility and activation.
 
 ### Home Assistant Connection
 
@@ -78,41 +78,64 @@ Configure this add-on through the Home Assistant UI. All configuration options a
 - Leverages ingress authentication (no token needed)
 - Only configure these if you need to connect to a **different** Home Assistant instance
 
-### Optional Features
+### Feature Toggles
 
-Configure the following options to enable their respective features. If an option is not set, the feature will be **automatically disabled**:
+Each feature can be individually enabled or disabled using toggle switches in the configuration UI. When a feature toggle is enabled, its configuration options become visible. When disabled, the feature is completely inactive and its configuration is ignored.
 
-#### Weather Forecast
-- `weather_api_key` (password) - Pirate Weather API key
-- `weather_latitude` (float) - Latitude for weather location
-- `weather_longitude` (float) - Longitude for weather location
+#### External API Integrations
 
-**Note**: All three weather options must be set to enable the weather feature.
+**Weather Forecast** (`enable_weather`)
+- Enable weather forecast display with current conditions and hourly/daily forecasts via Pirate Weather API
+- When enabled, configure:
+  - `weather_api_key` - Pirate Weather API key for fetching weather data
+  - `weather_latitude` - Latitude coordinate for weather location
+  - `weather_longitude` - Longitude coordinate for weather location
+- **Note**: All three weather options must be set for the feature to work.
 
-#### HVV Departures (Hamburg Public Transport)
-- `geofox_user` (string) - Geofox API username
-- `geofox_secret` (password) - Geofox API secret key
+**HVV Public Transport** (`enable_hvv`)
+- Enable HVV public transport departures display for Hamburg using Geofox API
+- When enabled, configure:
+  - `geofox_user` - Geofox API username for HVV departures
+  - `geofox_secret` - Geofox API secret key for HVV departures
+- **Note**: Both Geofox options must be set for the feature to work.
 
-**Note**: Both Geofox options must be set to enable HVV departures.
+**Telegram Notifications** (`enable_telegram`)
+- Enable Telegram bot notifications
+- When enabled, configure:
+  - `telegram_bot_token` - Telegram bot token for sending notifications
+  - `telegram_chat_id` - Telegram chat ID for receiving notifications
 
-#### Telegram Notifications
-- `telegram_bot_token` (password) - Telegram bot token
-- `telegram_chat_id` (string) - Telegram chat ID for notifications
+#### Home Assistant Entity Integrations
 
-#### Physical Buttons
-- `buttons_ws_url` (url) - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
+**Garage Door** (`enable_garage`)
+- Enable garage door monitoring and control
+- When enabled, configure:
+  - `entity_garage_door` - Entity ID for the garage door cover (e.g., `cover.garagentor`)
 
-#### Home Assistant Entities
+**Laundry Status** (`enable_laundry`)
+- Enable laundry status tracking for washing machines and dryer
+- When enabled, configure one or more of:
+  - `entity_washing_machine_new` - Entity ID for the new washing machine status sensor
+  - `entity_washing_machine_old` - Entity ID for the old washing machine status sensor
+  - `entity_dryer` - Entity ID for the dryer status sensor
 
-Configure entity IDs to match your Home Assistant setup. If an entity is not configured, that feature will be disabled:
+**Doorbell** (`enable_doorbell`)
+- Enable doorbell notifications with CCTV integration
+- When enabled, configure:
+  - `entity_doorbell` - Entity ID for the doorbell binary sensor
+  - `entity_doorbell_button` - Entity ID for the doorbell unlatch button
 
-- `entity_garage_door` (string) - Garage door cover entity (e.g., `cover.garagentor`)
-- `entity_washing_machine_new` (string) - New washing machine status entity
-- `entity_washing_machine_old` (string) - Old washing machine status entity
-- `entity_dryer` (string) - Dryer status entity
-- `entity_doorbell` (string) - Doorbell binary sensor entity
-- `entity_doorbell_button` (string) - Doorbell unlatch button entity
-- `entity_everyday_calendar` (string) - Everyday calendar sensor entity
+**Everyday Calendar** (`enable_everyday_calendar`)
+- Enable everyday calendar visual tracking for daily habits
+- When enabled, configure:
+  - `entity_everyday_calendar` - Entity ID for the everyday calendar sensor
+
+#### Hardware Integration
+
+**Physical Buttons** (`enable_physical_buttons`)
+- Enable physical button integration via WebSocket
+- When enabled, configure:
+  - `buttons_ws_url` - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
 
 ## How It Works
 
@@ -121,9 +144,10 @@ Configure entity IDs to match your Home Assistant setup. If an entity is not con
 Unlike traditional add-ons that use build-time environment variables, this add-on uses **runtime configuration injection**:
 
 1. The add-on's `run.sh` script reads configuration from Home Assistant's add-on options
-2. A `config.js` file is generated at startup with `window.APP_CONFIG` containing only set values
-3. The React application reads from `window.APP_CONFIG` first, falling back to build-time env vars for local development
-4. Features automatically disable if their required configuration is missing
+2. Feature toggles control which configuration options are included in the generated `config.js`
+3. A `config.js` file is generated at startup with `window.APP_CONFIG` containing only enabled features and their configuration
+4. The React application reads from `window.APP_CONFIG` first, falling back to build-time env vars for local development
+5. Features are automatically disabled if their toggle is off or if their required configuration is missing
 
 ### Architecture
 
@@ -193,7 +217,8 @@ After changing configuration in the Home Assistant UI:
 
 ### Features Not Showing
 
-- Check that required configuration options are set in the add-on configuration
+- Ensure the feature toggle is enabled in the add-on configuration
+- Check that required configuration options are set for the enabled feature
 - Verify entity IDs match your Home Assistant entities exactly
 - Check browser console for configuration errors
 - Restart the add-on after configuration changes
@@ -206,6 +231,7 @@ After changing configuration in the Home Assistant UI:
 
 ### Weather/HVV Not Loading
 
+- Ensure the feature toggle is enabled (e.g., `enable_weather` or `enable_hvv`)
 - Verify API keys are correct and have proper permissions
 - Check that all required options for the feature are configured
 - Review browser console for API errors

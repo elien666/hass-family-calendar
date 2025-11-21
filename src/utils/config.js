@@ -15,11 +15,31 @@ const getConfig = (key, defaultValue = undefined) => {
   return envValue !== undefined ? envValue : defaultValue
 }
 
+// Helper to convert config value to boolean
+const getConfigBoolean = (key, defaultValue = false) => {
+  const value = getConfig(key, defaultValue)
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    return value === 'true' || value === '1' || value === 'yes'
+  }
+  return Boolean(value)
+}
+
 // Home Assistant configuration
 // In HA add-on mode, HASS_HOST is empty string for relative URLs, HASS_ACCESS_TOKEN is empty (ingress handles auth)
 // For local dev, these should be set via .env
 export const HASS_HOST = getConfig('HASS_HOST', '')
 export const HASS_ACCESS_TOKEN = getConfig('HASS_ACCESS_TOKEN', '')
+
+// Feature enable/disable toggles
+export const ENABLE_WEATHER = getConfigBoolean('ENABLE_WEATHER', false)
+export const ENABLE_HVV = getConfigBoolean('ENABLE_HVV', false)
+export const ENABLE_TELEGRAM = getConfigBoolean('ENABLE_TELEGRAM', false)
+export const ENABLE_GARAGE = getConfigBoolean('ENABLE_GARAGE', false)
+export const ENABLE_LAUNDRY = getConfigBoolean('ENABLE_LAUNDRY', false)
+export const ENABLE_DOORBELL = getConfigBoolean('ENABLE_DOORBELL', false)
+export const ENABLE_EVERYDAY_CALENDAR = getConfigBoolean('ENABLE_EVERYDAY_CALENDAR', false)
+export const ENABLE_PHYSICAL_BUTTONS = getConfigBoolean('ENABLE_PHYSICAL_BUTTONS', false)
 
 // Weather API configuration (optional - feature disabled if not set)
 export const WEATHER_API_KEY = getConfig('WEATHER_API_KEY')

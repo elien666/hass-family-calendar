@@ -16,20 +16,170 @@ panel_admin: false
 panel_title: Kalender
 homeassistant_api: true
 schema:
-  hass_host: str?
-  hass_access_token: password?
-  weather_api_key: password?
-  weather_latitude: float?
-  weather_longitude: float?
-  geofox_secret: password?
-  geofox_user: str?
-  telegram_bot_token: password?
-  telegram_chat_id: str?
-  buttons_ws_url: url?
-  entity_garage_door: str?
-  entity_washing_machine_new: str?
-  entity_washing_machine_old: str?
-  entity_dryer: str?
-  entity_doorbell: str?
-  entity_doorbell_button: str?
-  entity_everyday_calendar: str?
+  # Home Assistant Connection (for external HA instances)
+  hass_host:
+    selector:
+      text: {}
+    description: "Home Assistant instance URL (leave empty when running as add-on, only needed for external instances)"
+    nullable: true
+  hass_access_token:
+    selector:
+      text: {}
+    description: "Long-lived access token for Home Assistant API (leave empty when running as add-on, only needed for external instances)"
+    nullable: true
+  
+  # External API Integrations
+  enable_weather:
+    selector:
+      boolean: {}
+    description: "Enable weather forecast display with current conditions and hourly/daily forecasts via Pirate Weather API"
+    default: false
+  weather_api_key:
+    selector:
+      text: {}
+    description: "Pirate Weather API key for fetching weather data"
+    nullable: true
+    visibility:
+      enable_weather: true
+  weather_latitude:
+    selector:
+      number: {}
+    description: "Latitude coordinate for weather location"
+    nullable: true
+    visibility:
+      enable_weather: true
+  weather_longitude:
+    selector:
+      number: {}
+    description: "Longitude coordinate for weather location"
+    nullable: true
+    visibility:
+      enable_weather: true
+  
+  enable_hvv:
+    selector:
+      boolean: {}
+    description: "Enable HVV public transport departures display for Hamburg using Geofox API"
+    default: false
+  geofox_user:
+    selector:
+      text: {}
+    description: "Geofox API username for HVV departures"
+    nullable: true
+    visibility:
+      enable_hvv: true
+  geofox_secret:
+    selector:
+      text: {}
+    description: "Geofox API secret key for HVV departures"
+    nullable: true
+    visibility:
+      enable_hvv: true
+  
+  enable_telegram:
+    selector:
+      boolean: {}
+    description: "Enable Telegram bot notifications"
+    default: false
+  telegram_bot_token:
+    selector:
+      text: {}
+    description: "Telegram bot token for sending notifications"
+    nullable: true
+    visibility:
+      enable_telegram: true
+  telegram_chat_id:
+    selector:
+      text: {}
+    description: "Telegram chat ID for receiving notifications"
+    nullable: true
+    visibility:
+      enable_telegram: true
+  
+  # Home Assistant Entity Integrations
+  enable_garage:
+    selector:
+      boolean: {}
+    description: "Enable garage door monitoring and control"
+    default: false
+  entity_garage_door:
+    selector:
+      text: {}
+    description: "Entity ID for the garage door cover (e.g., cover.garagentor)"
+    nullable: true
+    visibility:
+      enable_garage: true
+  
+  enable_laundry:
+    selector:
+      boolean: {}
+    description: "Enable laundry status tracking for washing machines and dryer"
+    default: false
+  entity_washing_machine_new:
+    selector:
+      text: {}
+    description: "Entity ID for the new washing machine status sensor"
+    nullable: true
+    visibility:
+      enable_laundry: true
+  entity_washing_machine_old:
+    selector:
+      text: {}
+    description: "Entity ID for the old washing machine status sensor"
+    nullable: true
+    visibility:
+      enable_laundry: true
+  entity_dryer:
+    selector:
+      text: {}
+    description: "Entity ID for the dryer status sensor"
+    nullable: true
+    visibility:
+      enable_laundry: true
+  
+  enable_doorbell:
+    selector:
+      boolean: {}
+    description: "Enable doorbell notifications with CCTV integration"
+    default: false
+  entity_doorbell:
+    selector:
+      text: {}
+    description: "Entity ID for the doorbell binary sensor"
+    nullable: true
+    visibility:
+      enable_doorbell: true
+  entity_doorbell_button:
+    selector:
+      text: {}
+    description: "Entity ID for the doorbell unlatch button"
+    nullable: true
+    visibility:
+      enable_doorbell: true
+  
+  enable_everyday_calendar:
+    selector:
+      boolean: {}
+    description: "Enable everyday calendar visual tracking for daily habits"
+    default: false
+  entity_everyday_calendar:
+    selector:
+      text: {}
+    description: "Entity ID for the everyday calendar sensor"
+    nullable: true
+    visibility:
+      enable_everyday_calendar: true
+  
+  # Hardware Integration
+  enable_physical_buttons:
+    selector:
+      boolean: {}
+    description: "Enable physical button integration via WebSocket"
+    default: false
+  buttons_ws_url:
+    selector:
+      url: {}
+    description: "WebSocket URL for physical button integration (e.g., ws://hostname:5678/)"
+    nullable: true
+    visibility:
+      enable_physical_buttons: true
