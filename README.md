@@ -1,5 +1,7 @@
 # HASS Family Calendar
 
+[![Build Home Assistant Add-on](https://github.com/elien666/hass-family-calendar/actions/workflows/build.yml/badge.svg)](https://github.com/elien666/hass-family-calendar/actions/workflows/build.yml)
+
 A magic mirror dashboard for Home Assistant which can be used without a mirror:
 
 - Calendar integration with multiple Home Assistant calendars
