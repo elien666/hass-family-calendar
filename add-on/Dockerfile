@@ -5,7 +5,8 @@ FROM ${BUILD_FROM:-homeassistant/amd64-base:latest}
 RUN apk add --no-cache \
     apache2 \
     apache2-utils \
-    sed
+    sed \
+    awk
 
 # Create Apache directories matching httpd:2.4 structure
 RUN mkdir -p /usr/local/apache2/htdocs /usr/local/apache2/conf /usr/local/apache2/logs /run/apache2
@@ -19,5 +20,9 @@ COPY ./run.sh /run.sh
 RUN chmod a+x /run.sh && \
     chown -R apache:apache /usr/local/apache2/htdocs /usr/local/apache2/logs
 
-# Set entrypoint
-ENTRYPOINT ["/run.sh"]
+# Create s6 service to run our script
+# This allows s6 to initialize properly before running the script
+RUN mkdir -p /etc/services.d/app && \
+    echo '#!/command/with-contenv bash' > /etc/services.d/app/run && \
+    echo 'exec /run.sh' >> /etc/services.d/app/run && \
+    chmod +x /etc/services.d/app/run

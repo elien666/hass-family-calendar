@@ -26,6 +26,7 @@ HA_SSH_PORT=""
 HA_ADDON_DIR=""
 HA_HOST=""
 HA_TOKEN=""
+SUPERVISOR_HOST=""  # Optional: separate host for Supervisor API (if different from HA_HOST)
 
 # Parse arguments
 WATCH_MODE=false
@@ -75,6 +76,7 @@ load_config() {
     HA_ADDON_DIR="${HA_ADDON_DIR:-/Volumes/addons/family_calendar}"
     HA_HOST="${HA_HOST:-}"
     HA_TOKEN="${HA_TOKEN:-}"
+    SUPERVISOR_HOST="${SUPERVISOR_HOST:-$HA_HOST}"  # Default to HA_HOST if not set
     ADDON_SLUG="${ADDON_SLUG:-family_calendar}"
 }
 
@@ -102,6 +104,7 @@ CONFIGURATION:
     Copy .deploy-config.local.example to .deploy-config.local and configure:
     - HA_SSH_HOST, HA_SSH_USER, HA_SSH_PATH for SSH deployment
     - HA_HOST, HA_TOKEN for API restart functionality
+    - SUPERVISOR_HOST (optional) for Supervisor API if different from HA_HOST
     - HA_ADDON_DIR for local mount deployment
 
 ENVIRONMENT VARIABLES:
@@ -466,27 +469,78 @@ restart_addon() {
         return 1
     fi
     
-    # Remove trailing slash from HA_HOST
+    # Use SUPERVISOR_HOST if set, otherwise use HA_HOST
+    # Supervisor API is typically only accessible from local network, not external URLs
+    local supervisor_host="${SUPERVISOR_HOST:-$HA_HOST}"
+    supervisor_host="${supervisor_host%/}"
+    
+    # Remove trailing slash from HA_HOST for display
     HA_HOST="${HA_HOST%/}"
     
+    # Test Supervisor API access first
+    log_info "Testing Supervisor API access at ${supervisor_host}..."
+    local test_response=$(curl -s -w "\n%{http_code}" -X GET \
+        -H "Authorization: Bearer $HA_TOKEN" \
+        "${supervisor_host}/api/hassio/supervisor/info" 2>&1 || echo -e "\n000")
+    local test_http_code=$(echo "$test_response" | tail -n1)
+    
+    if [ "$test_http_code" = "401" ] || [ "$test_http_code" = "403" ]; then
+        log_error "Cannot access Supervisor API - authentication failed (HTTP $test_http_code)"
+        log_warning "Long-lived access tokens may not have Supervisor API permissions"
+        log_info "This is a known limitation. Supervisor API may require:"
+        log_info "  1. A token with Supervisor-specific permissions"
+        log_info "  2. Or Supervisor API may not be accessible via API tokens"
+        log_info ""
+        log_info "Workaround: Rebuild and restart the add-on manually from Home Assistant UI"
+        log_info "  Settings -> Add-ons -> family-calendar -> Rebuild / Restart"
+        return 1
+    elif [ "$test_http_code" != "200" ]; then
+        log_warning "Supervisor API test failed (HTTP $test_http_code)"
+        log_info "Continuing with rebuild attempt anyway..."
+    else
+        log_success "Supervisor API is accessible"
+    fi
+    
     # First, rebuild the container to ensure latest changes are included
-    log_info "Rebuilding add-on container via Home Assistant API..."
-    local rebuild_url="${HA_HOST}/api/hassio/addons/${ADDON_SLUG}/rebuild"
+    log_info "Rebuilding add-on container via Home Assistant Supervisor API..."
+    log_info "Using Supervisor host: ${supervisor_host}"
+    local rebuild_url="${supervisor_host}/api/hassio/addons/${ADDON_SLUG}/rebuild"
     
     local rebuild_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $HA_TOKEN" \
         -H "Content-Type: application/json" \
-        "$rebuild_url" 2>/dev/null || echo -e "\n000")
+        "$rebuild_url" 2>&1 || echo -e "\n000")
     
     local rebuild_http_code=$(echo "$rebuild_response" | tail -n1)
     local rebuild_body=$(echo "$rebuild_response" | sed '$d')
+    
+    # Debug: log the response if not successful
+    if [ "$rebuild_http_code" != "200" ] && [ "$rebuild_http_code" != "201" ]; then
+        log_info "Rebuild API response (HTTP $rebuild_http_code): $rebuild_body"
+    fi
     
     if [ "$rebuild_http_code" = "200" ] || [ "$rebuild_http_code" = "201" ]; then
         log_success "Add-on container rebuild initiated successfully"
         # Wait a bit for rebuild to start
         sleep 2
     elif [ "$rebuild_http_code" = "401" ] || [ "$rebuild_http_code" = "403" ]; then
-        log_error "Authentication failed during rebuild. Check your HA_TOKEN"
+        log_error "Authentication failed during rebuild (HTTP $rebuild_http_code)"
+        if [[ "$supervisor_host" =~ (nabu\.casa|duckdns\.org|\.ui\.) ]]; then
+            log_warning "Supervisor API is not accessible through external URLs (Nabu Casa, DuckDNS, etc.)"
+            log_info "Set SUPERVISOR_HOST to your local IP (e.g., http://192.168.1.100:8123) in .deploy-config.local"
+        else
+            log_warning "Supervisor API authentication failed even with local URL: $supervisor_host"
+            log_info "Possible causes:"
+            log_info "  1. Long-lived access token may not have Supervisor permissions"
+            log_info "  2. Token may be expired or invalid"
+            log_info "  3. Supervisor API may require a different authentication method"
+            log_info ""
+            log_info "Try:"
+            log_info "  1. Create a new long-lived access token in Home Assistant"
+            log_info "  2. Ensure the token has full access permissions"
+            log_info "  3. Verify you can access ${supervisor_host}/api/hassio/supervisor/info in a browser"
+            log_info "  4. Or rebuild/restart the add-on manually from Home Assistant UI"
+        fi
         return 1
     elif [ "$rebuild_http_code" = "404" ]; then
         log_warning "Supervisor API not available or add-on not found for rebuild"
@@ -498,22 +552,43 @@ restart_addon() {
     fi
     
     # Now restart the add-on
-    log_info "Restarting add-on via Home Assistant API..."
-    local restart_url="${HA_HOST}/api/hassio/addons/${ADDON_SLUG}/restart"
+    log_info "Restarting add-on via Home Assistant Supervisor API..."
+    local restart_url="${supervisor_host}/api/hassio/addons/${ADDON_SLUG}/restart"
     
     local restart_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $HA_TOKEN" \
         -H "Content-Type: application/json" \
-        "$restart_url" 2>/dev/null || echo -e "\n000")
+        "$restart_url" 2>&1 || echo -e "\n000")
     
     local restart_http_code=$(echo "$restart_response" | tail -n1)
     local restart_body=$(echo "$restart_response" | sed '$d')
+    
+    # Debug: log the response if not successful
+    if [ "$restart_http_code" != "200" ] && [ "$restart_http_code" != "201" ]; then
+        log_info "Restart API response (HTTP $restart_http_code): $restart_body"
+    fi
     
     if [ "$restart_http_code" = "200" ] || [ "$restart_http_code" = "201" ]; then
         log_success "Add-on restart initiated successfully"
         return 0
     elif [ "$restart_http_code" = "401" ] || [ "$restart_http_code" = "403" ]; then
-        log_error "Authentication failed during restart. Check your HA_TOKEN"
+        log_error "Authentication failed during restart (HTTP $restart_http_code)"
+        if [[ "$supervisor_host" =~ (nabu\.casa|duckdns\.org|\.ui\.) ]]; then
+            log_warning "Supervisor API is not accessible through external URLs (Nabu Casa, DuckDNS, etc.)"
+            log_info "Set SUPERVISOR_HOST to your local IP (e.g., http://192.168.1.100:8123) in .deploy-config.local"
+        else
+            log_warning "Supervisor API authentication failed even with local URL: $supervisor_host"
+            log_info "Possible causes:"
+            log_info "  1. Long-lived access token may not have Supervisor permissions"
+            log_info "  2. Token may be expired or invalid"
+            log_info "  3. Supervisor API may require a different authentication method"
+            log_info ""
+            log_info "Try:"
+            log_info "  1. Create a new long-lived access token in Home Assistant"
+            log_info "  2. Ensure the token has full access permissions"
+            log_info "  3. Verify you can access ${supervisor_host}/api/hassio/supervisor/info in a browser"
+            log_info "  4. Or restart the add-on manually from Home Assistant UI"
+        fi
         return 1
     elif [ "$restart_http_code" = "404" ]; then
         log_warning "Supervisor API not available or add-on not found"
@@ -571,7 +646,7 @@ if [ "$WATCH_MODE" = true ]; then
         fi
         
         # Export environment variables for the recursive call
-        export HA_HOST HA_TOKEN HA_ADDON_DIR HA_SSH_HOST HA_SSH_USER HA_SSH_PATH HA_SSH_KEY HA_SSH_PORT
+        export HA_HOST HA_TOKEN SUPERVISOR_HOST HA_ADDON_DIR HA_SSH_HOST HA_SSH_USER HA_SSH_PATH HA_SSH_KEY HA_SSH_PORT
         
         # Build the command to run on file changes
         if [ "$RESTART_ADDON" = true ]; then
@@ -588,6 +663,7 @@ if [ "$WATCH_MODE" = true ]; then
         if [ -n "$HA_TOKEN" ]; then
             CHANGE_CMD="$CHANGE_CMD --token \"$HA_TOKEN\""
         fi
+        # Note: SUPERVISOR_HOST is exported via environment, not a command-line arg
         
         # Run chokidar with the change command
         $CHOKIDAR_CMD "$PROJECT_ROOT/src/**/*" \

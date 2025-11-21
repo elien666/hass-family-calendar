@@ -9,13 +9,54 @@ mkdir -p "$CONFIG_DIR"
 
 # Function to escape JSON string
 json_escape() {
-  printf '%s' "$1" | \
-    sed 's/\\/\\\\/g' | \
-    sed 's/"/\\"/g' | \
-    sed 's/\$/\\$/g' | \
-    sed 's/'"$(printf '\n')"'/\\n/g' | \
-    sed 's/'"$(printf '\r')"'/\\r/g' | \
-    sed 's/'"$(printf '\t')"'/\\t/g'
+  local input="${1:-}"
+  if [ -z "$input" ]; then
+    printf ''
+    return 0
+  fi
+  
+  # Use awk for reliable JSON escaping - avoids sed command substitution issues
+  # The original implementation used $(printf '\n') inside sed patterns which fails
+  local escaped=""
+  if command -v awk > /dev/null 2>&1; then
+    # Use awk with RS='^$' to read entire input as one record
+    # This allows us to properly escape newlines, tabs, etc.
+    escaped=$(printf '%s' "$input" | awk -v RS='^$' '
+      {
+        # Escape backslashes first (must be first)
+        gsub(/\\/, "\\\\")
+        # Escape quotes
+        gsub(/"/, "\\\"")
+        # Escape dollar signs
+        gsub(/\$/, "\\$")
+        # Escape newlines
+        gsub(/\n/, "\\n")
+        # Escape carriage returns
+        gsub(/\r/, "\\r")
+        # Escape tabs
+        gsub(/\t/, "\\t")
+        # Print the result
+        print
+      }' 2>/dev/null)
+    # Fallback if RS='^$' doesn't work (some awk implementations)
+    if [ -z "$escaped" ]; then
+      escaped=$(printf '%s' "$input" | awk '{
+        gsub(/\\/, "\\\\")
+        gsub(/"/, "\\\"")
+        gsub(/\$/, "\\$")
+        printf "%s", $0
+      }' 2>/dev/null)
+    fi
+  fi
+  
+  # Fallback: use sed with simple, guaranteed-to-work expressions
+  # Only escape backslash, quote, and dollar to avoid sed command substitution issues
+  if [ -z "$escaped" ]; then
+    escaped=$(printf '%s' "$input" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' 2>/dev/null)
+  fi
+  
+  # Ensure we always return something, even if escaping failed
+  printf '%s' "${escaped:-$input}"
 }
 
 # Function to output JSON value (string or number)
@@ -172,8 +213,34 @@ read_and_output_config "enable_everyday_calendar" "entity_everyday_calendar" "EN
 read_and_output_config "enable_physical_buttons" "buttons_ws_url" "BUTTONS_WS_URL" "false"
 
 # Remove trailing comma from last entry and close the config object
-sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null || sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-rm -f "${CONFIG_FILE}.bak" 2>/dev/null
+# Use awk for reliable trailing comma removal across different systems
+if command -v awk > /dev/null 2>&1; then
+  # Use awk to remove trailing comma from the last line
+  awk '{
+    if (NR > 1) print prev
+    prev = $0
+  }
+  END {
+    sub(/,$/, "", prev)
+    print prev
+  }' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" 2>/dev/null
+  if [ -f "${CONFIG_FILE}.tmp" ] && [ -s "${CONFIG_FILE}.tmp" ]; then
+    mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" 2>/dev/null || rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  else
+    rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  fi
+else
+  # Fallback: try sed approaches
+  if sed -i.bak '$ s/,$//' "$CONFIG_FILE" 2>/dev/null; then
+    rm -f "${CONFIG_FILE}.bak" 2>/dev/null
+  elif sed -i '' '$ s/,$//' "$CONFIG_FILE" 2>/dev/null; then
+    # macOS sed
+    :
+  elif sed '$ s/,$//' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" 2>/dev/null && [ -f "${CONFIG_FILE}.tmp" ] && [ -s "${CONFIG_FILE}.tmp" ]; then
+    mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" 2>/dev/null || rm -f "${CONFIG_FILE}.tmp" 2>/dev/null
+  fi
+fi
+rm -f "${CONFIG_FILE}.bak" "${CONFIG_FILE}.tmp" 2>/dev/null
 echo "};" >> "$CONFIG_FILE"
 
 # Verify the config file is valid and contains at least HASS_HOST and HASS_ACCESS_TOKEN

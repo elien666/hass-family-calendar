@@ -32,9 +32,19 @@ HA_ADDON_DIR="/Volumes/addons/family_calendar"
 # =============================================================================
 # Get a long-lived access token from:
 #   Home Assistant UI -> Profile -> Long-Lived Access Tokens -> Create Token
+#
+# IMPORTANT: Supervisor API (/api/hassio/*) is NOT accessible through external URLs
+# (Nabu Casa, DuckDNS, etc.) for security reasons. It's only accessible from local network.
+# If you use an external URL for HA_HOST, set SUPERVISOR_HOST to your local IP/URL.
 
 HA_HOST="http://homeassistant.local:8123"
+# Or use external URL: HA_HOST="https://your-instance.ui.nabu.casa"
 HA_TOKEN=""  # Your long-lived access token from Home Assistant
+
+# Optional: Separate host for Supervisor API (rebuild/restart functionality)
+# Only needed if HA_HOST is an external URL. Set to your local IP/URL.
+# Examples: "http://192.168.1.100:8123" or "http://homeassistant.local:8123"
+SUPERVISOR_HOST=""  # Leave empty to use HA_HOST
 
 # =============================================================================
 # Add-on Configuration
