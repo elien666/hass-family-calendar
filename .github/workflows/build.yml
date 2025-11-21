@@ -145,31 +145,24 @@ jobs:
           TAG_NAME="${{ steps.update-version.outputs.tag_name }}"
           
           # Get commits between the previous tag and HEAD
-          # Find the previous tag by getting all tags matching vX.Y pattern and finding the one before current
+          # Find the latest existing tag (previous release) by getting all tags matching vX.Y pattern
           ALL_TAGS=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+$' || echo "")
           PREVIOUS_TAG=""
           
           if [ -n "$ALL_TAGS" ]; then
-            # Find the tag that comes before the current tag
-            PREVIOUS_TAG=$(echo "$ALL_TAGS" | awk -v current="$TAG_NAME" '
-              BEGIN { found=0 }
-              $0 == current { found=1; next }
-              found && /^v[0-9]+\.[0-9]+$/ { print; exit }
-            ')
+            # Get the latest existing tag (first in sorted descending list)
+            # This is the previous release since we're creating a new version
+            PREVIOUS_TAG=$(echo "$ALL_TAGS" | head -1)
           fi
           
           COMMITS=""
           if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$TAG_NAME" ]; then
             # Get commits between previous tag and HEAD, excluding merge commits
+            # This gets only commits since the previous release
             COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
           else
-            # No previous tag, get recent commits from main
-            COMMITS=$(git log main --pretty=format:"%s" --no-merges -100 2>/dev/null || echo "")
-          fi
-          
-          # Fallback: get recent commits from main if no commits found
-          if [ -z "$COMMITS" ] || [ -z "$(echo "$COMMITS" | grep -v '^$' | head -1)" ]; then
-            COMMITS=$(git log main --pretty=format:"%s" --no-merges -100 2>/dev/null || echo "")
+            # No previous tag exists, this is the first release - get all commits from main
+            COMMITS=$(git log main --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
           fi
           
           # Filter out "Merge pull request" and other merge-related messages
