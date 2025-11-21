@@ -1,5 +1,29 @@
 ---
 configuration:
+  enable_weather:
+    name: Enable Weather
+    description: Show weather forecast on the dashboard
+  enable_hvv:
+    name: Enable HVV
+    description: Show HVV public transport departures
+  enable_telegram:
+    name: Enable Telegram
+    description: Enable Telegram bot integration
+  enable_garage:
+    name: Enable Garage
+    description: Show garage door status and control
+  enable_laundry:
+    name: Enable Laundry
+    description: Show washing machine and dryer status
+  enable_doorbell:
+    name: Enable Doorbell
+    description: Show doorbell notifications
+  enable_everyday_calendar:
+    name: Enable Everyday Calendar
+    description: Show everyday calendar tracking
+  enable_physical_buttons:
+    name: Enable Physical Buttons
+    description: Enable physical button WebSocket connection
   weather:
     name: Weather
     description: Configure the weather forecast.

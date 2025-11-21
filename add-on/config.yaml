@@ -16,6 +16,14 @@ panel_admin: false
 panel_title: Kalender
 homeassistant_api: true
 options:
+  enable_weather: false
+  enable_hvv: false
+  enable_telegram: false
+  enable_garage: false
+  enable_laundry: false
+  enable_doorbell: false
+  enable_everyday_calendar: false
+  enable_physical_buttons: false
   weather:
     weather_latitude: 53.570
     weather_longitude: 10.091
@@ -31,6 +39,14 @@ options:
   everyday_calendar:
     entity_everyday_calendar: sensor.everyday_calendar
 schema:
+  enable_weather: bool?
+  enable_hvv: bool?
+  enable_telegram: bool?
+  enable_garage: bool?
+  enable_laundry: bool?
+  enable_doorbell: bool?
+  enable_everyday_calendar: bool?
+  enable_physical_buttons: bool?
   weather:
     weather_api_key: str?
     weather_latitude: float?
