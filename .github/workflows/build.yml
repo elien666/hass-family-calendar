@@ -1,13 +1,15 @@
 name: Build Home Assistant Add-on
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'  # Matches tags like v2.3.4
+  pull_request:
+    types: [closed]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     permissions:
       contents: write
     
@@ -45,32 +47,87 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Extract version from tag
-        id: extract-version
+      - name: Calculate version
+        id: calculate-version
         shell: bash
         run: |
-          # Extract version from tag (e.g., v2.3.4 -> 2.3.4)
-          TAG_NAME="${{ github.ref_name }}"
-          VERSION="${TAG_NAME#v}"  # Remove 'v' prefix
+          # Load major version from repo
+          # First, try to read from VERSION file if it exists
+          MAJOR_VERSION=""
+          if [ -f "VERSION" ]; then
+            # Read VERSION file and extract first number (handles "2", "v2", "2.0", etc.)
+            VERSION_CONTENT=$(cat VERSION | tr -d ' \n')
+            MAJOR_VERSION=$(echo "$VERSION_CONTENT" | sed 's/^v*\([0-9]*\).*/\1/' | grep -oE '^[0-9]+' || echo "")
+          fi
           
-          echo "Tag: $TAG_NAME"
-          echo "Version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # If no VERSION file or empty, get major version from latest tag
+          if [ -z "$MAJOR_VERSION" ] || [ "$MAJOR_VERSION" = "0" ]; then
+            # Get all tags matching vX.Y pattern
+            LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1 || echo "")
+            
+            if [ -n "$LATEST_TAG" ]; then
+              # Extract major version from latest tag (e.g., v2.3 -> 2)
+              MAJOR_VERSION=$(echo "$LATEST_TAG" | sed 's/^v\([0-9]*\)\.[0-9]*$/\1/')
+            else
+              # No tags exist, default to major version 1
+              MAJOR_VERSION="1"
+            fi
+          fi
+          
+          # Ensure MAJOR_VERSION is a valid number
+          if ! echo "$MAJOR_VERSION" | grep -qE '^[0-9]+$'; then
+            echo "Invalid major version: $MAJOR_VERSION, defaulting to 1"
+            MAJOR_VERSION="1"
+          fi
+          
+          echo "Major version: $MAJOR_VERSION"
+          
+          # Find highest minor version for this major version
+          # Get all tags matching v{MAJOR}.* pattern
+          TAGS_FOR_MAJOR=$(git tag --sort=-version:refname | grep -E "^v${MAJOR_VERSION}\.[0-9]+$" || echo "")
+          
+          MINOR_VERSION=0
+          if [ -n "$TAGS_FOR_MAJOR" ]; then
+            # Get the highest minor version
+            HIGHEST_TAG=$(echo "$TAGS_FOR_MAJOR" | head -1)
+            # Extract minor version (e.g., v2.3 -> 3)
+            MINOR_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.\([0-9]*\)$/\1/')
+            # Ensure it's a valid number before incrementing
+            if echo "$MINOR_VERSION" | grep -qE '^[0-9]+$'; then
+              # Increment minor version
+              MINOR_VERSION=$((MINOR_VERSION + 1))
+            else
+              MINOR_VERSION=0
+            fi
+          fi
+          
+          # Construct new version
+          NEW_VERSION="${MAJOR_VERSION}.${MINOR_VERSION}"
+          TAG_NAME="v${NEW_VERSION}"
+          
+          echo "New version: $NEW_VERSION"
+          echo "Tag name: $TAG_NAME"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "major_version=$MAJOR_VERSION" >> $GITHUB_OUTPUT
+          echo "minor_version=$MINOR_VERSION" >> $GITHUB_OUTPUT
 
       - name: Update version in config.yaml
         id: update-version
         shell: bash
         run: |
-          VERSION="${{ steps.extract-version.outputs.version }}"
+          VERSION="${{ steps.calculate-version.outputs.version }}"
+          TAG_NAME="${{ steps.calculate-version.outputs.tag_name }}"
           
           # Read current version from config.yaml
           CURRENT_VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
           echo "Current version: $CURRENT_VERSION"
           echo "New version: $VERSION"
+          echo "Tag name: $TAG_NAME"
           
           echo "new_version=$VERSION" >> $GITHUB_OUTPUT
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           
           # Update config.yaml
           sed -i "s/^version: \".*\"/version: \"$VERSION\"/" add-on/config.yaml
@@ -85,11 +142,11 @@ jobs:
           
           # Get new version from previous step
           NEW_VERSION="${{ steps.update-version.outputs.new_version }}"
-          TAG_NAME="${{ steps.extract-version.outputs.tag_name }}"
+          TAG_NAME="${{ steps.update-version.outputs.tag_name }}"
           
-          # Get commits between the previous tag and this tag
-          # Find the previous tag by getting all tags and finding the one before current
-          ALL_TAGS=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || echo "")
+          # Get commits between the previous tag and HEAD
+          # Find the previous tag by getting all tags matching vX.Y pattern and finding the one before current
+          ALL_TAGS=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+$' || echo "")
           PREVIOUS_TAG=""
           
           if [ -n "$ALL_TAGS" ]; then
@@ -97,20 +154,17 @@ jobs:
             PREVIOUS_TAG=$(echo "$ALL_TAGS" | awk -v current="$TAG_NAME" '
               BEGIN { found=0 }
               $0 == current { found=1; next }
-              found && /^v[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }
+              found && /^v[0-9]+\.[0-9]+$/ { print; exit }
             ')
           fi
           
           COMMITS=""
           if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$TAG_NAME" ]; then
-            # Get commits between previous tag and current tag, excluding merge commits
-            # Try to get commits from the tag range
-            COMMITS=$(git log "$PREVIOUS_TAG".."$TAG_NAME" --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
-            
-            # If that fails or returns empty, try getting commits from the tag's commit
-            if [ -z "$COMMITS" ] || [ -z "$(echo "$COMMITS" | grep -v '^$' | head -1)" ]; then
-              COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges -100 2>/dev/null || echo "")
-            fi
+            # Get commits between previous tag and HEAD, excluding merge commits
+            COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
+          else
+            # No previous tag, get recent commits from main
+            COMMITS=$(git log main --pretty=format:"%s" --no-merges -100 2>/dev/null || echo "")
           fi
           
           # Fallback: get recent commits from main if no commits found
@@ -182,11 +236,42 @@ jobs:
           git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }} [skip ci]"
           git push origin HEAD:main
 
-      - name: Create GitHub Release
-        id: create-release
+      - name: Create and push git tag
+        id: create-tag
         shell: bash
         run: |
-          TAG_NAME="${{ steps.extract-version.outputs.tag_name }}"
+          TAG_NAME="${{ steps.update-version.outputs.tag_name }}"
+          VERSION="${{ steps.update-version.outputs.new_version }}"
+          
+          # Ensure we're on main branch
+          git checkout main || true
+          
+          # Check if tag already exists remotely
+          if git ls-remote --tags origin "$TAG_NAME" | grep -q "$TAG_NAME"; then
+            echo "Tag $TAG_NAME already exists on remote, skipping tag creation"
+            echo "tag_created=false" >> $GITHUB_OUTPUT
+          elif git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists locally, skipping tag creation"
+            echo "tag_created=false" >> $GITHUB_OUTPUT
+          else
+            # Create and push the tag on the current HEAD
+            # This will tag either the commit we just pushed (if changes were committed)
+            # or the current HEAD (the merged PR commit if no changes)
+            git tag -a "$TAG_NAME" -m "Release $VERSION"
+            git push origin "$TAG_NAME"
+            echo "Created and pushed tag $TAG_NAME"
+            echo "tag_created=true" >> $GITHUB_OUTPUT
+          fi
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        id: create-release
+        if: steps.create-tag.outputs.tag_created == 'true'
+        shell: bash
+        run: |
+          TAG_NAME="${{ steps.create-tag.outputs.tag_name }}"
           VERSION="${{ steps.update-version.outputs.new_version }}"
           
           # Read CHANGELOG content for release notes
