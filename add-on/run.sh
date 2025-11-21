@@ -116,6 +116,7 @@ HASS_HOST="${HASS_HOST:-}"
 HASS_ACCESS_TOKEN="${HASS_ACCESS_TOKEN:-}"
 
 # Always output HASS_HOST and HASS_ACCESS_TOKEN (even if empty)
+# In ingress mode, these are explicitly set to empty strings to indicate relative URLs and no auth header
 output_json_value "HASS_HOST" "$HASS_HOST" "false" "true" >> "$CONFIG_FILE"
 output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "true" >> "$CONFIG_FILE"
 

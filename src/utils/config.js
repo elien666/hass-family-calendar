@@ -9,6 +9,14 @@ const getConfig = (key, defaultValue = undefined) => {
     if (value === "undefined" || value === "null") {
       return defaultValue
     }
+    // For HASS_ACCESS_TOKEN and HASS_HOST, treat empty string as "not set" to allow fallback to build-time env
+    // This is important: when config.js explicitly sets empty string for ingress mode, we still want
+    // to respect that (empty means use relative URLs, no auth header), but if config.js is broken
+    // and doesn't set these, we fall back to build-time env vars
+    if ((key === 'HASS_ACCESS_TOKEN' || key === 'HASS_HOST') && value === '') {
+      // Empty string is a valid value that means "use ingress mode" - return it
+      return value
+    }
     // Return empty string as-is, but convert undefined/null to defaultValue for consistency
     return value === null || value === undefined ? defaultValue : value
   }
@@ -41,13 +49,13 @@ const hasValidToken = HASS_ACCESS_TOKEN &&
   typeof HASS_ACCESS_TOKEN === 'string' && 
   HASS_ACCESS_TOKEN.trim() !== ''
 
+// Only set Authorization header if we have a valid token
+// In ingress mode (empty token), don't set the header at all - ingress handles auth
 if (hasValidToken) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-} else {
-  // Explicitly remove Authorization header for ingress mode
-  // This ensures no Authorization header is sent when running through HA ingress
-  delete axios.defaults.headers.common['Authorization']
 }
+// Don't delete the header - just don't set it if empty
+// This allows any existing header to remain, or no header to be sent (correct for ingress)
 
 // Feature enable/disable toggles
 export const ENABLE_WEATHER = getConfigBoolean('ENABLE_WEATHER', false)
