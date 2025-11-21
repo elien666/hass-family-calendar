@@ -9,11 +9,8 @@ const getConfig = (key, defaultValue = undefined) => {
     if (value === "undefined" || value === "null") {
       return defaultValue
     }
-    // For HASS_ACCESS_TOKEN and HASS_HOST in ingress mode, empty string is explicitly set
-    // to indicate "use relative URLs, no auth header" - this is correct for ingress
-    // Return the value as-is (empty string is a valid, intentional value for ingress mode)
-    return value
     // Return empty string as-is, but convert undefined/null to defaultValue for consistency
+    // Empty string is a valid, intentional value (e.g., for ingress mode)
     return value === null || value === undefined ? defaultValue : value
   }
   // Fallback to build-time environment variables
