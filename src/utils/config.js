@@ -21,8 +21,25 @@ const getConfig = (key, defaultValue = undefined) => {
     // and we don't want to use the build-time token
     return defaultValue
   }
+  
   // Fallback to build-time environment variables (only when not running in add-on)
   const envValue = import.meta.env[`VITE_${key}`]
+  
+  // Special handling for HASS_ACCESS_TOKEN when window.APP_CONFIG is undefined
+  // If window.APP_CONFIG is undefined, config.js likely failed to load or we're in add-on mode
+  // Be conservative: only use build-time token if we're clearly in local dev (localhost/127.0.0.1)
+  // Otherwise assume add-on/ingress mode and don't use build-time token to avoid 401 errors
+  if (key === 'HASS_ACCESS_TOKEN' && envValue !== undefined) {
+    const isLocalDev = typeof window !== 'undefined' && 
+      window.location && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    
+    if (!isLocalDev) {
+      // Not localhost - assume add-on/ingress mode, don't use build-time token
+      return defaultValue
+    }
+  }
+  
   return envValue !== undefined ? envValue : defaultValue
 }
 
