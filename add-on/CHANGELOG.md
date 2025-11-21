@@ -1,3 +1,9 @@
+**1.2 - 2025-11-21**
+
+- refactor: remove redundant Authorization header deletion check
+- fix: improve Authorization header removal in ingress mode
+- fix: only include commits since previous release in changelog
+
 **1.1 - 2025-11-21**
 
 - fix: prevent 401 errors in ingress mode by not using build-time HASS_ACCESS_TOKEN
