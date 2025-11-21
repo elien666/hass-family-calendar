@@ -1,4 +1,28 @@
-**2.3 - 2025-11-20**
+**next-2 - 2025-11-21**
+
+_Staging build_
+
+- Clean up
+- refactor: enable features based on config values, not separate toggles
+- fix: add enable_* toggle fields to addon config schema
+- fix: don't output empty HASS_HOST/HASS_ACCESS_TOKEN in config.js to allow fallback
+- fix: remove duplicate return statement in getConfig
+- fix: explicitly delete Authorization header when token is empty for ingress
+- fix: improve Authorization header handling for ingress mode
+- fix: remove Authorization header in ingress mode to fix 401 API errors
+- fix: use relative path for config.js to support subpath deployment
+- fix: use text/javascript MIME type for better browser compatibility
+- fix: set correct MIME type for JavaScript files
+- fix: resolve Apache configuration errors for Alpine Linux
+- Use gawk instead of awk in Dockerfile for better compatibility
+- Fix s6-envdir error and improve Supervisor API handling in dev-deploy
+- feat: add container rebuild to dev-deploy restart option
+- Update config.yaml to use options/schema format with device selectors
+- Add development deployment workflow and fix addon config schema
+- Add feature toggle switches with conditional visibility in HA add-on config
+- feat: implement tag-based releases and staging workflow
+- Fix undefined API URLs and improve config handling
+- Remove deprecated options from config.yaml and update schema for Home Assistant integration
 - fix: update CHANGELOG generation to replace content and filter merge PRs
 - Refactor configuration management and improve feature handling in the HASS Family Calendar add-on. Updated README for clarity on environment variables and local development setup. Enhanced runtime configuration injection for Home Assistant add-on mode, ensuring features are only rendered if properly configured. Added optional entity IDs and improved error handling across components. Updated Dockerfile for better build practices.
 - fix: update pnpm version to 10 in CI to support lockfile v9
@@ -23,69 +47,5 @@
 - Works now
 - Using WebRTC instead of HLS for video streams
 - Added delay to closing of doorbell cam overlay
-- Show doorbell cam on visit
-- Fix everyday calendar
-- Remove debug message
-- Fixed entity ID
-- Fix issue with garage door status
-- Everyday calendar
-- Fixed Vite build relative paths and fixed nginx cache-control
-- Improved visualization for multi-day events
-- Refactored to use Vite
-- Updated all modules to latest version and refactored to native crypto
-- Don't use physical buttons
-- 1.0.16
-- Optimize background loading of calendar w/o flicker
-- Streamlined HVV view
-- Fix issue with spinning laundry icons
-- Release 1.0.15
-- Improved overlay UX
-- Overlay now looks sexier
-- Washing maschine icon improvements and overlay
-- Calendar now supports swipe and has a loading animation
-- Responsive fixes for small screens
-- Accessible to all users
-- responsive fixes
-- Fixed issue with small sreens
-- Fixed https access isuue, and optimized view for tablet screen
-- Fix problem with calendar loading
-- Fix header chevrons (were reversed)
-- HASS Add-on configuration
-- Add-on for HASSIO
-- Using pnpm now
-- Updated major deps
-- Updated minor deps
-- Updated minor minor deps
-- Now combining the state of all three machines
-- Removed debug console log
-- Do not set new data when calendar loading failed
-- Prep for updated washing and dryer status
-- Using pnpm, updating to cloud HASS and new pirate weather API
-- Improved GPIO handling
-- Listen to buttons
-- New build
-- Optimize UI
-- Improve HVV UI and data display
-- Fix 24 hour issue
-- HVV Geofox API babystep -> departurelist
-- HVV Geofox API babystep
-- Fixed rendering issues
-- Cron to turn TV on/off
-- Show weekday in details
-- Show weather data update time in details
-- Show laundry status
-- HDMI on / off scripts and daemon
-- Linux scripts
-- Fixing minor UI issues
-- Garagedoor
-- Added weather details with hotkey 'w'
-- Added today button and automatically starting week with today, if today is visible
-- bugfix
-- Garage icon based on state
-- Make weather more robust
-- New Build
-- Garage door
-- Weather completed for now
-- First steps to sidebar
 
->>>>>>> origin/main
+
