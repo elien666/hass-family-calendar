@@ -4,13 +4,10 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl } from "./config"
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
 
@@ -20,7 +17,7 @@ const useDoorbell = () => {
   const [ error, setError ] = React.useState(false)
 
   // Check if doorbell is configured
-  const isConfigured = ENTITY_DOORBELL && (HASS_HOST || HASS_ACCESS_TOKEN)
+  const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
 
   React.useEffect(() => {
     // Skip if not configured

@@ -2,7 +2,7 @@ import React from 'react'
 import useTimeout from './use-timeout'
 import axios from 'axios'
 import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCloud, WiDayCloudy, WiNightPartlyCloudy } from 'weather-icons-react'
-import { WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE } from './config'
+import { WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE, ENABLE_WEATHER } from './config'
 import logger from './logger'
 
 export const weatherIconToPresentation = {
@@ -25,7 +25,7 @@ const useWeatherData = (toggleLoading) => {
   const timer = useTimeout(60000 * 10, 'Weather') // 1 hour in ms
 
   // Check if weather is configured
-  const isConfigured = WEATHER_API_KEY && WEATHER_LATITUDE && WEATHER_LONGITUDE
+  const isConfigured = ENABLE_WEATHER && WEATHER_API_KEY && WEATHER_LATITUDE && WEATHER_LONGITUDE
 
   React.useEffect(() => {
     // Skip if not configured

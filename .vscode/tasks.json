@@ -2,6 +2,109 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "build",
+			"type": "shell",
+			"command": "pnpm run build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			}
+		},
+		{
+			"label": "deploy",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/dev-deploy.sh",
+			"args": ["--skip-build"],
+			"group": "none",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"options": {
+				"env": {
+					"HA_ADDON_DIR": "${env:HA_ADDON_DIR}"
+				}
+			}
+		},
+		{
+			"label": "build-and-deploy",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/dev-deploy.sh",
+			"group": "none",
+			"dependsOn": [],
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"options": {
+				"env": {
+					"HA_ADDON_DIR": "${env:HA_ADDON_DIR}"
+				}
+			}
+		},
+		{
+			"label": "watch-and-deploy",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/dev-deploy.sh",
+			"args": ["--watch"],
+			"group": "none",
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "custom",
+				"pattern": {
+					"regexp": ".",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "Starting watch mode",
+					"endsPattern": "Watching:"
+				}
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": true
+			},
+			"options": {
+				"env": {
+					"HA_ADDON_DIR": "${env:HA_ADDON_DIR}",
+					"HA_HOST": "${env:HA_HOST}",
+					"HA_TOKEN": "${env:HA_TOKEN}"
+				}
+			}
+		},
+		{
+			"label": "deploy-and-restart",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/dev-deploy.sh",
+			"args": [
+				"--restart"
+			],
+			"group": "none",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"options": {
+				"env": {
+					"HA_HOST": "${env:HA_HOST}",
+					"HA_TOKEN": "${env:HA_TOKEN}",
+					"HA_ADDON_DIR": "${env:HA_ADDON_DIR}"
+				}
+			}
+		},
+		{
 			"type": "docker-build",
 			"label": "docker-build",
 			"platform": "node",
@@ -16,7 +119,7 @@
 			"label": "docker-run: release",
 			"dependsOn": [
 				"docker-build"
-			],
+			]
 		},
 		{
 			"type": "docker-run",
