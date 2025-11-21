@@ -1,0 +1,43 @@
+# Development Deployment Configuration
+# Copy this file to .deploy-config.local and fill in your values
+# This file is gitignored and will not be committed
+
+# =============================================================================
+# SSH Deployment Configuration (Recommended - no mounting required)
+# =============================================================================
+# Set these for direct SSH/rsync deployment without mounting
+# Leave HA_SSH_HOST empty to use local mount point instead
+
+HA_SSH_HOST="homeassistant.local"
+HA_SSH_USER="root"
+# Find the correct path by SSHing into your HA instance and running:
+#   find /usr/share/hassio/addons -name "family_calendar" -type d
+# Common paths:
+#   /usr/share/hassio/addons/git_<hash>/family_calendar (git-based add-ons)
+#   /addons/family_calendar (local add-ons)
+HA_SSH_PATH="/usr/share/hassio/addons/git_*/family_calendar"
+HA_SSH_KEY=""  # Optional: path to SSH private key (e.g., ~/.ssh/id_rsa)
+HA_SSH_PORT="22"  # Optional: custom SSH port (default: 22)
+
+# =============================================================================
+# Local Mount Point (Alternative to SSH)
+# =============================================================================
+# Only used if HA_SSH_HOST is empty
+# Mount your HA add-on directory locally (e.g., via SSHFS) to this path
+
+HA_ADDON_DIR="/Volumes/addons/family_calendar"
+
+# =============================================================================
+# Home Assistant API Configuration (for restart functionality)
+# =============================================================================
+# Get a long-lived access token from:
+#   Home Assistant UI -> Profile -> Long-Lived Access Tokens -> Create Token
+
+HA_HOST="http://homeassistant.local:8123"
+HA_TOKEN=""  # Your long-lived access token from Home Assistant
+
+# =============================================================================
+# Add-on Configuration
+# =============================================================================
+ADDON_SLUG="family_calendar"
+

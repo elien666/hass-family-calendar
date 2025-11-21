@@ -1,7 +1,7 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
 version: "next-1"
-slug: "family_calendar"
+slug: "family-calendar"
 init: false
 arch:
   - aarch64
@@ -15,171 +15,51 @@ panel_icon: mdi:calendar-week
 panel_admin: false
 panel_title: Kalender
 homeassistant_api: true
+options:
+  weather:
+    weather_api_key:
+    weather_latitude: 53.570
+    weather_longitude: 10.091
+  hvv:
+    geofox_user:
+    geofox_secret:
+  telegram:
+    telegram_bot_token:
+    telegram_chat_id:
+  garage:
+    entity_garage_door:
+  laundry:
+    entity_washing_machine_new:
+    entity_washing_machine_old:
+    entity_dryer:
+  doorbell:
+    entity_doorbell:
+    entity_doorbell_button:
+  everyday_calendar:
+    entity_everyday_calendar:
+  physical_buttons:
+    buttons_ws_url:
 schema:
-  # Home Assistant Connection (for external HA instances)
-  hass_host:
-    selector:
-      text: {}
-    description: "Home Assistant instance URL (leave empty when running as add-on, only needed for external instances)"
-    nullable: true
-  hass_access_token:
-    selector:
-      text: {}
-    description: "Long-lived access token for Home Assistant API (leave empty when running as add-on, only needed for external instances)"
-    nullable: true
-  
-  # External API Integrations
-  enable_weather:
-    selector:
-      boolean: {}
-    description: "Enable weather forecast display with current conditions and hourly/daily forecasts via Pirate Weather API"
-    default: false
-  weather_api_key:
-    selector:
-      text: {}
-    description: "Pirate Weather API key for fetching weather data"
-    nullable: true
-    visibility:
-      enable_weather: true
-  weather_latitude:
-    selector:
-      number: {}
-    description: "Latitude coordinate for weather location"
-    nullable: true
-    visibility:
-      enable_weather: true
-  weather_longitude:
-    selector:
-      number: {}
-    description: "Longitude coordinate for weather location"
-    nullable: true
-    visibility:
-      enable_weather: true
-  
-  enable_hvv:
-    selector:
-      boolean: {}
-    description: "Enable HVV public transport departures display for Hamburg using Geofox API"
-    default: false
-  geofox_user:
-    selector:
-      text: {}
-    description: "Geofox API username for HVV departures"
-    nullable: true
-    visibility:
-      enable_hvv: true
-  geofox_secret:
-    selector:
-      text: {}
-    description: "Geofox API secret key for HVV departures"
-    nullable: true
-    visibility:
-      enable_hvv: true
-  
-  enable_telegram:
-    selector:
-      boolean: {}
-    description: "Enable Telegram bot notifications"
-    default: false
-  telegram_bot_token:
-    selector:
-      text: {}
-    description: "Telegram bot token for sending notifications"
-    nullable: true
-    visibility:
-      enable_telegram: true
-  telegram_chat_id:
-    selector:
-      text: {}
-    description: "Telegram chat ID for receiving notifications"
-    nullable: true
-    visibility:
-      enable_telegram: true
-  
-  # Home Assistant Entity Integrations
-  enable_garage:
-    selector:
-      boolean: {}
-    description: "Enable garage door monitoring and control"
-    default: false
-  entity_garage_door:
-    selector:
-      text: {}
-    description: "Entity ID for the garage door cover (e.g., cover.garagentor)"
-    nullable: true
-    visibility:
-      enable_garage: true
-  
-  enable_laundry:
-    selector:
-      boolean: {}
-    description: "Enable laundry status tracking for washing machines and dryer"
-    default: false
-  entity_washing_machine_new:
-    selector:
-      text: {}
-    description: "Entity ID for the new washing machine status sensor"
-    nullable: true
-    visibility:
-      enable_laundry: true
-  entity_washing_machine_old:
-    selector:
-      text: {}
-    description: "Entity ID for the old washing machine status sensor"
-    nullable: true
-    visibility:
-      enable_laundry: true
-  entity_dryer:
-    selector:
-      text: {}
-    description: "Entity ID for the dryer status sensor"
-    nullable: true
-    visibility:
-      enable_laundry: true
-  
-  enable_doorbell:
-    selector:
-      boolean: {}
-    description: "Enable doorbell notifications with CCTV integration"
-    default: false
-  entity_doorbell:
-    selector:
-      text: {}
-    description: "Entity ID for the doorbell binary sensor"
-    nullable: true
-    visibility:
-      enable_doorbell: true
-  entity_doorbell_button:
-    selector:
-      text: {}
-    description: "Entity ID for the doorbell unlatch button"
-    nullable: true
-    visibility:
-      enable_doorbell: true
-  
-  enable_everyday_calendar:
-    selector:
-      boolean: {}
-    description: "Enable everyday calendar visual tracking for daily habits"
-    default: false
-  entity_everyday_calendar:
-    selector:
-      text: {}
-    description: "Entity ID for the everyday calendar sensor"
-    nullable: true
-    visibility:
-      enable_everyday_calendar: true
-  
-  # Hardware Integration
-  enable_physical_buttons:
-    selector:
-      boolean: {}
-    description: "Enable physical button integration via WebSocket"
-    default: false
-  buttons_ws_url:
-    selector:
-      url: {}
-    description: "WebSocket URL for physical button integration (e.g., ws://hostname:5678/)"
-    nullable: true
-    visibility:
-      enable_physical_buttons: true
+  weather:
+    weather_api_key: str?
+    weather_latitude: float?
+    weather_longitude: float?
+  hvv:
+    geofox_user: str?
+    geofox_secret: str?
+  telegram:
+    telegram_bot_token: str?
+    telegram_chat_id: str?
+  garage:
+    entity_garage_door: device
+  laundry:
+    entity_washing_machine_new: device
+    entity_washing_machine_old: device
+    entity_dryer: device
+  doorbell:
+    entity_doorbell: device
+    entity_doorbell_button: device
+  everyday_calendar:
+    entity_everyday_calendar: device
+  physical_buttons:
+    buttons_ws_url: url?

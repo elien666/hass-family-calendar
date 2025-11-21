@@ -1,0 +1,66 @@
+---
+configuration:
+  weather:
+    name: Weather
+    description: Configure the weather forecast.
+    fields:
+      weather_api_key: 
+        name: Pirate Weather API Key
+      weather_latitude:
+        name: Weather Latitude
+      weather_longitude:
+        name: Weather Longitude
+  hvv:
+    name: HVV
+    description: Configure the HVV departures.
+    fields:
+      geofox_user:
+        name: Geofox User
+      geofox_secret:
+        name: Geofox Secret
+  telegram:
+    name: Telegram
+    description: Configure the Telegram bot.
+    fields:
+      telegram_bot_token:
+        name: Telegram Bot Token
+      telegram_chat_id:
+        name: Telegram Chat ID
+  garage:
+    name: Garage
+    description: Configure the garage door.
+    fields:
+      entity_garage_door:
+        name: Garage Door Entity
+      entity_garage_door_control:
+        name: Garage Door Control Entity
+  laundry:
+    name: Laundry
+    description: Configure the laundry.
+    fields:
+      entity_washing_machine_new:
+        name: Washing Machine New Entity
+      entity_washing_machine_old:
+        name: Washing Machine Old Entity
+      entity_dryer:
+        name: Dryer Entity
+  doorbell:
+    name: Doorbell
+    description: Configure the doorbell.
+    fields:
+      entity_doorbell:
+        name: Doorbell Entity
+      entity_doorbell_button:
+        name: Doorbell Button Entity
+  everyday_calendar:
+    name: Everyday Calendar
+    description: Configure the everyday calendar.
+    fields:
+      entity_everyday_calendar:
+        name: Everyday Calendar Entity
+  physical_buttons:
+    name: Physical Buttons
+    description: Configure the physical buttons.
+    fields:
+      buttons_ws_url:
+        name: Buttons WebSocket URL

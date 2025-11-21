@@ -206,6 +206,27 @@ The `merry-timeline` dependency (v0.5.0) requires a postinstall fix that is auto
 
 For local development, use the `.env` file approach (see main `README.md`). The add-on configuration system is only active when running as a Home Assistant add-on.
 
+### Quick Development Workflow
+
+When testing changes in your local Home Assistant instance:
+
+1. **Build and deploy**:
+   ```bash
+   pnpm run dev:deploy
+   ```
+
+2. **Watch mode** (automatically rebuilds and deploys on changes):
+   ```bash
+   pnpm run dev:deploy:watch
+   ```
+
+3. **Restart the add-on** from Home Assistant UI or use:
+   ```bash
+   ./scripts/restart-addon.sh --host http://homeassistant.local:8123 --token YOUR_TOKEN
+   ```
+
+See the main `README.md` for detailed development workflow documentation, including VS Code task configuration and environment variable setup.
+
 ### Configuration Changes
 
 After changing configuration in the Home Assistant UI:
