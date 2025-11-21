@@ -7,10 +7,7 @@ import axios from 'axios'
 import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, ENABLE_EVERYDAY_CALENDAR, buildHaUrl } from "./config"
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`) : null
 

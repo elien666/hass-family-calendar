@@ -7,10 +7,7 @@ import useTimeout from './use-timeout'
 import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl } from "./config"
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const host = (name) => buildHaUrl(`/api/calendars/${name}`)
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`

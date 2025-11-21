@@ -7,10 +7,7 @@ import axios from 'axios'
 import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl } from "./config"
 import logger from './logger'
 
-// Set authorization header if token is available
-if (HASS_ACCESS_TOKEN) {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
-}
+// Authorization header is configured centrally in config.js
 
 const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
 

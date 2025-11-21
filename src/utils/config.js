@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 // Get runtime config from window.APP_CONFIG (injected by HA add-on) or fallback to build-time env vars
 const getConfig = (key, defaultValue = undefined) => {
   // Check for runtime config from HA add-on first
@@ -30,6 +32,22 @@ const getConfigBoolean = (key, defaultValue = false) => {
 // For local dev, these should be set via .env
 export const HASS_HOST = getConfig('HASS_HOST', '')
 export const HASS_ACCESS_TOKEN = getConfig('HASS_ACCESS_TOKEN', '')
+
+// Configure axios Authorization header
+// When running in ingress mode (empty token), don't send Authorization header
+// Ingress proxy handles authentication automatically
+// This must be done after HASS_ACCESS_TOKEN is defined
+const hasValidToken = HASS_ACCESS_TOKEN && 
+  typeof HASS_ACCESS_TOKEN === 'string' && 
+  HASS_ACCESS_TOKEN.trim() !== ''
+
+if (hasValidToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
+} else {
+  // Explicitly remove Authorization header for ingress mode
+  // This ensures no Authorization header is sent when running through HA ingress
+  delete axios.defaults.headers.common['Authorization']
+}
 
 // Feature enable/disable toggles
 export const ENABLE_WEATHER = getConfigBoolean('ENABLE_WEATHER', false)
