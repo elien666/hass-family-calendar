@@ -115,10 +115,16 @@ fi
 HASS_HOST="${HASS_HOST:-}"
 HASS_ACCESS_TOKEN="${HASS_ACCESS_TOKEN:-}"
 
-# Always output HASS_HOST and HASS_ACCESS_TOKEN (even if empty)
-# In ingress mode, these are explicitly set to empty strings to indicate relative URLs and no auth header
-output_json_value "HASS_HOST" "$HASS_HOST" "false" "true" >> "$CONFIG_FILE"
-output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "true" >> "$CONFIG_FILE"
+# Output HASS_HOST and HASS_ACCESS_TOKEN
+# In ingress mode, DON'T output these when empty - let app fall back to build-time env vars
+# This matches the "broken config.js" behavior that worked
+# Only output if they have actual values
+if [ -n "$HASS_HOST" ]; then
+  output_json_value "HASS_HOST" "$HASS_HOST" "false" "false" >> "$CONFIG_FILE"
+fi
+if [ -n "$HASS_ACCESS_TOKEN" ]; then
+  output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "false" >> "$CONFIG_FILE"
+fi
 
 # Helper function to check if a toggle is enabled
 is_toggle_enabled() {
@@ -244,14 +250,11 @@ fi
 rm -f "${CONFIG_FILE}.bak" "${CONFIG_FILE}.tmp" 2>/dev/null
 echo "};" >> "$CONFIG_FILE"
 
-# Verify the config file is valid and contains at least HASS_HOST and HASS_ACCESS_TOKEN
-if ! grep -q "HASS_HOST" "$CONFIG_FILE"; then
-  echo "Warning: HASS_HOST not found in config.js, regenerating..." >&2
-  # Regenerate with minimal config
-  echo "window.APP_CONFIG = {" > "$CONFIG_FILE"
-  echo "  HASS_HOST: \"\"," >> "$CONFIG_FILE"
-  echo "  HASS_ACCESS_TOKEN: \"\"" >> "$CONFIG_FILE"
-  echo "};" >> "$CONFIG_FILE"
+# Verify the config file is valid JSON
+# Don't require HASS_HOST/HASS_ACCESS_TOKEN to be present - let app fall back to build-time env vars
+if ! grep -q "window.APP_CONFIG" "$CONFIG_FILE" || ! grep -q "}" "$CONFIG_FILE"; then
+  echo "Warning: config.js is invalid, regenerating with empty config..." >&2
+  echo "window.APP_CONFIG = {};" > "$CONFIG_FILE"
 fi
 
 # Start Apache (try common paths)
