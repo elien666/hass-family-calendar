@@ -3,17 +3,25 @@ import axios from 'axios'
 // Get runtime config from window.APP_CONFIG (injected by HA add-on) or fallback to build-time env vars
 const getConfig = (key, defaultValue = undefined) => {
   // Check for runtime config from HA add-on first
-  if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG[key] !== undefined) {
-    const value = window.APP_CONFIG[key]
-    // Handle string "undefined" or "null" as invalid values
-    if (value === "undefined" || value === "null") {
-      return defaultValue
+  if (typeof window !== 'undefined' && window.APP_CONFIG) {
+    // If window.APP_CONFIG exists, we're running in the add-on
+    // Check if the key is explicitly set in APP_CONFIG
+    if (window.APP_CONFIG[key] !== undefined) {
+      const value = window.APP_CONFIG[key]
+      // Handle string "undefined" or "null" as invalid values
+      if (value === "undefined" || value === "null") {
+        return defaultValue
+      }
+      // Return empty string as-is, but convert undefined/null to defaultValue for consistency
+      // Empty string is a valid, intentional value (e.g., for ingress mode)
+      return value === null || value === undefined ? defaultValue : value
     }
-    // Return empty string as-is, but convert undefined/null to defaultValue for consistency
-    // Empty string is a valid, intentional value (e.g., for ingress mode)
-    return value === null || value === undefined ? defaultValue : value
+    // If key is not in APP_CONFIG, return defaultValue (don't fall back to build-time env vars)
+    // This is critical for ingress mode where HASS_ACCESS_TOKEN is intentionally not set
+    // and we don't want to use the build-time token
+    return defaultValue
   }
-  // Fallback to build-time environment variables
+  // Fallback to build-time environment variables (only when not running in add-on)
   const envValue = import.meta.env[`VITE_${key}`]
   return envValue !== undefined ? envValue : defaultValue
 }
