@@ -86,7 +86,7 @@ Deploy the built add-on files to your Home Assistant instance via SSH/rsync or l
 
 OPTIONS:
     -w, --watch              Watch for changes and automatically rebuild and deploy
-    -r, --restart            Restart the add-on after deployment (requires HA_HOST and HA_TOKEN)
+    -r, --restart            Rebuild and restart the add-on after deployment (requires HA_HOST and HA_TOKEN)
     -s, --skip-build         Skip the build step and only deploy existing dist files
     -t, --target DIR         Target directory for local deployment (overrides HA_ADDON_DIR)
     -h, --host HOST          Home Assistant host URL (e.g., http://homeassistant.local:8123)
@@ -115,7 +115,7 @@ EXAMPLES:
     # Watch mode for continuous development
     $0 --watch
 
-    # Deploy and restart add-on
+    # Deploy and rebuild/restart add-on
     $0 --restart
 
     # Override SSH settings via command line
@@ -460,41 +460,68 @@ deploy_files() {
 # Function to restart the add-on via HA Supervisor API
 restart_addon() {
     if [ -z "$HA_HOST" ] || [ -z "$HA_TOKEN" ]; then
-        log_warning "HA_HOST and HA_TOKEN are required for restart"
+        log_warning "HA_HOST and HA_TOKEN are required for rebuild/restart"
         log_info "Set them in .deploy-config.local or via --host and --token flags"
-        log_info "Alternatively, restart the add-on manually from Home Assistant UI"
+        log_info "Alternatively, rebuild and restart the add-on manually from Home Assistant UI"
         return 1
     fi
-    
-    log_info "Restarting add-on via Home Assistant API..."
     
     # Remove trailing slash from HA_HOST
     HA_HOST="${HA_HOST%/}"
     
-    # Try Supervisor API first (for add-ons)
-    local supervisor_url="${HA_HOST}/api/hassio/addons/${ADDON_SLUG}/restart"
+    # First, rebuild the container to ensure latest changes are included
+    log_info "Rebuilding add-on container via Home Assistant API..."
+    local rebuild_url="${HA_HOST}/api/hassio/addons/${ADDON_SLUG}/rebuild"
     
-    local response=$(curl -s -w "\n%{http_code}" -X POST \
+    local rebuild_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $HA_TOKEN" \
         -H "Content-Type: application/json" \
-        "$supervisor_url" 2>/dev/null || echo -e "\n000")
+        "$rebuild_url" 2>/dev/null || echo -e "\n000")
     
-    local http_code=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | sed '$d')
+    local rebuild_http_code=$(echo "$rebuild_response" | tail -n1)
+    local rebuild_body=$(echo "$rebuild_response" | sed '$d')
     
-    if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
+    if [ "$rebuild_http_code" = "200" ] || [ "$rebuild_http_code" = "201" ]; then
+        log_success "Add-on container rebuild initiated successfully"
+        # Wait a bit for rebuild to start
+        sleep 2
+    elif [ "$rebuild_http_code" = "401" ] || [ "$rebuild_http_code" = "403" ]; then
+        log_error "Authentication failed during rebuild. Check your HA_TOKEN"
+        return 1
+    elif [ "$rebuild_http_code" = "404" ]; then
+        log_warning "Supervisor API not available or add-on not found for rebuild"
+        log_info "Skipping rebuild, will attempt restart only"
+    else
+        log_warning "Failed to rebuild via API (HTTP $rebuild_http_code)"
+        log_info "Response: $rebuild_body"
+        log_info "Continuing with restart attempt..."
+    fi
+    
+    # Now restart the add-on
+    log_info "Restarting add-on via Home Assistant API..."
+    local restart_url="${HA_HOST}/api/hassio/addons/${ADDON_SLUG}/restart"
+    
+    local restart_response=$(curl -s -w "\n%{http_code}" -X POST \
+        -H "Authorization: Bearer $HA_TOKEN" \
+        -H "Content-Type: application/json" \
+        "$restart_url" 2>/dev/null || echo -e "\n000")
+    
+    local restart_http_code=$(echo "$restart_response" | tail -n1)
+    local restart_body=$(echo "$restart_response" | sed '$d')
+    
+    if [ "$restart_http_code" = "200" ] || [ "$restart_http_code" = "201" ]; then
         log_success "Add-on restart initiated successfully"
         return 0
-    elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
-        log_error "Authentication failed. Check your HA_TOKEN"
+    elif [ "$restart_http_code" = "401" ] || [ "$restart_http_code" = "403" ]; then
+        log_error "Authentication failed during restart. Check your HA_TOKEN"
         return 1
-    elif [ "$http_code" = "404" ]; then
+    elif [ "$restart_http_code" = "404" ]; then
         log_warning "Supervisor API not available or add-on not found"
         log_info "You may need to restart the add-on manually from Home Assistant UI"
         return 1
     else
-        log_warning "Failed to restart via API (HTTP $http_code)"
-        log_info "Response: $body"
+        log_warning "Failed to restart via API (HTTP $restart_http_code)"
+        log_info "Response: $restart_body"
         log_info "Please restart the add-on manually from Home Assistant UI"
         return 1
     fi
@@ -512,13 +539,13 @@ deploy() {
     if [ "$RESTART_ADDON" = true ]; then
         restart_addon || true  # Don't fail if restart fails
     else
-        log_info "Add-on restart skipped. Restart manually from HA UI if needed."
+        log_info "Add-on rebuild/restart skipped. Rebuild and restart manually from HA UI if needed."
     fi
     
     echo ""
     log_success "Deployment completed!"
     log_info "Next steps:"
-    log_info "  1. Restart the add-on from Home Assistant UI if not done automatically"
+    log_info "  1. Rebuild and restart the add-on from Home Assistant UI if not done automatically"
     log_info "  2. Hard refresh your browser (Ctrl+F5 / Cmd+Shift+R) to see changes"
     echo ""
 }
