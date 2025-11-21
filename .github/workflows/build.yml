@@ -1,15 +1,15 @@
 name: Build Home Assistant Add-on
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
+    # Skip if commit message contains [skip ci]
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     permissions:
       contents: write
     
