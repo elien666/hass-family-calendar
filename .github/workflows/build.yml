@@ -272,6 +272,10 @@ jobs:
         id: create-tag
         shell: bash
         run: |
+          # Configure git identity
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
           TAG_NAME="${{ steps.read-version.outputs.tag_name }}"
           VERSION="${{ steps.read-version.outputs.version }}"
           
