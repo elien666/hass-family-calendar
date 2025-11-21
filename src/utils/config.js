@@ -57,6 +57,10 @@ if (hasValidToken) {
   // Explicitly remove Authorization header for ingress mode
   // This is critical - ingress proxy handles auth and will reject if we send our own header
   delete axios.defaults.headers.common['Authorization']
+  // Ensure it's completely removed by checking if it still exists
+  if ('Authorization' in axios.defaults.headers.common) {
+    delete axios.defaults.headers.common['Authorization']
+  }
 }
 
 // Feature enable/disable toggles
