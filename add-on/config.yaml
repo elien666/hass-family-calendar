@@ -17,28 +17,19 @@ panel_title: Kalender
 homeassistant_api: true
 options:
   weather:
-    weather_api_key:
     weather_latitude: 53.570
     weather_longitude: 10.091
-  hvv:
-    geofox_user:
-    geofox_secret:
-  telegram:
-    telegram_bot_token:
-    telegram_chat_id:
   garage:
-    entity_garage_door:
+    entity_garage_door: cover.garagentor
   laundry:
-    entity_washing_machine_new:
-    entity_washing_machine_old:
-    entity_dryer:
+    entity_washing_machine_new: input_select.wasching_machine_neu_status
+    entity_washing_machine_old: input_select.washing_machine_alt_status
+    entity_dryer: input_select.dryer_status
   doorbell:
-    entity_doorbell:
-    entity_doorbell_button:
+    entity_doorbell: binary_sensor.tuerklingel_person
+    entity_doorbell_button: button.haustur_unlatch_2
   everyday_calendar:
-    entity_everyday_calendar:
-  physical_buttons:
-    buttons_ws_url:
+    entity_everyday_calendar: sensor.everyday_calendar
 schema:
   weather:
     weather_api_key: str?
@@ -51,15 +42,15 @@ schema:
     telegram_bot_token: str?
     telegram_chat_id: str?
   garage:
-    entity_garage_door: device
+    entity_garage_door: str?
   laundry:
-    entity_washing_machine_new: device
-    entity_washing_machine_old: device
-    entity_dryer: device
+    entity_washing_machine_new: str?
+    entity_washing_machine_old: str?
+    entity_dryer: str?
   doorbell:
-    entity_doorbell: device
-    entity_doorbell_button: device
+    entity_doorbell: str?
+    entity_doorbell_button: str?
   everyday_calendar:
-    entity_everyday_calendar: device
+    entity_everyday_calendar: str?
   physical_buttons:
     buttons_ws_url: url?
