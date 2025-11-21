@@ -6,7 +6,7 @@ RUN apk add --no-cache \
     apache2 \
     apache2-utils \
     sed \
-    awk
+    gawk
 
 # Create Apache directories matching httpd:2.4 structure
 RUN mkdir -p /usr/local/apache2/htdocs /usr/local/apache2/conf /usr/local/apache2/logs /run/apache2
