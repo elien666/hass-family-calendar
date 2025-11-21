@@ -4,21 +4,25 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+  # Job 1: Build check for PRs to main - validate and write back to PR branch
+  build-check:
     runs-on: ubuntu-latest
-    # Skip if commit message contains [skip ci]
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
     permissions:
       contents: write
+      pull-requests: write
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch full history for commit messages
-          ref: main  # Checkout main branch to commit changes back
+          ref: ${{ github.head_ref }}  # Checkout PR branch
           fetch-tags: true  # Fetch tags to reference them
 
       - name: Setup Node.js
@@ -161,8 +165,8 @@ jobs:
             # This gets only commits since the previous release
             COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
           else
-            # No previous tag exists, this is the first release - get all commits from main
-            COMMITS=$(git log main --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
+            # No previous tag exists, this is the first release - get all commits from the branch
+            COMMITS=$(git log --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
           fi
           
           # Filter out "Merge pull request" and other merge-related messages
@@ -221,20 +225,55 @@ jobs:
             git status
           fi
 
-      - name: Commit and push changes
+      - name: Commit and push changes to PR branch
         if: steps.git-check.outputs.has_changes == 'true'
         shell: bash
         run: |
           git add add-on/config.yaml add-on/CHANGELOG.md add-on/dist
           git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }} [skip ci]"
-          git push origin HEAD:main
+          git push origin HEAD:${{ github.head_ref }}
+
+  # Job 2: Create release on push to main (after PR merge) - NO build
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    permissions:
+      contents: write
+    needs: []  # No dependencies - this runs independently after PR merge
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for commit messages
+          ref: main  # Checkout main branch
+          fetch-tags: true  # Fetch tags to reference them
+
+      - name: Read version from config.yaml
+        id: read-version
+        shell: bash
+        run: |
+          # Read current version from config.yaml that was set during PR build
+          VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
+          
+          if [ -z "$VERSION" ]; then
+            echo "Error: Could not read version from config.yaml"
+            exit 1
+          fi
+          
+          TAG_NAME="v${VERSION}"
+          
+          echo "Version from config.yaml: $VERSION"
+          echo "Tag name: $TAG_NAME"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Create and push git tag
         id: create-tag
         shell: bash
         run: |
-          TAG_NAME="${{ steps.update-version.outputs.tag_name }}"
-          VERSION="${{ steps.update-version.outputs.new_version }}"
+          TAG_NAME="${{ steps.read-version.outputs.tag_name }}"
+          VERSION="${{ steps.read-version.outputs.version }}"
           
           # Ensure we're on main branch
           git checkout main || true
@@ -247,9 +286,7 @@ jobs:
             echo "Tag $TAG_NAME already exists locally, skipping tag creation"
             echo "tag_created=false" >> $GITHUB_OUTPUT
           else
-            # Create and push the tag on the current HEAD
-            # This will tag either the commit we just pushed (if changes were committed)
-            # or the current HEAD (the merged PR commit if no changes)
+            # Create and push the tag on the current HEAD (the merged PR commit)
             git tag -a "$TAG_NAME" -m "Release $VERSION"
             git push origin "$TAG_NAME"
             echo "Created and pushed tag $TAG_NAME"
@@ -265,7 +302,7 @@ jobs:
         shell: bash
         run: |
           TAG_NAME="${{ steps.create-tag.outputs.tag_name }}"
-          VERSION="${{ steps.update-version.outputs.new_version }}"
+          VERSION="${{ steps.read-version.outputs.version }}"
           
           # Read CHANGELOG content for release notes
           RELEASE_NOTES=""
@@ -299,4 +336,3 @@ jobs:
             --target main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
