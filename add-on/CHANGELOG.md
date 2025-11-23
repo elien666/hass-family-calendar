@@ -1,3 +1,7 @@
+**1.1 - 2025-11-23**
+
+- Add renovate.json
+
 **1.0 - 2025-11-21**
 
 - fix: add git config to release job for tag creation
