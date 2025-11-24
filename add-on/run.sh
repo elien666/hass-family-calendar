@@ -189,19 +189,44 @@ output_json_value "ENABLE_TELEGRAM" "$ENABLE_TELEGRAM" "false" "true" >> "$CONFI
 
 # Garage: enabled if entity_garage_door is set
 ENABLE_GARAGE="false"
-if has_config_value "garage.entity_garage_door"; then
-  ENABLE_GARAGE="true"
-  read_and_output_config "garage.entity_garage_door" "ENTITY_GARAGE_DOOR" "false"
+# Read the entity value first, then check if it's valid
+if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+  GARAGE_ENTITY_VALUE=$(bashio::config "garage.entity_garage_door" 2>/dev/null || echo "")
+  GARAGE_ENTITY_VALUE="${GARAGE_ENTITY_VALUE:-}"
+  # Check if value is non-empty and not "undefined" or "null"
+  if [ -n "$GARAGE_ENTITY_VALUE" ] && [ "$GARAGE_ENTITY_VALUE" != "undefined" ] && [ "$GARAGE_ENTITY_VALUE" != "null" ]; then
+    ENABLE_GARAGE="true"
+    output_json_value "ENTITY_GARAGE_DOOR" "$GARAGE_ENTITY_VALUE" "false" "false" >> "$CONFIG_FILE"
+  fi
 fi
 output_json_value "ENABLE_GARAGE" "$ENABLE_GARAGE" "false" "true" >> "$CONFIG_FILE"
 
 # Laundry: enabled if any laundry entity is set
 ENABLE_LAUNDRY="false"
-if has_config_value "laundry.entity_washing_machine_new" || has_config_value "laundry.entity_washing_machine_old" || has_config_value "laundry.entity_dryer"; then
-  ENABLE_LAUNDRY="true"
-  read_and_output_config "laundry.entity_washing_machine_new" "ENTITY_WASHING_MACHINE_NEW" "false"
-  read_and_output_config "laundry.entity_washing_machine_old" "ENTITY_WASHING_MACHINE_OLD" "false"
-  read_and_output_config "laundry.entity_dryer" "ENTITY_DRYER" "false"
+# Read the entity values first, then check if any are valid
+if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+  LAUNDRY_NEW=$(bashio::config "laundry.entity_washing_machine_new" 2>/dev/null || echo "")
+  LAUNDRY_NEW="${LAUNDRY_NEW:-}"
+  LAUNDRY_OLD=$(bashio::config "laundry.entity_washing_machine_old" 2>/dev/null || echo "")
+  LAUNDRY_OLD="${LAUNDRY_OLD:-}"
+  LAUNDRY_DRYER=$(bashio::config "laundry.entity_dryer" 2>/dev/null || echo "")
+  LAUNDRY_DRYER="${LAUNDRY_DRYER:-}"
+  
+  # Check if any value is non-empty and not "undefined" or "null"
+  if ([ -n "$LAUNDRY_NEW" ] && [ "$LAUNDRY_NEW" != "undefined" ] && [ "$LAUNDRY_NEW" != "null" ]) || \
+     ([ -n "$LAUNDRY_OLD" ] && [ "$LAUNDRY_OLD" != "undefined" ] && [ "$LAUNDRY_OLD" != "null" ]) || \
+     ([ -n "$LAUNDRY_DRYER" ] && [ "$LAUNDRY_DRYER" != "undefined" ] && [ "$LAUNDRY_DRYER" != "null" ]); then
+    ENABLE_LAUNDRY="true"
+    if [ -n "$LAUNDRY_NEW" ] && [ "$LAUNDRY_NEW" != "undefined" ] && [ "$LAUNDRY_NEW" != "null" ]; then
+      output_json_value "ENTITY_WASHING_MACHINE_NEW" "$LAUNDRY_NEW" "false" "false" >> "$CONFIG_FILE"
+    fi
+    if [ -n "$LAUNDRY_OLD" ] && [ "$LAUNDRY_OLD" != "undefined" ] && [ "$LAUNDRY_OLD" != "null" ]; then
+      output_json_value "ENTITY_WASHING_MACHINE_OLD" "$LAUNDRY_OLD" "false" "false" >> "$CONFIG_FILE"
+    fi
+    if [ -n "$LAUNDRY_DRYER" ] && [ "$LAUNDRY_DRYER" != "undefined" ] && [ "$LAUNDRY_DRYER" != "null" ]; then
+      output_json_value "ENTITY_DRYER" "$LAUNDRY_DRYER" "false" "false" >> "$CONFIG_FILE"
+    fi
+  fi
 fi
 output_json_value "ENABLE_LAUNDRY" "$ENABLE_LAUNDRY" "false" "true" >> "$CONFIG_FILE"
 

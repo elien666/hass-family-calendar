@@ -2,10 +2,11 @@ import styled from 'styled-components'
 import Icon from '@mdi/react'
 import React, { memo, useCallback } from 'react'
 import useWashingMachine from '../utils/use-washing-machine'
-import { ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER } from '../utils/config'
+import { ENABLE_LAUNDRY } from '../utils/config'
 import clsx from 'clsx'
 import Overlay from './overlay'
 import { mapToPresentation } from '../utils/use-washing-machine'
+import { mdiAlertCircle } from '@mdi/js'
 
 const Div = styled.div`
   padding-bottom: 12px;
@@ -30,6 +31,15 @@ const Div = styled.div`
       span {
         display: none;
       }
+    }
+  }
+
+  &.disabled {
+    cursor: default;
+    
+    .status {
+      cursor: default;
+      opacity: 0.6;
     }
   }
 
@@ -71,27 +81,40 @@ const Div = styled.div`
 `
 
 const Laundry = () => {
-  // Don't render if no laundry entities are configured
-  if (!ENTITY_WASHING_MACHINE_NEW && !ENTITY_WASHING_MACHINE_OLD && !ENTITY_DRYER) {
+  // Don't render if laundry feature is disabled
+  if (!ENABLE_LAUNDRY) {
     return null
   }
 
-  const [ status, states ] = useWashingMachine()
+  const [ status, states, error ] = useWashingMachine()
   const [ showLaundry, toggle ] = React.useState(false)
   
-  const openLaundry = useCallback(() => toggle(true), [])
+  const openLaundry = useCallback(() => {
+    if (error === false) {
+      toggle(true)
+    }
+  }, [error])
   const closeLaundry = useCallback(() => toggle(false), [])
 
   return (
-    <Div>
+    <Div className={clsx({ disabled: error !== false })}>
       <h2>Wäsche</h2>
       <div className={'status'} onClick={openLaundry}>
-        <div className={clsx({ animate: status.animate })}>
-          <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
-        </div>
-        <span>{status.label}</span>
+        {error !== false ? (
+          <>
+            <Icon path={mdiAlertCircle} size={'2rem'} color='#f85a5a'/>
+            <span>Fehler</span>
+          </>
+        ) : (
+          <>
+            <div className={clsx({ animate: status.animate })}>
+              <Icon path={status.icon} size={'2rem'} color='#ffffff'/>
+            </div>
+            <span>{status.label}</span>
+          </>
+        )}
       </div>
-      <Overlay visible={showLaundry} onClick={closeLaundry}>
+      <Overlay visible={showLaundry && error === false} onClick={closeLaundry}>
         <div className={'states'}>
           {states.map((state, index) => (
             <div key={index}>

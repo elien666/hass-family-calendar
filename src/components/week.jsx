@@ -127,7 +127,7 @@ const Div = styled.div`
 const Week = () => {
 
   const [ startDate, setStartDate ] = React.useState(undefined)
-  const data = useCalendarData(startDate)
+  const [data, error] = useCalendarData(startDate)
   const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
   
   React.useEffect(() => {
@@ -192,16 +192,28 @@ const Week = () => {
       </div>
       {data.length === 0 && (
         <div className='loading'>
-          <ThreeDots
-            visible={true}
-            height="80"
-            width="80"
-            color="#c1c1c1"
-            radius="9"
-            ariaLabel="three-dots-loading"
-            wrapperStyle={{}}
-            wrapperClass=""
-            />
+          {error !== false ? (
+            <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+              <h3>Fehler beim Laden der Kalenderdaten</h3>
+              <div>{error instanceof Error ? error.message : String(error)}</div>
+            </div>
+          ) : (
+            <ThreeDots
+              visible={true}
+              height="80"
+              width="80"
+              color="#c1c1c1"
+              radius="9"
+              ariaLabel="three-dots-loading"
+              wrapperStyle={{}}
+              wrapperClass=""
+              />
+          )}
+        </div>
+      )}
+      {error !== false && data.length > 0 && (
+        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center', marginTop: '1rem' }}>
+          <div>Warnung: {error instanceof Error ? error.message : String(error)}</div>
         </div>
       )}
     </Div>

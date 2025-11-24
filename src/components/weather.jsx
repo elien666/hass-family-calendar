@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import useWeatherData, { weatherIconToPresentation } from '../utils/use-weather-data'
-import { WEATHER_API_KEY } from '../utils/config'
+import { ENABLE_WEATHER } from '../utils/config'
 import { DateTime } from 'luxon'
 import useKeyPress from '../utils/use-key-press'
 import React, { memo, useMemo, useCallback } from 'react'
@@ -143,12 +143,12 @@ const Icon = ({ icon }) => {
 }
 
 const Weather = ({ pin }) => {
-  // Don't render if weather is not configured
-  if (!WEATHER_API_KEY) {
+  // Don't render if weather feature is disabled
+  if (!ENABLE_WEATHER) {
     return null
   }
 
-  const data = useWeatherData()
+  const [data, error] = useWeatherData()
   const [ showWeather, toggle ] = React.useState(false)
   const keyWeather = useKeyPress('w')
   const merryWeatherNext24h = React.useRef()
@@ -186,7 +186,19 @@ const Weather = ({ pin }) => {
   }, [ keyWeather, pin ]) // Only fire when key or button is pressed
 
   // Early return AFTER all hooks
-  if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) return ''
+  if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) {
+    if (error !== false) {
+      return (
+        <Div>
+          <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+            <h3>Fehler beim Laden der Wetterdaten</h3>
+            <div>{error instanceof Error ? error.message : String(error)}</div>
+          </div>
+        </Div>
+      )
+    }
+    return ''
+  }
 
   return (
     <Div>
@@ -203,6 +215,12 @@ const Weather = ({ pin }) => {
       </div>
       <Overlay visible={showWeather} onClick={toggleWeather}>
         <div className={'full-weather'}>
+          {error !== false && (
+            <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center', marginBottom: '1rem' }}>
+              <h3>Fehler!</h3>
+              <div>{error instanceof Error ? error.message : String(error)}</div>
+            </div>
+          )}
           <div className={'detail-header'}>
             <div>
               <div className={'headline'}>
