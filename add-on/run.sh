@@ -255,6 +255,21 @@ if has_config_value "physical_buttons.buttons_ws_url"; then
 fi
 output_json_value "ENABLE_PHYSICAL_BUTTONS" "$ENABLE_PHYSICAL_BUTTONS" "false" "true" >> "$CONFIG_FILE"
 
+# Calendars: read array from config and output as JSON array
+if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+  # Read calendars array from config
+  CALENDARS_JSON=$(bashio::config "calendars" 2>/dev/null || echo "[]")
+  # Ensure it's valid JSON (bashio should return JSON array, but verify)
+  if [ -z "$CALENDARS_JSON" ] || [ "$CALENDARS_JSON" = "null" ] || [ "$CALENDARS_JSON" = "undefined" ]; then
+    CALENDARS_JSON="[]"
+  fi
+  # Output as JSON array (no quotes needed, it's already JSON)
+  echo "  CALENDARS: $CALENDARS_JSON," >> "$CONFIG_FILE"
+else
+  # Fallback to empty array if not in HA mode
+  echo "  CALENDARS: []," >> "$CONFIG_FILE"
+fi
+
 # Remove trailing comma from last entry and close the config object
 # Use awk for reliable trailing comma removal across different systems
 if command -v awk > /dev/null 2>&1; then

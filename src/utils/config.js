@@ -120,6 +120,25 @@ export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
 
+// Calendars configuration (array of calendar objects with name and optional icon)
+export const CALENDARS = (() => {
+  const calendarsValue = getConfig('CALENDARS', '[]')
+  if (typeof calendarsValue === 'string') {
+    try {
+      return JSON.parse(calendarsValue)
+    } catch (e) {
+      // If parsing fails, return empty array
+      return []
+    }
+  }
+  // If it's already an array (from window.APP_CONFIG), return it
+  if (Array.isArray(calendarsValue)) {
+    return calendarsValue
+  }
+  // Fallback to empty array
+  return []
+})()
+
 // Feature enable/disable toggles
 // In development mode, auto-enable features if their entities/config are present
 // In production (add-on), these are set by run.sh based on config
