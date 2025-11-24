@@ -43,7 +43,7 @@ load_config() {
             # Skip comments and empty lines
             [[ "$line" =~ ^[[:space:]]*# ]] && continue
             [[ -z "${line// }" ]] && continue
-            
+
             # Parse variable assignments (VAR="value" or VAR=value)
             if [[ "$line" =~ ^[[:space:]]*([A-Z_][A-Z0-9_]*)=\"([^\"]*)\"[[:space:]]*$ ]]; then
                 # Quoted value
@@ -56,7 +56,7 @@ load_config() {
             else
                 continue
             fi
-            
+
             # Only set if not already set by environment or command line
             if [ -z "${!var_name}" ]; then
                 export "$var_name=$var_value"
@@ -65,7 +65,7 @@ load_config() {
     fi
     # Store config loaded status for later use
     CONFIG_LOADED="$config_loaded"
-    
+
     # Set defaults for values not set by config, environment, or command line
     # This ensures variables have sensible defaults even if not in config file
     HA_SSH_HOST="${HA_SSH_HOST:-}"
@@ -210,7 +210,7 @@ determine_deploy_mode() {
     if [ "$CONFIG_LOADED" = "true" ]; then
         log_info "Configuration loaded from .deploy-config.local"
     fi
-    
+
     if [ -n "$HA_SSH_HOST" ] && [ -n "$HA_SSH_PATH" ]; then
         DEPLOY_MODE="ssh"
         log_info "Using SSH/rsync deployment mode"
@@ -246,33 +246,44 @@ build_project() {
 
     log_info "Building project..."
     cd "$PROJECT_ROOT"
-    
+
     if ! command -v pnpm &> /dev/null; then
         log_error "pnpm is not installed. Please install pnpm first."
         exit 1
     fi
-    
+
+    # Clear VITE_HASS_* environment variables to prevent baking in tokens during build
+    # This ensures production builds don't include development tokens that would cause 401 errors
+    # Vite's import.meta.env.DEV will be false in production builds, so the app will use relative URLs
+    log_info "Clearing VITE_HASS_* environment variables to prevent token leakage..."
+
+    # Explicitly unset HASS-related VITE vars to prevent them from being baked into the build
+    unset VITE_HASS_HOST
+    unset VITE_HASS_ACCESS_TOKEN
+    unset VITE_HASS_TOKEN
+
+    # Run build - Vite will set import.meta.env.DEV=false for production builds
     pnpm run build
-    
+
     if [ ! -d "$BUILD_DIR" ] || [ -z "$(ls -A "$BUILD_DIR" 2>/dev/null)" ]; then
         log_error "Build failed or build directory is empty: $BUILD_DIR"
         exit 1
     fi
-    
+
     log_success "Build completed successfully"
 }
 
 # Function to deploy files via SSH/rsync
 deploy_files_ssh() {
     local remote_path="$HA_SSH_PATH"
-    
+
     # Expand tilde in SSH key path if present
     local ssh_key_path="$HA_SSH_KEY"
     if [ -n "$ssh_key_path" ]; then
         # Remove any surrounding quotes that might have been included
         ssh_key_path="${ssh_key_path#\"}"
         ssh_key_path="${ssh_key_path%\"}"
-        
+
         # Expand tilde using the most reliable method
         # Check if path starts with ~/ using string comparison (most reliable)
         if [[ "${ssh_key_path:0:2}" == "~/" ]]; then
@@ -295,13 +306,13 @@ deploy_files_ssh() {
             log_info "Using path as-is, SSH may fail if tilde is not expanded by SSH"
         fi
     fi
-    
+
     # Validate SSH user is set
     if [ -z "$HA_SSH_USER" ]; then
         log_error "HA_SSH_USER is not set. Please configure it in .deploy-config.local"
         exit 1
     fi
-    
+
     # Build SSH options array for direct SSH commands
     local ssh_opts=()
     if [ -n "$ssh_key_path" ]; then
@@ -313,7 +324,7 @@ deploy_files_ssh() {
     ssh_opts+=("-o" "StrictHostKeyChecking=no")
     ssh_opts+=("-o" "UserKnownHostsFile=/dev/null")
     ssh_opts+=("-o" "BatchMode=yes")
-    
+
     # Build SSH command string for rsync -e option
     # rsync's -e expects a single command string
     # Explicitly specify the user with -l to ensure correct user is used
@@ -326,24 +337,24 @@ deploy_files_ssh() {
         ssh_cmd="$ssh_cmd -p $HA_SSH_PORT"
     fi
     ssh_cmd="$ssh_cmd -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes"
-    
+
     # Ensure remote directory exists
     log_info "Ensuring remote directory exists: ${HA_SSH_USER}@${HA_SSH_HOST}:${remote_path}"
     if ! ssh "${ssh_opts[@]}" "${HA_SSH_USER}@${HA_SSH_HOST}" "mkdir -p ${remote_path}/dist" 2>/dev/null; then
         log_warning "Could not create remote directory, will try rsync anyway"
     fi
-    
+
     # Build rsync command with proper SSH command
     # Use user@host:path format to explicitly specify the user
     # The -l flag in ssh_cmd ensures SSH connects as the correct user
     local rsync_opts=("-av" "--delete" "--progress" "-e" "$ssh_cmd")
     local addon_dir="$PROJECT_ROOT/add-on"
     local remote_base="${HA_SSH_USER}@${HA_SSH_HOST}:${remote_path}"
-    
+
     # Deploy dist folder
     log_info "Deploying dist files via SSH/rsync to ${remote_base}/dist"
     local remote_dist="${remote_base}/dist/"
-    
+
     if ! rsync "${rsync_opts[@]}" "${BUILD_DIR}/" "$remote_dist"; then
         log_error "Failed to deploy dist files"
         log_info "Check:"
@@ -353,11 +364,11 @@ deploy_files_ssh() {
         log_info "  4. rsync is installed on both local and remote systems"
         exit 1
     fi
-    
+
     # Deploy other add-on files (excluding dist folder)
     log_info "Deploying add-on configuration files via SSH/rsync to ${remote_base}"
     local remote_target="${remote_base}/"
-    
+
     # Build exclude patterns for rsync
     local exclude_opts=(
         "--exclude=dist"
@@ -365,7 +376,7 @@ deploy_files_ssh() {
         "--exclude=.git"
         "--exclude=.gitignore"
     )
-    
+
     # Deploy add-on configuration files
     # Capture rsync output to check for permission errors
     local rsync_output
@@ -384,7 +395,7 @@ deploy_files_ssh() {
         log_success "Dist files deployed successfully via SSH/rsync"
         return 0
     fi
-    
+
     log_success "All files deployed successfully via SSH/rsync"
 }
 
@@ -392,27 +403,27 @@ deploy_files_ssh() {
 deploy_files_local() {
     local target_dir="$HA_ADDON_DIR"
     local addon_dir="$PROJECT_ROOT/add-on"
-    
+
     log_info "Deploying to local directory: $target_dir"
-    
+
     # Check if target directory exists
     if [ ! -d "$target_dir" ]; then
         log_error "Target directory does not exist: $target_dir"
         log_info "Please ensure the add-on directory is mounted or accessible."
         exit 1
     fi
-    
+
     # Check if build directory exists and has content
     if [ ! -d "$BUILD_DIR" ] || [ -z "$(ls -A "$BUILD_DIR" 2>/dev/null)" ]; then
         log_error "Build directory is empty or doesn't exist: $BUILD_DIR"
         log_info "Run build first or remove --skip-build flag"
         exit 1
     fi
-    
+
     # Create target dist directory if it doesn't exist
     local target_dist="${target_dir}/dist"
     mkdir -p "$target_dist"
-    
+
     # Copy dist files
     log_info "Copying dist files from $BUILD_DIR to $target_dist..."
     if command -v rsync &> /dev/null; then
@@ -426,7 +437,7 @@ deploy_files_local() {
         rm -rf "$target_dist"/*
         cp -r "$BUILD_DIR"/* "$target_dist/"
     fi
-    
+
     # Copy other add-on files (excluding dist folder)
     log_info "Copying add-on configuration files from $addon_dir to $target_dir..."
     if command -v rsync &> /dev/null; then
@@ -445,14 +456,14 @@ deploy_files_local() {
         # Copy files individually, excluding dist
         find "$addon_dir" -maxdepth 1 -type f ! -name ".DS_Store" -exec cp {} "$target_dir/" \;
     fi
-    
+
     log_success "All files deployed successfully"
 }
 
 # Function to deploy files (routes to appropriate method)
 deploy_files() {
     determine_deploy_mode
-    
+
     if [ "$DEPLOY_MODE" = "ssh" ]; then
         deploy_files_ssh
     else
@@ -468,22 +479,22 @@ restart_addon() {
         log_info "Alternatively, rebuild and restart the add-on manually from Home Assistant UI"
         return 1
     fi
-    
+
     # Use SUPERVISOR_HOST if set, otherwise use HA_HOST
     # Supervisor API is typically only accessible from local network, not external URLs
     local supervisor_host="${SUPERVISOR_HOST:-$HA_HOST}"
     supervisor_host="${supervisor_host%/}"
-    
+
     # Remove trailing slash from HA_HOST for display
     HA_HOST="${HA_HOST%/}"
-    
+
     # Test Supervisor API access first
     log_info "Testing Supervisor API access at ${supervisor_host}..."
     local test_response=$(curl -s -w "\n%{http_code}" -X GET \
         -H "Authorization: Bearer $HA_TOKEN" \
         "${supervisor_host}/api/hassio/supervisor/info" 2>&1 || echo -e "\n000")
     local test_http_code=$(echo "$test_response" | tail -n1)
-    
+
     if [ "$test_http_code" = "401" ] || [ "$test_http_code" = "403" ]; then
         log_error "Cannot access Supervisor API - authentication failed (HTTP $test_http_code)"
         log_warning "Long-lived access tokens may not have Supervisor API permissions"
@@ -500,25 +511,25 @@ restart_addon() {
     else
         log_success "Supervisor API is accessible"
     fi
-    
+
     # First, rebuild the container to ensure latest changes are included
     log_info "Rebuilding add-on container via Home Assistant Supervisor API..."
     log_info "Using Supervisor host: ${supervisor_host}"
     local rebuild_url="${supervisor_host}/api/hassio/addons/${ADDON_SLUG}/rebuild"
-    
+
     local rebuild_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $HA_TOKEN" \
         -H "Content-Type: application/json" \
         "$rebuild_url" 2>&1 || echo -e "\n000")
-    
+
     local rebuild_http_code=$(echo "$rebuild_response" | tail -n1)
     local rebuild_body=$(echo "$rebuild_response" | sed '$d')
-    
+
     # Debug: log the response if not successful
     if [ "$rebuild_http_code" != "200" ] && [ "$rebuild_http_code" != "201" ]; then
         log_info "Rebuild API response (HTTP $rebuild_http_code): $rebuild_body"
     fi
-    
+
     if [ "$rebuild_http_code" = "200" ] || [ "$rebuild_http_code" = "201" ]; then
         log_success "Add-on container rebuild initiated successfully"
         # Wait a bit for rebuild to start
@@ -550,24 +561,24 @@ restart_addon() {
         log_info "Response: $rebuild_body"
         log_info "Continuing with restart attempt..."
     fi
-    
+
     # Now restart the add-on
     log_info "Restarting add-on via Home Assistant Supervisor API..."
     local restart_url="${supervisor_host}/api/hassio/addons/${ADDON_SLUG}/restart"
-    
+
     local restart_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $HA_TOKEN" \
         -H "Content-Type: application/json" \
         "$restart_url" 2>&1 || echo -e "\n000")
-    
+
     local restart_http_code=$(echo "$restart_response" | tail -n1)
     local restart_body=$(echo "$restart_response" | sed '$d')
-    
+
     # Debug: log the response if not successful
     if [ "$restart_http_code" != "200" ] && [ "$restart_http_code" != "201" ]; then
         log_info "Restart API response (HTTP $restart_http_code): $restart_body"
     fi
-    
+
     if [ "$restart_http_code" = "200" ] || [ "$restart_http_code" = "201" ]; then
         log_success "Add-on restart initiated successfully"
         return 0
@@ -607,16 +618,16 @@ deploy() {
     echo ""
     log_info "Starting deployment process..."
     echo ""
-    
+
     build_project
     deploy_files
-    
+
     if [ "$RESTART_ADDON" = true ]; then
         restart_addon || true  # Don't fail if restart fails
     else
         log_info "Add-on rebuild/restart skipped. Rebuild and restart manually from HA UI if needed."
     fi
-    
+
     echo ""
     log_success "Deployment completed!"
     log_info "Next steps:"
@@ -631,30 +642,30 @@ if [ "$WATCH_MODE" = true ]; then
     log_info "Watching for changes in: $PROJECT_ROOT/src"
     log_info "Press Ctrl+C to stop"
     echo ""
-    
+
     # Check if chokidar-cli is available
     if command -v chokidar &> /dev/null || [ -f "$PROJECT_ROOT/node_modules/.bin/chokidar" ] || npx --yes chokidar --version &> /dev/null 2>&1; then
         log_info "Using chokidar for file watching"
         log_info "Watching: $PROJECT_ROOT/src"
         echo ""
-        
+
         # Use chokidar to watch for changes
         if [ -f "$PROJECT_ROOT/node_modules/.bin/chokidar" ]; then
             CHOKIDAR_CMD="$PROJECT_ROOT/node_modules/.bin/chokidar"
         else
             CHOKIDAR_CMD="npx --yes chokidar"
         fi
-        
+
         # Export environment variables for the recursive call
         export HA_HOST HA_TOKEN SUPERVISOR_HOST HA_ADDON_DIR HA_SSH_HOST HA_SSH_USER HA_SSH_PATH HA_SSH_KEY HA_SSH_PORT
-        
+
         # Build the command to run on file changes
         if [ "$RESTART_ADDON" = true ]; then
             RESTART_FLAG="--restart"
         else
             RESTART_FLAG=""
         fi
-        
+
         # Create the change command as a function call with proper argument handling
         CHANGE_CMD="echo '' && echo '🔄 Change detected, rebuilding...' && \"$0\" $RESTART_FLAG"
         if [ -n "$HA_HOST" ]; then
@@ -664,7 +675,7 @@ if [ "$WATCH_MODE" = true ]; then
             CHANGE_CMD="$CHANGE_CMD --token \"$HA_TOKEN\""
         fi
         # Note: SUPERVISOR_HOST is exported via environment, not a command-line arg
-        
+
         # Run chokidar with the change command
         $CHOKIDAR_CMD "$PROJECT_ROOT/src/**/*" \
             --ignore "**/node_modules/**" \
@@ -677,19 +688,19 @@ if [ "$WATCH_MODE" = true ]; then
         log_warning "chokidar not available, using simple file watching"
         log_info "Install chokidar-cli for better performance: pnpm add -D chokidar-cli"
         echo ""
-        
+
         # Simple polling-based watch using find
         LAST_MODIFIED=0
         while true; do
             CURRENT_MODIFIED=$(find "$PROJECT_ROOT/src" -type f -not -path "*/node_modules/*" -exec stat -f "%m" {} \; 2>/dev/null | sort -n | tail -1 || echo "0")
-            
+
             if [ "$CURRENT_MODIFIED" -gt "$LAST_MODIFIED" ] && [ "$CURRENT_MODIFIED" != "0" ]; then
                 LAST_MODIFIED=$CURRENT_MODIFIED
                 echo ""
                 log_info "Change detected, rebuilding..."
                 deploy
             fi
-            
+
             sleep 2
         done
     fi

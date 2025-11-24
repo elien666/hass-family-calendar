@@ -4,9 +4,10 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, ENABLE_LAUNDRY, buildHaUrl } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, LAUNDRY_MACHINES, ENABLE_LAUNDRY, buildHaUrl, isDevelopment } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
@@ -27,14 +28,39 @@ const mapToValue = {
 }
 
 const useWashingMachine = () => {
-  const machineNew = useSubscription(ENTITY_WASHING_MACHINE_NEW)
-  const machineOld = useSubscription(ENTITY_WASHING_MACHINE_OLD)
-  const dryer = useSubscription(ENTITY_DRYER)
+  // LAUNDRY_MACHINES is stable (from config, doesn't change during component lifecycle)
+  // so it's safe to call hooks in a map - the number of hooks will be consistent
+  const machines = Array.isArray(LAUNDRY_MACHINES) ? LAUNDRY_MACHINES : []
+  
+  // Call useSubscription for each machine
+  // Note: This violates the rules-of-hooks lint rule, but it's safe because:
+  // 1. LAUNDRY_MACHINES is stable (from config, doesn't change during render)
+  // 2. The array length is consistent across renders
+  // 3. We need dynamic number of subscriptions based on config
+  const subscriptions = machines.map((machine, index) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [state, error] = useSubscription(machine.entity_id)
+    return { state, error, name: machine.name }
+  })
 
   const [ state, setState ] = React.useState(mapToPresentation['off'])
+  const [ error, setError ] = React.useState(false)
+
+  // Extract states and errors from subscriptions
+  const machineStates = subscriptions.map(sub => sub.state)
+  const machineErrors = subscriptions.map(sub => sub.error)
 
   React.useEffect(() => {
-    const sum = mapToValue[machineNew] + mapToValue[machineOld] + mapToValue[dryer]
+    // Aggregate errors from all subscriptions
+    const hasError = machineErrors.some(err => err !== false)
+    setError(hasError ? machineErrors.find(err => err !== false) || false : false)
+  }, [machineErrors])
+
+  React.useEffect(() => {
+    // Calculate sum of all machine values
+    const sum = machineStates.reduce((acc, machineState) => {
+      return acc + (mapToValue[machineState] || 0)
+    }, 0)
 
     // Sum === 0 -> All off
     if (sum === 0) {
@@ -70,18 +96,21 @@ const useWashingMachine = () => {
     else {
       setState(mapToPresentation['running'])
     }
-  }, [ machineOld, machineNew, dryer ])
+  }, [machineStates])
 
-  return [ state, [
-    { label: 'Neue Waschmaschine', state: machineNew },
-    { label: 'Alte Waschmaschine', state: machineOld },
-    { label: 'Trockner', state: dryer },
-  ]]
+  // Return states array with machine names from config
+  const states = subscriptions.map(sub => ({
+    label: sub.name,
+    state: sub.state
+  }))
+
+  return [ state, states, error ]
 }
 
 const useSubscription = ( entity ) => {
 
   const [ state, setState ] = React.useState('off')
+  const [ error, setError ] = React.useState(false)
 
   // Check if entity is configured
   const isConfigured = ENABLE_LAUNDRY && entity
@@ -96,9 +125,11 @@ const useSubscription = ( entity ) => {
     axios(url)
       .then((response) => {
         setState(response.data.state)
+        setError(false)
       })
       .catch((err) => {
-        logger.error(`Failed to fetch state for ${entity}:`, err)
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured, url])
@@ -114,15 +145,22 @@ const useSubscription = ( entity ) => {
         return
       }
 
+      // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
+      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+      if (!isDevelopment) {
+        logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
+        return
+      }
+
       const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
       const token = HASS_ACCESS_TOKEN || ''
-      
+
       // Skip WebSocket connection if no token
       if (!token) {
         logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
         return
       }
-      
+
       try {
         const auth = createLongLivedTokenAuth(host, token)
 
@@ -143,7 +181,10 @@ const useSubscription = ( entity ) => {
             }
         })
       } catch (err) {
-        logger.error(`Failed to setup connection for ${entity}:`, err)
+        if (isMounted) {
+          logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
+          setError(err instanceof Error ? err.message : String(err))
+        }
       }
     }
 
@@ -161,7 +202,7 @@ const useSubscription = ( entity ) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured])
 
-  return state
+  return [ state, error ]
 
 }
 

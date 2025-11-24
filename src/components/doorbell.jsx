@@ -3,7 +3,8 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import WhepVideo from './whep-video'
+import Go2RTCStream from './go2rtc-stream'
+import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -60,6 +61,10 @@ const Container = styled.div`
 `
 
 const Doorbell = () => {
+    // Don't render if doorbell feature is disabled
+    if (!ENABLE_DOORBELL) {
+        return null
+    }
 
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()
@@ -127,17 +132,52 @@ const Doorbell = () => {
                         transitionTimingFunction='linear'
                     />
 
+                    {error !== false && (
+                        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+                            <h3>Fehler!</h3>
+                            <div>{error instanceof Error ? error.message : String(error)}</div>
+                        </div>
+                    )}
+
                     <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
-                        <div onClick={() => openDoor()}> 
-                            <WhepVideo src="http://192.168.188.10:8889/tuerklingel_sub/whep" show={showDoorCams}
-                                muted={true} controls={false} autoPlay={true} width='360' height='480' />                   
-                        </div>
-                        <div onClick={() => openDoor()}>
-                            <WhepVideo src="http://192.168.188.10:8889/eingang/whep" show={showDoorCams}
-                                muted={true} controls={false} autoPlay={true} width='100%' />
-                            <WhepVideo src="http://192.168.188.10:8889/weg/whep" show={showDoorCams}
-                                muted={true} controls={false} autoPlay={true} width='100%' height='240px' />
-                        </div>
+                        {(() => {
+                            // Separate cameras by orientation
+                            const portraitCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait')
+                            const landscapeCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'landscape')
+                            
+                            return (
+                                <>
+                                    {portraitCameras.length > 0 && (
+                                        <div onClick={() => openDoor()} style={{ flexDirection: 'column' }}>
+                                            {portraitCameras.map((camera, index) => (
+                                                <Go2RTCStream
+                                                    key={index}
+                                                    src={camera.name}
+                                                    show={showDoorCams}
+                                                    orientation="portrait"
+                                                    width='360'
+                                                    height='480'
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                    {landscapeCameras.length > 0 && (
+                                        <div onClick={() => openDoor()}>
+                                            {landscapeCameras.map((camera, index) => (
+                                                <Go2RTCStream
+                                                    key={index}
+                                                    src={camera.name}
+                                                    show={showDoorCams}
+                                                    orientation="landscape"
+                                                    width='100%'
+                                                    height={index === landscapeCameras.length - 1 ? '240px' : undefined}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )
+                        })()}
                     </div>    
                     {showOpenDoor && (
                     

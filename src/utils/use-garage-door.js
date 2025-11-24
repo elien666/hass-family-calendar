@@ -4,12 +4,11 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl, isDevelopment } from "./config"
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
-
-const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
 
 const useGarageDoor = () => {
 
@@ -18,6 +17,7 @@ const useGarageDoor = () => {
 
   // Check if garage door is configured
   const isConfigured = ENABLE_GARAGE && ENTITY_GARAGE_DOOR
+  const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -28,10 +28,11 @@ const useGarageDoor = () => {
     axios(url)
       .then((response) => {
         setState(response.data.state)
+        setError(false)
       })
       .catch((err) => {
-        logger.error('Failed to fetch garage door state:', err)
-        setError(err instanceof Error ? err.message : String(err))
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfigured, url])
@@ -48,32 +49,41 @@ const useGarageDoor = () => {
 
       let auth
       try {
-        // Use window.location.origin if HASS_HOST is empty (HA add-on mode with relative URLs)
+        // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
+        // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+        if (!isDevelopment) {
+          logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
+          return
+        }
+
         const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
         const token = HASS_ACCESS_TOKEN || ''
-        
-        // Skip WebSocket connection if no token (ingress mode handles REST API, WebSocket needs token)
+
+        // Skip WebSocket connection if no token
         if (!token) {
           logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
           return
         }
-        
+
         auth = createLongLivedTokenAuth(host, token)
         if (isMounted) setError(false)
       } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err.message : String(err))
+        if (isMounted) {
+          logger.error('Failed to create WebSocket auth:', err)
+          setError(err instanceof Error ? err.message : String(err))
+        }
         return
       }
-    
+
       try {
         connection = await createConnection({ auth });
-    
+
         const trigger = (result) => {
           if (isMounted) {
             setState(result.variables.trigger.to_state.state)
           }
         }
-    
+
         await connection.subscribeMessage(trigger, {
           "type": "subscribe_trigger",
           "trigger":
@@ -83,12 +93,15 @@ const useGarageDoor = () => {
             }
         })
       } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err.message : String(err))
+        if (isMounted) {
+          logger.error('Failed to setup WebSocket connection:', err)
+          setError(err instanceof Error ? err.message : String(err))
+        }
       }
     }
 
     connect()
-    
+
     return () => {
       isMounted = false
       if (connection) {
@@ -108,10 +121,15 @@ export const toggleGarageDoor = (isLoading) => {
   const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(buildHaUrl('/api/services/cover/toggle'), {
     entity_id: ENTITY_GARAGE_DOOR
-  }).finally(() => {
-    clearTimeout(timeoutId)
-    isLoading(false)
   })
+    .catch((err) => {
+      // Error is already logged by interceptor
+      logger.error('Failed to toggle garage door:', err)
+    })
+    .finally(() => {
+      clearTimeout(timeoutId)
+      isLoading(false)
+    })
 }
 
 export const openGarageDoor = (isLoading) => {
@@ -120,10 +138,15 @@ export const openGarageDoor = (isLoading) => {
   const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(buildHaUrl('/api/services/cover/open_cover'), {
     entity_id: ENTITY_GARAGE_DOOR
-  }).finally(() => {
-    clearTimeout(timeoutId)
-    isLoading(false)
   })
+    .catch((err) => {
+      // Error is already logged by interceptor
+      logger.error('Failed to open garage door:', err)
+    })
+    .finally(() => {
+      clearTimeout(timeoutId)
+      isLoading(false)
+    })
 }
 
 export const closeGarageDoor = (isLoading) => {
@@ -132,10 +155,15 @@ export const closeGarageDoor = (isLoading) => {
   const timeoutId = setTimeout(() => isLoading(false), 3000)
   axios.post(buildHaUrl('/api/services/cover/close_cover'), {
     entity_id: ENTITY_GARAGE_DOOR
-  }).finally(() => {
-    clearTimeout(timeoutId)
-    isLoading(false)
   })
+    .catch((err) => {
+      // Error is already logged by interceptor
+      logger.error('Failed to close garage door:', err)
+    })
+    .finally(() => {
+      clearTimeout(timeoutId)
+      isLoading(false)
+    })
 }
 
 export default useGarageDoor

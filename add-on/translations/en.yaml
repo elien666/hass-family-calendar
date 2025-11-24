@@ -4,6 +4,8 @@ configuration:
     name: Weather
     description: Configure the weather forecast.
     fields:
+      enabled:
+        name: Enabled
       weather_api_key: 
         name: Pirate Weather API Key
       weather_latitude:
@@ -14,6 +16,8 @@ configuration:
     name: HVV
     description: Configure the HVV departures.
     fields:
+      enabled:
+        name: Enabled
       geofox_user:
         name: Geofox User
       geofox_secret:
@@ -22,6 +26,8 @@ configuration:
     name: Telegram
     description: Configure the Telegram bot.
     fields:
+      enabled:
+        name: Enabled
       telegram_bot_token:
         name: Telegram Bot Token
       telegram_chat_id:
@@ -30,6 +36,8 @@ configuration:
     name: Garage
     description: Configure the garage door.
     fields:
+      enabled:
+        name: Enabled
       entity_garage_door:
         name: Garage Door Entity
       entity_garage_door_control:
@@ -38,29 +46,32 @@ configuration:
     name: Laundry
     description: Configure the laundry.
     fields:
-      entity_washing_machine_new:
-        name: Washing Machine New Entity
-      entity_washing_machine_old:
-        name: Washing Machine Old Entity
-      entity_dryer:
-        name: Dryer Entity
+      enabled:
+        name: Enabled
+      machines:
+        name: Machines
+        description: List of laundry machines to monitor
   doorbell:
     name: Doorbell
     description: Configure the doorbell.
     fields:
+      enabled:
+        name: Enabled
       entity_doorbell:
         name: Doorbell Entity
       entity_doorbell_button:
         name: Doorbell Button Entity
+      cameras:
+        name: Cameras
+        description: List of camera URLs to display
   everyday_calendar:
     name: Everyday Calendar
     description: Configure the everyday calendar.
     fields:
+      enabled:
+        name: Enabled
       entity_everyday_calendar:
         name: Everyday Calendar Entity
-  physical_buttons:
-    name: Physical Buttons
-    description: Configure the physical buttons.
-    fields:
-      buttons_ws_url:
-        name: Buttons WebSocket URL
+  calendars:
+    name: Calendars
+    description: List of calendar entities to display.

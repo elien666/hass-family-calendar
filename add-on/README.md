@@ -114,10 +114,10 @@ Each feature can be individually enabled or disabled using toggle switches in th
 
 **Laundry Status** (`enable_laundry`)
 - Enable laundry status tracking for washing machines and dryer
-- When enabled, configure one or more of:
-  - `entity_washing_machine_new` - Entity ID for the new washing machine status sensor
-  - `entity_washing_machine_old` - Entity ID for the old washing machine status sensor
-  - `entity_dryer` - Entity ID for the dryer status sensor
+- When enabled, configure `machines` array with one or more machines:
+  - `machines` - Array of machine objects, each with:
+    - `name` - Display name for the machine (e.g., "New Washer", "Dryer")
+    - `entity_id` - Entity ID for the machine status sensor (e.g., `sensor.washing_machine_new`)
 
 **Doorbell** (`enable_doorbell`)
 - Enable doorbell notifications with CCTV integration
@@ -129,13 +129,6 @@ Each feature can be individually enabled or disabled using toggle switches in th
 - Enable everyday calendar visual tracking for daily habits
 - When enabled, configure:
   - `entity_everyday_calendar` - Entity ID for the everyday calendar sensor
-
-#### Hardware Integration
-
-**Physical Buttons** (`enable_physical_buttons`)
-- Enable physical button integration via WebSocket
-- When enabled, configure:
-  - `buttons_ws_url` - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
 
 ## How It Works
 

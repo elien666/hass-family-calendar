@@ -2,7 +2,7 @@ import React from 'react'
 import clsx from "clsx"
 import styled from "styled-components"
 import useEverydayCalendar, { storeData } from '../utils/use-everyday-calendar-state'
-import { ENTITY_EVERYDAY_CALENDAR } from '../utils/config'
+import { ENABLE_EVERYDAY_CALENDAR } from '../utils/config'
 import { ThreeDots } from 'react-loader-spinner'
 
 const Div = styled.div` 
@@ -61,8 +61,8 @@ const Dot = ({ on, month, day }) => {
 }
 
 const EverydayCalendar = () => {
-    // Don't render if everyday calendar is not configured
-    if (!ENTITY_EVERYDAY_CALENDAR) {
+    // Don't render if everyday calendar feature is disabled
+    if (!ENABLE_EVERYDAY_CALENDAR) {
         return null
     }
 
@@ -83,7 +83,7 @@ const EverydayCalendar = () => {
     const month_labels = Array.from({ length: 12 }, (_, i) => i + 1); // Creates an array [1, 2, ..., 12]
 
     const on = React.useState(undefined)
-    const dataStore = useEverydayCalendar()
+    const [dataStore, error] = useEverydayCalendar()
 
     React.useEffect(() => {
         // Set local store if loading from backend completed
@@ -103,6 +103,12 @@ const EverydayCalendar = () => {
     return on[0] !== undefined ? (
         <Div>
             <h2>Jeden Tag ein bißchen</h2>
+            {error !== false && (
+                <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center', marginBottom: '1rem' }}>
+                    <h3>Fehler!</h3>
+                    <div>{error instanceof Error ? error.message : String(error)}</div>
+                </div>
+            )}
             <div className='calendar'>
                 {day_labels.map((label, index) => (
                     <div key={index} style={{ gridArea: `${label+1} / 1 / ${label+1} / 1` }}>{label}</div>
@@ -119,16 +125,23 @@ const EverydayCalendar = () => {
         </Div>
     ) : (
         <Div className='loading'>
-            <ThreeDots
-                visible={true}
-                height="80"
-                width="80"
-                color="#c1c1c1"
-                radius="9"
-                ariaLabel="three-dots-loading"
-                wrapperStyle={{}}
-                wrapperClass=""
-            />
+            {error !== false ? (
+                <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+                    <h3>Fehler!</h3>
+                    <div>{error instanceof Error ? error.message : String(error)}</div>
+                </div>
+            ) : (
+                <ThreeDots
+                    visible={true}
+                    height="80"
+                    width="80"
+                    color="#c1c1c1"
+                    radius="9"
+                    ariaLabel="three-dots-loading"
+                    wrapperStyle={{}}
+                    wrapperClass=""
+                />
+            )}
         </Div>
     )
 }
