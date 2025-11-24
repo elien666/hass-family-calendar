@@ -140,10 +140,10 @@ export const CALENDARS = (() => {
 })()
 
 // Feature enable/disable toggles
-// In development mode, auto-enable features if their entities/config are present
-// In production (add-on), these are set by run.sh based on config
+// In production (add-on), these are set by run.sh based on dedicated enabled flags in config.yaml
+// In development mode, auto-enable features if their entities/config are present (for local dev convenience)
 const getFeatureFlag = (key, autoEnableCondition) => {
-  // First check if explicitly set in config (check raw value, not boolean)
+  // First check if explicitly set in config (from run.sh in production, or build-time env vars)
   const rawValue = getConfig(key, undefined)
   // If value is explicitly set (not undefined), use it
   if (rawValue !== undefined) {
@@ -151,6 +151,7 @@ const getFeatureFlag = (key, autoEnableCondition) => {
     return getConfigBoolean(key, false)
   }
   // Value not explicitly set - in development mode, auto-enable if condition is met
+  // This is useful for local development when run.sh hasn't run
   if (isDevelopment) {
     // Check if auto-enable condition is truthy (entity/config exists)
     if (autoEnableCondition) {
@@ -166,6 +167,8 @@ const isTruthy = (value) => {
   return value !== undefined && value !== null && value !== '' && value !== 'undefined' && value !== 'null'
 }
 
+// Feature flags - run.sh sets these based on dedicated enabled flags in config.yaml
+// In development mode, fallback to auto-enable if config values are present
 export const ENABLE_WEATHER = getFeatureFlag('ENABLE_WEATHER', 
   isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE)))
 export const ENABLE_HVV = getFeatureFlag('ENABLE_HVV', 
