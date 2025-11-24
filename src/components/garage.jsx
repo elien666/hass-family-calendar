@@ -1,9 +1,9 @@
 import React, { memo, useCallback } from 'react'
-import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline, mdiArrowUp, mdiArrowDown } from '@mdi/js'
+import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline, mdiArrowUp, mdiArrowDown, mdiAlertCircle } from '@mdi/js'
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
-import { ENTITY_GARAGE_DOOR } from '../utils/config'
+import { ENABLE_GARAGE } from '../utils/config'
 import useKeyPress from '../utils/use-key-press'
 import { toast } from 'react-toastify'
 import Overlay from './overlay'
@@ -12,12 +12,24 @@ import logger from '../utils/logger'
 
 const Div = styled.div`
   padding-bottom: 12px;
-  cursor: pointer;
 
   @media only screen and (max-width: 1200px) {
     h2 {
       display: none;
     }
+  }
+
+  &.disabled {
+    cursor: default;
+    
+    .status {
+      cursor: default;
+      opacity: 0.6;
+    }
+  }
+
+  .status {
+    cursor: pointer;
   }
 
   .controls {
@@ -123,8 +135,8 @@ const showToast = (promise, garageDoor) => (
 )
 
 const Garage = () => {
-  // Don't render if garage door is not configured
-  if (!ENTITY_GARAGE_DOOR) {
+  // Don't render if garage feature is disabled
+  if (!ENABLE_GARAGE) {
     return null
   }
 
@@ -155,14 +167,15 @@ const Garage = () => {
 
   const keyGarage = useKeyPress('g')
   React.useEffect(() => {
-    if (keyGarage) {
+    if (keyGarage && error === false) {
       // Send toggle action to Home Assistant
       toggleGarageDoor(setAnimate)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyGarage]) // Only fire when key is pressed
+  }, [keyGarage, error]) // Only fire when key is pressed
 
   const controlGarage = useCallback((action) => {
+    if (error !== false) return
     toggle(false)
     switch (action) {
       case 'open':
@@ -174,29 +187,29 @@ const Garage = () => {
       default:
         // 
     }
-  }, [setAnimate])
+  }, [setAnimate, error])
 
-  React.useEffect(() => {
-    if (error !== false) {
+  const handleStatusClick = useCallback(() => {
+    if (error === false) {
       toggle(true)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error])
 
   return (
-    <Div>
+    <Div className={clsx({ disabled: error !== false })}>
       <h2>Garage</h2>
-      <div onClick={() => toggle(true)}>
-        <Status garageDoor={garageDoor} animate={animate} />
+      <div className="status" onClick={handleStatusClick}>
+        {error !== false ? (
+          <StatusDiv>
+            <Icon path={mdiAlertCircle} size={'2rem'} color='#f85a5a'/>
+            <span>Fehler</span>
+          </StatusDiv>
+        ) : (
+          <Status garageDoor={garageDoor} animate={animate} />
+        )}
       </div> 
-      <Overlay visible={showControls} onClick={() => toggle(false)}>
+      <Overlay visible={showControls && error === false} onClick={() => toggle(false)}>
         <div className={'controls'}>
-          {error !== false && (
-            <div>
-              <h3>Fehler!</h3>
-              <div>{error instanceof Error ? error.message : String(error)}</div>
-            </div>
-          )}
           <div onClick={() => controlGarage('open')}>Öffnen</div>
           <div onClick={() => controlGarage('close')}>Schließen</div>
         </div>

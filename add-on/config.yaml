@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.3"
+version: "1.4"
 slug: "family-calendar"
 init: false
 arch:
@@ -15,42 +15,61 @@ panel_icon: mdi:calendar-week
 panel_admin: false
 panel_title: Kalender
 homeassistant_api: true
+hassio_api: true
+hassio_role: default
 options:
   weather:
+    enabled: false
     weather_latitude: 53.570
     weather_longitude: 10.091
   garage:
-    entity_garage_door: cover.garagentor
+    enabled: false
   laundry:
-    entity_washing_machine_new: input_select.wasching_machine_neu_status
-    entity_washing_machine_old: input_select.washing_machine_alt_status
-    entity_dryer: input_select.dryer_status
+    enabled: false
+    machines: []
   doorbell:
-    entity_doorbell: binary_sensor.tuerklingel_person
-    entity_doorbell_button: button.haustur_unlatch_2
+    enabled: false
+    cameras: []
   everyday_calendar:
-    entity_everyday_calendar: sensor.everyday_calendar
+    enabled: false
+  calendars: []
+  hvv:
+    enabled: false
+  telegram:
+    enabled: false
 schema:
   weather:
+    enabled: bool
     weather_api_key: str?
     weather_latitude: float?
     weather_longitude: float?
-  hvv:
+  hvv: 
+    enabled: bool
     geofox_user: str?
     geofox_secret: str?
   telegram:
+    enabled: bool
     telegram_bot_token: str?
     telegram_chat_id: str?
   garage:
+    enabled: bool
     entity_garage_door: str?
   laundry:
-    entity_washing_machine_new: str?
-    entity_washing_machine_old: str?
-    entity_dryer: str?
+    enabled: bool
+    machines:
+      - name: str
+        entity_id: str
   doorbell:
+    enabled: bool
     entity_doorbell: str?
     entity_doorbell_button: str?
+    cameras:
+      - name: str
+        orientation: str?
+  go2rtc_base_url: str?
   everyday_calendar:
+    enabled: bool
     entity_everyday_calendar: str?
-  physical_buttons:
-    buttons_ws_url: url?
+  calendars:
+    - name: str
+      icon: str?

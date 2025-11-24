@@ -4,6 +4,7 @@ import axios from 'axios'
 import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCloud, WiDayCloudy, WiNightPartlyCloudy } from 'weather-icons-react'
 import { WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE, ENABLE_WEATHER } from './config'
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 export const weatherIconToPresentation = {
   'clear-day': { icon: WiDaySunny, label: 'Klar', color: '#eeeef5' },
@@ -22,6 +23,7 @@ const url = () => `./forecast/${WEATHER_API_KEY}/${WEATHER_LATITUDE},${WEATHER_L
 
 const useWeatherData = (toggleLoading) => {
   const [ data, setData ] = React.useState([])
+  const [ error, setError ] = React.useState(false)
   const timer = useTimeout(60000 * 10, 'Weather') // 1 hour in ms
 
   // Check if weather is configured
@@ -39,16 +41,18 @@ const useWeatherData = (toggleLoading) => {
     axios(url())
       .then((response) => {
         setData(response.data)
+        setError(false)
       })
       .catch((err) => {
-        logger.error('Could not load weather data', err)
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(err))
       })
       .finally(() => { if(toggleLoading) toggleLoading(false) })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ timer, toggleLoading, isConfigured ])
 
-  return data
+  return [ data, error ]
 }
 
 export default useWeatherData

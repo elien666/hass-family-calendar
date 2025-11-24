@@ -2,24 +2,45 @@ import React, { useRef } from 'react'
 import { DateTime } from 'luxon'
 import axios from 'axios'
 import qs from 'qs'
-import { mdiDelete, mdiCake } from '@mdi/js'
+// Import only the icons that are commonly used for calendars
+// Add more icons here as needed when configuring calendars
+import { 
+  mdiDelete, 
+  mdiCake,
+  // Add other commonly used calendar icons here as needed
+} from '@mdi/js'
 import useTimeout from './use-timeout'
-import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl, CALENDARS } from "./config"
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
 const host = (name) => buildHaUrl(`/api/calendars/${name}`)
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
-const calendars = [
-  { name: 'calendar.hamsischwan_s_kalender', icon: undefined },
-  { name: 'calendar.biotonne', icon: mdiDelete },
-  { name: 'calendar.gelber_sack', icon: mdiDelete },
-  { name: 'calendar.blaue_tonne', icon: mdiDelete },
-  { name: 'calendar.schwarze_tonne', icon: mdiDelete },
-  { name: 'calendar.familiengeburtstage', icon: mdiCake },
-]
+// Map icon string names to actual icon objects from @mdi/js
+// Only includes icons that are explicitly imported above to keep bundle size small
+const iconMap = {
+  mdiDelete,
+  mdiCake,
+  // Add mappings for other icons as needed
+}
+
+const getIconFromString = (iconString) => {
+  if (!iconString || typeof iconString !== 'string') {
+    return undefined
+  }
+  // Convert icon string (e.g., "mdiDelete") to actual icon object
+  const iconKey = iconString.startsWith('mdi') ? iconString : `mdi${iconString.charAt(0).toUpperCase() + iconString.slice(1)}`
+  return iconMap[iconKey] || undefined
+}
+
+// Process calendars from config: map icon strings to icon objects
+const calendars = CALENDARS.map((calendar) => ({
+  name: calendar.name,
+  icon: getIconFromString(calendar.icon)
+}))
 
 const loadCalendarInto = (calendar, start, end, data) => (
   axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }), {
@@ -67,6 +88,11 @@ const loadCalendarInto = (calendar, start, end, data) => (
 
       })
     })
+    .catch((err) => {
+      // Error is already logged by interceptor
+      // Re-throw to be handled by Promise.all catch
+      throw err
+    })
 )
 
 // Simple cache to avoid reloading the same date range
@@ -77,7 +103,7 @@ const getCacheKey = (startDate) => {
   return startDate.toISODate()
 }
 
-const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
+const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) => {
   // Set up day buckets
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
@@ -118,11 +144,13 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
             timestamp: Date.now()
           })
           setData(newData)
+          setError(false)
         }
       })
       .catch((err) => {
         if (!abortController.signal.aborted) {
-          logger.error('Could not load calendar', err)
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
         }
       })
       .finally(() => {
@@ -132,7 +160,8 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
       })
   } catch (err) {
     if (!abortController.signal.aborted) {
-      logger.error('Error loading calendar data:', err)
+      // Error is already logged by interceptor, format for UI
+      setError(formatErrorForUI(err))
       toggleLoading(false)
     }
   }
@@ -143,6 +172,7 @@ const emptyData = []
 const useCalendarData = (startDate) => {
   const [ data, setData ] = React.useState(emptyData)
   const [ isLoading, setIsLoading ] = React.useState(false)
+  const [ error, setError ] = React.useState(false)
   const timeout = useTimeout(60000, 'Calendar')
   const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
   const abortRef = useRef(null)
@@ -157,7 +187,7 @@ const useCalendarData = (startDate) => {
         setCurrentStartDate(startDate)
       }
       
-      loadAll(startDate, data, setData, setIsLoading, abortRef)
+      loadAll(startDate, data, setData, setIsLoading, abortRef, setError)
     }
 
     return () => {
@@ -168,7 +198,7 @@ const useCalendarData = (startDate) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, timeout])
 
-  return data
+  return [ data, error ]
 }
 
 export default useCalendarData
