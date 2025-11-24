@@ -1,6 +1,7 @@
 **1.4 - 2025-11-24**
 
 - chore(deps): update actions/setup-node action to v6
+- chore(deps): update dependency node to v24
 
 **1.3 - 2025-11-24**
 
