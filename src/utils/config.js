@@ -108,9 +108,6 @@ export const GEOFOX_USER = getConfig('GEOFOX_USER')
 export const TELEGRAM_BOT_TOKEN = getConfig('TELEGRAM_BOT_TOKEN')
 export const TELEGRAM_CHAT_ID = getConfig('TELEGRAM_CHAT_ID')
 
-// Physical buttons WebSocket URL (optional - feature disabled if not set)
-export const BUTTONS_WS_URL = getConfig('BUTTONS_WS_URL')
-
 // Entity IDs (optional - feature disabled if not set)
 export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
 export const ENTITY_WASHING_MACHINE_NEW = getConfig('ENTITY_WASHING_MACHINE_NEW')
@@ -183,8 +180,6 @@ export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL',
   isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
 export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 
   isTruthy(ENTITY_EVERYDAY_CALENDAR))
-export const ENABLE_PHYSICAL_BUTTONS = getFeatureFlag('ENABLE_PHYSICAL_BUTTONS', 
-  isTruthy(BUTTONS_WS_URL))
 
 // Helper function to build HA API URLs
 // In production mode (add-on/ingress), use simple relative URLs

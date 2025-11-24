@@ -4,7 +4,6 @@ import Week from './components/week'
 import Sidebar from './components/sidebar'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-//import usePhysicalButtons from './utils/use-physical-buttons'
 import './fonts/fonts.css'
 import useReload from './utils/use-reload'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -43,8 +42,6 @@ const Div = styled.div`
 `
 
 function App() {
-
-  const pin = undefined// usePhysicalButtons()
   
   useReload()
 
@@ -57,7 +54,7 @@ function App() {
             <Week />
           </ErrorBoundary>
           <ErrorBoundary>
-            <Sidebar pin={pin} />
+            <Sidebar />
           </ErrorBoundary>
         </div>
         <ToastContainer />

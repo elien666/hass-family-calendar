@@ -45,10 +45,10 @@ const Div = styled.div`
   }
 `
 
-const Sidebar = ({ pin }) => {
+const Sidebar = () => {
   return (
     <Div>
-      <Weather pin={pin} />
+      <Weather />
       <Hvv />
       <div className={'two-cols'}>
         <Garage />

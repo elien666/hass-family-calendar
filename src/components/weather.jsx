@@ -142,7 +142,7 @@ const Icon = ({ icon }) => {
   return <presentation.icon size={60} color={'#ffffff'} />
 }
 
-const Weather = ({ pin }) => {
+const Weather = () => {
   // Don't render if weather feature is disabled
   if (!ENABLE_WEATHER) {
     return null
@@ -181,9 +181,9 @@ const Weather = ({ pin }) => {
 
   // Toggle weather on keypress
   React.useEffect(() => {
-    if (keyWeather || pin === 17) toggleWeather()
+    if (keyWeather) toggleWeather()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ keyWeather, pin ]) // Only fire when key or button is pressed
+  }, [ keyWeather ]) // Only fire when key is pressed
 
   // Early return AFTER all hooks
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) {
