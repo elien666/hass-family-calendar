@@ -248,13 +248,6 @@ if [ "$ENABLE_EVERYDAY_CALENDAR" = "true" ]; then
 fi
 output_json_value "ENABLE_EVERYDAY_CALENDAR" "$ENABLE_EVERYDAY_CALENDAR" "false" "true" >> "$CONFIG_FILE"
 
-# Physical buttons: read enabled flag from config
-ENABLE_PHYSICAL_BUTTONS=$(read_bool_config "physical_buttons.enabled" "false")
-if [ "$ENABLE_PHYSICAL_BUTTONS" = "true" ]; then
-  read_and_output_config "physical_buttons.buttons_ws_url" "BUTTONS_WS_URL" "false"
-fi
-output_json_value "ENABLE_PHYSICAL_BUTTONS" "$ENABLE_PHYSICAL_BUTTONS" "false" "true" >> "$CONFIG_FILE"
-
 # Calendars: read array from config and output as JSON array
 if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
   # Read calendars array from config

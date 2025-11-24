@@ -72,14 +72,6 @@ configuration:
         name: Enabled
       entity_everyday_calendar:
         name: Everyday Calendar Entity
-  physical_buttons:
-    name: Physical Buttons
-    description: Configure the physical buttons.
-    fields:
-      enabled:
-        name: Enabled
-        buttons_ws_url:
-        name: Buttons WebSocket URL
   calendars:
     name: Calendars
     description: List of calendar entities to display.

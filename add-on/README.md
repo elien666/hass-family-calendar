@@ -130,13 +130,6 @@ Each feature can be individually enabled or disabled using toggle switches in th
 - When enabled, configure:
   - `entity_everyday_calendar` - Entity ID for the everyday calendar sensor
 
-#### Hardware Integration
-
-**Physical Buttons** (`enable_physical_buttons`)
-- Enable physical button integration via WebSocket
-- When enabled, configure:
-  - `buttons_ws_url` - WebSocket URL for physical button integration (e.g., `ws://hostname:5678/`)
-
 ## How It Works
 
 ### Runtime Configuration Injection

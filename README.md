@@ -84,7 +84,6 @@ For local development, create a `.env` file in the root directory based on `.env
 - `VITE_GEOFOX_USER` - Geofox API username
 - `VITE_TELEGRAM_BOT_TOKEN` - Telegram bot token (optional)
 - `VITE_TELEGRAM_CHAT_ID` - Telegram chat ID for notifications (optional)
-- `VITE_BUTTONS_WS_URL` - WebSocket URL for physical button integration (optional)
 - `VITE_ENTITY_GARAGE_DOOR` - Garage door entity ID (disables garage feature if not set)
 - `VITE_ENTITY_WASHING_MACHINE_NEW` - New washing machine status entity
 - `VITE_ENTITY_WASHING_MACHINE_OLD` - Old washing machine status entity

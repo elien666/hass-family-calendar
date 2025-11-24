@@ -35,8 +35,6 @@ options:
     enabled: false
   telegram:
     enabled: false
-  physical_buttons:
-    enabled: false
   doorbell:
     enabled: false
   everyday_calendar:
@@ -70,9 +68,6 @@ schema:
   everyday_calendar:
     enabled: bool
     entity_everyday_calendar: str?
-  physical_buttons:
-    enabled: bool
-    buttons_ws_url: url?
   calendars:
     - name: str
       icon: str?
