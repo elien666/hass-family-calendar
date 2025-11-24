@@ -3,7 +3,7 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import WhepVideo from './whep-video'
+import Go2RTCStream from './go2rtc-stream'
 import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
 
 // Duration to keep overlay open, afer door ring event stopped
@@ -150,13 +150,11 @@ const Doorbell = () => {
                                     {portraitCameras.length > 0 && (
                                         <div onClick={() => openDoor()} style={{ flexDirection: 'column' }}>
                                             {portraitCameras.map((camera, index) => (
-                                                <WhepVideo
+                                                <Go2RTCStream
                                                     key={index}
-                                                    src={camera.url}
+                                                    src={camera.name}
                                                     show={showDoorCams}
-                                                    muted={true}
-                                                    controls={false}
-                                                    autoPlay={true}
+                                                    orientation="portrait"
                                                     width='360'
                                                     height='480'
                                                 />
@@ -166,13 +164,11 @@ const Doorbell = () => {
                                     {landscapeCameras.length > 0 && (
                                         <div onClick={() => openDoor()}>
                                             {landscapeCameras.map((camera, index) => (
-                                                <WhepVideo
+                                                <Go2RTCStream
                                                     key={index}
-                                                    src={camera.url}
+                                                    src={camera.name}
                                                     show={showDoorCams}
-                                                    muted={true}
-                                                    controls={false}
-                                                    autoPlay={true}
+                                                    orientation="landscape"
                                                     width='100%'
                                                     height={index === landscapeCameras.length - 1 ? '240px' : undefined}
                                                 />

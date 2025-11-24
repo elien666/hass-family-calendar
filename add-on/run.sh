@@ -264,6 +264,9 @@ if [ "$ENABLE_DOORBELL" = "true" ]; then
 fi
 output_json_value "ENABLE_DOORBELL" "$ENABLE_DOORBELL" "false" "true" >> "$CONFIG_FILE"
 
+# go2rtc base URL configuration
+read_and_output_config "go2rtc_base_url" "GO2RTC_BASE_URL" "false"
+
 # Everyday calendar: read enabled flag from config
 ENABLE_EVERYDAY_CALENDAR=$(read_bool_config "everyday_calendar.enabled" "false")
 if [ "$ENABLE_EVERYDAY_CALENDAR" = "true" ]; then
