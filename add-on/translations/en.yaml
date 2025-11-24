@@ -61,6 +61,9 @@ configuration:
         name: Doorbell Entity
       entity_doorbell_button:
         name: Doorbell Button Entity
+      cameras:
+        name: Cameras
+        description: List of camera URLs to display
   everyday_calendar:
     name: Everyday Calendar
     description: Configure the everyday calendar.

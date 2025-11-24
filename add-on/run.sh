@@ -248,6 +248,19 @@ ENABLE_DOORBELL=$(read_bool_config "doorbell.enabled" "false")
 if [ "$ENABLE_DOORBELL" = "true" ]; then
   read_and_output_config "doorbell.entity_doorbell" "ENTITY_DOORBELL" "false"
   read_and_output_config "doorbell.entity_doorbell_button" "ENTITY_DOORBELL_BUTTON" "false"
+  # Read cameras array from config
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    DOORBELL_CAMERAS_JSON=$(bashio::config "doorbell.cameras" 2>/dev/null || echo "[]")
+    # Ensure it's valid JSON (bashio should return JSON array, but verify)
+    if [ -z "$DOORBELL_CAMERAS_JSON" ] || [ "$DOORBELL_CAMERAS_JSON" = "null" ] || [ "$DOORBELL_CAMERAS_JSON" = "undefined" ]; then
+      DOORBELL_CAMERAS_JSON="[]"
+    fi
+    # Output as JSON array (no quotes needed, it's already JSON)
+    echo "  DOORBELL_CAMERAS: $DOORBELL_CAMERAS_JSON," >> "$CONFIG_FILE"
+  else
+    # Fallback to empty array if not in HA mode
+    echo "  DOORBELL_CAMERAS: []," >> "$CONFIG_FILE"
+  fi
 fi
 output_json_value "ENABLE_DOORBELL" "$ENABLE_DOORBELL" "false" "true" >> "$CONFIG_FILE"
 
