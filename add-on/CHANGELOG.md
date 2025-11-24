@@ -1,5 +1,11 @@
 **1.4 - 2025-11-24**
 
+- Add baseBranches to renovate configuration
+- chore(deps): update dependency node to v24
+- chore(deps): update actions/setup-node action to v6
+
+**1.4 - 2025-11-24**
+
 - chore(deps): update actions/setup-node action to v6
 - chore(deps): update dependency node to v24
 
