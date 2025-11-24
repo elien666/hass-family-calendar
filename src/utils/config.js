@@ -152,7 +152,10 @@ export const LAUNDRY_MACHINES = (() => {
   return []
 })()
 
-// Doorbell cameras configuration (array of camera objects with url and optional orientation)
+// go2rtc base URL for stream HTML pages
+export const GO2RTC_BASE_URL = getConfig('GO2RTC_BASE_URL', 'http://192.168.188.10:1984')
+
+// Doorbell cameras configuration (array of camera objects with name and optional orientation)
 export const DOORBELL_CAMERAS = (() => {
   const camerasValue = getConfig('DOORBELL_CAMERAS', '[]')
   if (typeof camerasValue === 'string') {

@@ -64,8 +64,9 @@ schema:
     entity_doorbell: str?
     entity_doorbell_button: str?
     cameras:
-      - url: str
+      - name: str
         orientation: str?
+  go2rtc_base_url: str?
   everyday_calendar:
     enabled: bool
     entity_everyday_calendar: str?
