@@ -26,6 +26,7 @@ options:
     enabled: false
   laundry:
     enabled: false
+    machines: []
   doorbell:
     enabled: false
   everyday_calendar:
@@ -58,9 +59,9 @@ schema:
     entity_garage_door: str?
   laundry:
     enabled: bool
-    entity_washing_machine_new: str?
-    entity_washing_machine_old: str?
-    entity_dryer: str?
+    machines:
+      - name: str
+        entity_id: str
   doorbell:
     enabled: bool
     entity_doorbell: str?

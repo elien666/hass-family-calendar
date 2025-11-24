@@ -60,7 +60,7 @@ const Div = styled.div`
 
   .states {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     justify-content: space-between;
     column-gap: 2rem;
 
