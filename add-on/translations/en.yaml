@@ -48,12 +48,9 @@ configuration:
     fields:
       enabled:
         name: Enabled
-      entity_washing_machine_new:
-        name: Washing Machine New Entity
-      entity_washing_machine_old:
-        name: Washing Machine Old Entity
-      entity_dryer:
-        name: Dryer Entity
+      machines:
+        name: Machines
+        description: List of laundry machines to monitor
   doorbell:
     name: Doorbell
     description: Configure the doorbell.

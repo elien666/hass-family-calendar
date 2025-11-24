@@ -110,9 +110,6 @@ export const TELEGRAM_CHAT_ID = getConfig('TELEGRAM_CHAT_ID')
 
 // Entity IDs (optional - feature disabled if not set)
 export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
-export const ENTITY_WASHING_MACHINE_NEW = getConfig('ENTITY_WASHING_MACHINE_NEW')
-export const ENTITY_WASHING_MACHINE_OLD = getConfig('ENTITY_WASHING_MACHINE_OLD')
-export const ENTITY_DRYER = getConfig('ENTITY_DRYER')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
@@ -131,6 +128,25 @@ export const CALENDARS = (() => {
   // If it's already an array (from window.APP_CONFIG), return it
   if (Array.isArray(calendarsValue)) {
     return calendarsValue
+  }
+  // Fallback to empty array
+  return []
+})()
+
+// Laundry machines configuration (array of machine objects with name and entity_id)
+export const LAUNDRY_MACHINES = (() => {
+  const machinesValue = getConfig('LAUNDRY_MACHINES', '[]')
+  if (typeof machinesValue === 'string') {
+    try {
+      return JSON.parse(machinesValue)
+    } catch (e) {
+      // If parsing fails, return empty array
+      return []
+    }
+  }
+  // If it's already an array (from window.APP_CONFIG), return it
+  if (Array.isArray(machinesValue)) {
+    return machinesValue
   }
   // Fallback to empty array
   return []
@@ -175,7 +191,7 @@ export const ENABLE_TELEGRAM = getFeatureFlag('ENABLE_TELEGRAM',
 export const ENABLE_GARAGE = getFeatureFlag('ENABLE_GARAGE', 
   isTruthy(ENTITY_GARAGE_DOOR))
 export const ENABLE_LAUNDRY = getFeatureFlag('ENABLE_LAUNDRY', 
-  isTruthy(ENTITY_WASHING_MACHINE_NEW) || isTruthy(ENTITY_WASHING_MACHINE_OLD) || isTruthy(ENTITY_DRYER))
+  Array.isArray(LAUNDRY_MACHINES) && LAUNDRY_MACHINES.length > 0)
 export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL', 
   isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
 export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 

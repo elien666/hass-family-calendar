@@ -227,9 +227,19 @@ output_json_value "ENABLE_GARAGE" "$ENABLE_GARAGE" "false" "true" >> "$CONFIG_FI
 # Laundry: read enabled flag from config
 ENABLE_LAUNDRY=$(read_bool_config "laundry.enabled" "false")
 if [ "$ENABLE_LAUNDRY" = "true" ]; then
-  read_and_output_config "laundry.entity_washing_machine_new" "ENTITY_WASHING_MACHINE_NEW" "false"
-  read_and_output_config "laundry.entity_washing_machine_old" "ENTITY_WASHING_MACHINE_OLD" "false"
-  read_and_output_config "laundry.entity_dryer" "ENTITY_DRYER" "false"
+  # Read machines array from config
+  if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+    LAUNDRY_MACHINES_JSON=$(bashio::config "laundry.machines" 2>/dev/null || echo "[]")
+    # Ensure it's valid JSON (bashio should return JSON array, but verify)
+    if [ -z "$LAUNDRY_MACHINES_JSON" ] || [ "$LAUNDRY_MACHINES_JSON" = "null" ] || [ "$LAUNDRY_MACHINES_JSON" = "undefined" ]; then
+      LAUNDRY_MACHINES_JSON="[]"
+    fi
+    # Output as JSON array (no quotes needed, it's already JSON)
+    echo "  LAUNDRY_MACHINES: $LAUNDRY_MACHINES_JSON," >> "$CONFIG_FILE"
+  else
+    # Fallback to empty array if not in HA mode
+    echo "  LAUNDRY_MACHINES: []," >> "$CONFIG_FILE"
+  fi
 fi
 output_json_value "ENABLE_LAUNDRY" "$ENABLE_LAUNDRY" "false" "true" >> "$CONFIG_FILE"
 
