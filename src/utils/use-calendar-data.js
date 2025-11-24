@@ -2,7 +2,13 @@ import React, { useRef } from 'react'
 import { DateTime } from 'luxon'
 import axios from 'axios'
 import qs from 'qs'
-import * as mdiIcons from '@mdi/js'
+// Import only the icons that are commonly used for calendars
+// Add more icons here as needed when configuring calendars
+import { 
+  mdiDelete, 
+  mdiCake,
+  // Add other commonly used calendar icons here as needed
+} from '@mdi/js'
 import useTimeout from './use-timeout'
 import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl, CALENDARS } from "./config"
 import logger from './logger'
@@ -14,14 +20,20 @@ const host = (name) => buildHaUrl(`/api/calendars/${name}`)
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
 // Map icon string names to actual icon objects from @mdi/js
+// Only includes icons that are explicitly imported above to keep bundle size small
+const iconMap = {
+  mdiDelete,
+  mdiCake,
+  // Add mappings for other icons as needed
+}
+
 const getIconFromString = (iconString) => {
   if (!iconString || typeof iconString !== 'string') {
     return undefined
   }
   // Convert icon string (e.g., "mdiDelete") to actual icon object
-  // @mdi/js exports icons with camelCase names matching the string
   const iconKey = iconString.startsWith('mdi') ? iconString : `mdi${iconString.charAt(0).toUpperCase() + iconString.slice(1)}`
-  return mdiIcons[iconKey] || undefined
+  return iconMap[iconKey] || undefined
 }
 
 // Process calendars from config: map icon strings to icon objects
