@@ -152,6 +152,25 @@ export const LAUNDRY_MACHINES = (() => {
   return []
 })()
 
+// Doorbell cameras configuration (array of camera objects with url and optional orientation)
+export const DOORBELL_CAMERAS = (() => {
+  const camerasValue = getConfig('DOORBELL_CAMERAS', '[]')
+  if (typeof camerasValue === 'string') {
+    try {
+      return JSON.parse(camerasValue)
+    } catch (e) {
+      // If parsing fails, return empty array
+      return []
+    }
+  }
+  // If it's already an array (from window.APP_CONFIG), return it
+  if (Array.isArray(camerasValue)) {
+    return camerasValue
+  }
+  // Fallback to empty array
+  return []
+})()
+
 // Feature enable/disable toggles
 // In production (add-on), these are set by run.sh based on dedicated enabled flags in config.yaml
 // In development mode, auto-enable features if their entities/config are present (for local dev convenience)

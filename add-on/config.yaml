@@ -29,16 +29,13 @@ options:
     machines: []
   doorbell:
     enabled: false
+    cameras: []
   everyday_calendar:
     enabled: false
   calendars: []
   hvv:
     enabled: false
   telegram:
-    enabled: false
-  doorbell:
-    enabled: false
-  everyday_calendar:
     enabled: false
 schema:
   weather:
@@ -66,6 +63,9 @@ schema:
     enabled: bool
     entity_doorbell: str?
     entity_doorbell_button: str?
+    cameras:
+      - url: str
+        orientation: str?
   everyday_calendar:
     enabled: bool
     entity_everyday_calendar: str?
