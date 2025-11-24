@@ -2,9 +2,9 @@ import React, { useRef } from 'react'
 import { DateTime } from 'luxon'
 import axios from 'axios'
 import qs from 'qs'
-import { mdiDelete, mdiCake } from '@mdi/js'
+import * as mdiIcons from '@mdi/js'
 import useTimeout from './use-timeout'
-import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl, CALENDARS } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
@@ -13,14 +13,22 @@ import { formatErrorForUI } from './axios-error-handler'
 const host = (name) => buildHaUrl(`/api/calendars/${name}`)
 const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
-const calendars = [
-  { name: 'calendar.hamsischwan_s_kalender', icon: undefined },
-  { name: 'calendar.biotonne', icon: mdiDelete },
-  { name: 'calendar.gelber_sack', icon: mdiDelete },
-  { name: 'calendar.blaue_tonne', icon: mdiDelete },
-  { name: 'calendar.schwarze_tonne', icon: mdiDelete },
-  { name: 'calendar.familiengeburtstage', icon: mdiCake },
-]
+// Map icon string names to actual icon objects from @mdi/js
+const getIconFromString = (iconString) => {
+  if (!iconString || typeof iconString !== 'string') {
+    return undefined
+  }
+  // Convert icon string (e.g., "mdiDelete") to actual icon object
+  // @mdi/js exports icons with camelCase names matching the string
+  const iconKey = iconString.startsWith('mdi') ? iconString : `mdi${iconString.charAt(0).toUpperCase() + iconString.slice(1)}`
+  return mdiIcons[iconKey] || undefined
+}
+
+// Process calendars from config: map icon strings to icon objects
+const calendars = CALENDARS.map((calendar) => ({
+  name: calendar.name,
+  icon: getIconFromString(calendar.icon)
+}))
 
 const loadCalendarInto = (calendar, start, end, data) => (
   axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }), {
