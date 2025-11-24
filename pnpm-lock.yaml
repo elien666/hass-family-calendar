@@ -28,7 +28,7 @@ importers:
         version: 4.2.0
       home-assistant-js-websocket:
         specifier: ^9.5.0
-        version: 9.5.0
+        version: 9.6.0
       luxon:
         specifier: ^3.7.2
         version: 3.7.2
@@ -709,8 +709,8 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
-  home-assistant-js-websocket@9.5.0:
-    resolution: {integrity: sha512-gCBX0ulIPW3o5EhYxyNKgztBwNIs7u4hypZ+rcWir65wjLKL3b5uDx1jzU7RceyuANxvVKwBVLNujBeFohjnUw==}
+  home-assistant-js-websocket@9.6.0:
+    resolution: {integrity: sha512-TK8HWW6UjCsUdjIBQRB2sBbEya0VniOBFqFjgqSznJiB7YriNgN8jghyThxOkgxwrnt2eN6oWoZMCTSp1o7H+w==}
 
   is-binary-path@2.1.0:
     resolution: {integrity: sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==}
@@ -1611,7 +1611,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  home-assistant-js-websocket@9.5.0: {}
+  home-assistant-js-websocket@9.6.0: {}
 
   is-binary-path@2.1.0:
     dependencies:
