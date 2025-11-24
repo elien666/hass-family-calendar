@@ -1,3 +1,7 @@
+**1.5 - 2025-11-24**
+
+- Change base branch for Renovate configuration
+
 **1.4 - 2025-11-24**
 
 - chore(deps): update actions/setup-node action to v6
