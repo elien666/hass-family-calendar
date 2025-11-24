@@ -1,7 +1,4 @@
-import {
-  createLongLivedTokenAuth,
-  createConnection,
-} from 'home-assistant-js-websocket'
+// WebSocket imports not needed - this component only uses REST API
 import React from 'react'
 import axios from 'axios'
 import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, ENABLE_EVERYDAY_CALENDAR, buildHaUrl } from "./config"

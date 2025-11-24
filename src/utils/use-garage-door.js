@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl, isDevelopment } from "./config"
 import logger from './logger'
 
 // Authorization header is configured centrally in config.js
@@ -48,32 +48,38 @@ const useGarageDoor = () => {
 
       let auth
       try {
-        // Use window.location.origin if HASS_HOST is empty (HA add-on mode with relative URLs)
+        // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
+        // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+        if (!isDevelopment) {
+          logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
+          return
+        }
+
         const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
         const token = HASS_ACCESS_TOKEN || ''
-        
-        // Skip WebSocket connection if no token (ingress mode handles REST API, WebSocket needs token)
+
+        // Skip WebSocket connection if no token
         if (!token) {
           logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
           return
         }
-        
+
         auth = createLongLivedTokenAuth(host, token)
         if (isMounted) setError(false)
       } catch (err) {
         if (isMounted) setError(err instanceof Error ? err.message : String(err))
         return
       }
-    
+
       try {
         connection = await createConnection({ auth });
-    
+
         const trigger = (result) => {
           if (isMounted) {
             setState(result.variables.trigger.to_state.state)
           }
         }
-    
+
         await connection.subscribeMessage(trigger, {
           "type": "subscribe_trigger",
           "trigger":
@@ -88,7 +94,7 @@ const useGarageDoor = () => {
     }
 
     connect()
-    
+
     return () => {
       isMounted = false
       if (connection) {

@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, ENABLE_LAUNDRY, buildHaUrl } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, ENABLE_LAUNDRY, buildHaUrl, isDevelopment } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 
@@ -114,15 +114,22 @@ const useSubscription = ( entity ) => {
         return
       }
 
+      // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
+      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+      if (!isDevelopment) {
+        logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
+        return
+      }
+
       const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
       const token = HASS_ACCESS_TOKEN || ''
-      
+
       // Skip WebSocket connection if no token
       if (!token) {
         logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
         return
       }
-      
+
       try {
         const auth = createLongLivedTokenAuth(host, token)
 

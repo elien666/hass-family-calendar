@@ -2,6 +2,20 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Start Home Assistant",
+			"type": "shell",
+			"command": "supervisor_run",
+			"group": {
+			  "kind": "test",
+			  "isDefault": true
+			},
+			"presentation": {
+			  "reveal": "always",
+			  "panel": "new"
+			},
+			"problemMatcher": []
+		  },
+		{
 			"label": "build",
 			"type": "shell",
 			"command": "pnpm run build",
@@ -105,36 +119,69 @@
 			}
 		},
 		{
-			"type": "docker-build",
+			"type": "shell",
 			"label": "docker-build",
-			"platform": "node",
-			"dockerBuild": {
-				"dockerfile": "${workspaceFolder}/add-on/Dockerfile",
-				"context": "${workspaceFolder}/add-on/",
-				"pull": true
+			"command": "docker",
+			"args": [
+				"build",
+				"--pull",
+				"-f",
+				"${workspaceFolder}/add-on/Dockerfile",
+				"-t",
+				"hass-family-calendar:latest",
+				"${workspaceFolder}/add-on/"
+			],
+			"group": "none",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
 			}
 		},
 		{
-			"type": "docker-run",
+			"type": "shell",
 			"label": "docker-run: release",
-			"dependsOn": [
-				"docker-build"
-			]
-		},
-		{
-			"type": "docker-run",
-			"label": "docker-run: debug",
+			"command": "docker",
+			"args": [
+				"run",
+				"--rm",
+				"-p",
+				"8080:80",
+				"hass-family-calendar:latest"
+			],
 			"dependsOn": [
 				"docker-build"
 			],
-			"dockerRun": {
-				"env": {
-					"DEBUG": "*",
-					"NODE_ENV": "development"
-				}
-			},
-			"node": {
-				"enableDebugging": true
+			"group": "none",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "docker-run: debug",
+			"command": "docker",
+			"args": [
+				"run",
+				"--rm",
+				"-p",
+				"8080:80",
+				"-e",
+				"DEBUG=*",
+				"-e",
+				"NODE_ENV=development",
+				"hass-family-calendar:latest"
+			],
+			"dependsOn": [
+				"docker-build"
+			],
+			"group": "none",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
 			}
 		}
 	]
