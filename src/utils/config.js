@@ -1,5 +1,10 @@
 import axios from 'axios'
 
+// Use Vite's built-in DEV mode to detect development vs production
+// import.meta.env.DEV is true when running `pnpm start` (dev server)
+// import.meta.env.DEV is false when running `pnpm run build` (production build)
+export const isDevelopment = import.meta.env.DEV
+
 // Get runtime config from window.APP_CONFIG (injected by HA add-on) or fallback to build-time env vars
 const getConfig = (key, defaultValue = undefined) => {
   // Check for runtime config from HA add-on first
@@ -21,25 +26,20 @@ const getConfig = (key, defaultValue = undefined) => {
     // and we don't want to use the build-time token
     return defaultValue
   }
-  
-  // Fallback to build-time environment variables (only when not running in add-on)
+
+  // Fallback to build-time environment variables
   const envValue = import.meta.env[`VITE_${key}`]
-  
-  // Special handling for HASS_ACCESS_TOKEN when window.APP_CONFIG is undefined
-  // If window.APP_CONFIG is undefined, config.js likely failed to load or we're in add-on mode
-  // Be conservative: only use build-time token if we're clearly in local dev (localhost/127.0.0.1)
-  // Otherwise assume add-on/ingress mode and don't use build-time token to avoid 401 errors
-  if (key === 'HASS_ACCESS_TOKEN' && envValue !== undefined) {
-    const isLocalDev = typeof window !== 'undefined' && 
-      window.location && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    
-    if (!isLocalDev) {
-      // Not localhost - assume add-on/ingress mode, don't use build-time token
-      return defaultValue
-    }
+
+  // In production mode (import.meta.env.DEV === false), never use build-time tokens
+  // This prevents baking in tokens during build that would cause 401 errors in add-on mode
+  // Only allow build-time env vars when in development mode (pnpm start)
+  if (!isDevelopment && key === 'HASS_ACCESS_TOKEN' && envValue !== undefined) {
+    // Production build - don't use build-time token, rely on ingress authentication
+    return defaultValue
   }
-  
+
+  // In development mode, allow build-time env vars
+  // In production mode, only use env vars if explicitly set in window.APP_CONFIG
   return envValue !== undefined ? envValue : defaultValue
 }
 
@@ -60,10 +60,11 @@ export const HASS_HOST = getConfig('HASS_HOST', '')
 export const HASS_ACCESS_TOKEN = getConfig('HASS_ACCESS_TOKEN', '')
 
 // Configure axios Authorization header
-// When running in ingress mode (empty token), explicitly remove Authorization header
-// Ingress proxy handles authentication automatically and will reject requests with Authorization header
-const hasValidToken = HASS_ACCESS_TOKEN && 
-  typeof HASS_ACCESS_TOKEN === 'string' && 
+// When running in add-on mode (empty token), explicitly remove Authorization header
+// Apache proxy forwards /api/* to http://supervisor/core/api/* with SUPERVISOR_TOKEN
+// The proxy adds the Authorization header, so the frontend should not send one
+const hasValidToken = HASS_ACCESS_TOKEN &&
+  typeof HASS_ACCESS_TOKEN === 'string' &&
   HASS_ACCESS_TOKEN.trim() !== '' &&
   HASS_ACCESS_TOKEN !== 'undefined' &&
   HASS_ACCESS_TOKEN !== 'null'
@@ -71,8 +72,8 @@ const hasValidToken = HASS_ACCESS_TOKEN &&
 if (hasValidToken) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${HASS_ACCESS_TOKEN}`
 } else {
-  // Explicitly remove Authorization header for ingress mode
-  // This is critical - ingress proxy handles auth and will reject if we send our own header
+  // Explicitly remove Authorization header for add-on mode
+  // Apache proxy adds SUPERVISOR_TOKEN, so frontend should not send Authorization header
   delete axios.defaults.headers.common['Authorization']
 }
 
@@ -112,12 +113,34 @@ export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
 
 // Helper function to build HA API URLs
-// When HASS_HOST is empty (HA add-on mode), use relative URLs
+// In production mode (add-on/ingress), use simple relative URLs
+// Remove leading slash to make it relative to current directory, not origin root
+// This ensures requests go through the ingress proxy to the add-on's Apache, which then
+// proxies to http://supervisor/core/api/ with SUPERVISOR_TOKEN authentication
+// In development mode, use HASS_HOST if provided
 export const buildHaUrl = (path) => {
+  // Ensure path starts with /
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+  // In production mode (add-on/ingress), construct absolute URL from window.location
+  // This ensures requests go through the ingress proxy to the add-on's Apache
+  // which then proxies to http://supervisor/core/api/ with SUPERVISOR_TOKEN
+  if (!isDevelopment) {
+    if (typeof window !== 'undefined' && window.location) {
+      // Get the current pathname and remove trailing slash
+      const basePath = window.location.pathname.replace(/\/$/, '')
+      // Construct full URL: origin + pathname + API path
+      return `${window.location.origin}${basePath}${normalizedPath}`
+    }
+    // Fallback to relative URL if window is not available
+    return normalizedPath
+  }
+
+  // In development mode, use HASS_HOST if provided
   // Defensive check: treat "undefined" or "null" strings as empty
   const host = (HASS_HOST === "undefined" || HASS_HOST === "null") ? "" : HASS_HOST
   if (!host) {
-    return path.startsWith('/') ? path : `/${path}`
+    return normalizedPath
   }
-  return `${host}${path.startsWith('/') ? path : `/${path}`}`
+  return `${host}${normalizedPath}`
 }
