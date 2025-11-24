@@ -1,3 +1,7 @@
+**1.2 - 2025-11-24**
+
+- chore(deps): update actions/checkout action to v6
+
 **1.1 - 2025-11-23**
 
 - Add renovate.json
