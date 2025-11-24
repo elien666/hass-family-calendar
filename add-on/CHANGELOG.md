@@ -1,5 +1,10 @@
+**1.3 - 2025-11-24**
+
+- chore(deps): update dependency home-assistant-js-websocket to v9.6.0
+
 **1.2 - 2025-11-24**
 
+- chore(deps): update dependency home-assistant-js-websocket to v9.6.0
 - chore(deps): update actions/checkout action to v6
 
 **1.1 - 2025-11-23**
