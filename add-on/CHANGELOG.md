@@ -1,3 +1,21 @@
+**1.4 - 2025-11-24**
+
+- chore(deps): update actions/setup-node action to v6
+- chore(deps): update dependency node to v24
+
+**1.3 - 2025-11-24**
+
+- chore(deps): update dependency home-assistant-js-websocket to v9.6.0
+
+**1.2 - 2025-11-24**
+
+- chore(deps): update dependency home-assistant-js-websocket to v9.6.0
+- chore(deps): update actions/checkout action to v6
+
+**1.1 - 2025-11-23**
+
+- Add renovate.json
+
 **1.0 - 2025-11-21**
 
 - fix: add git config to release job for tag creation
