@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { logAxiosError } from './axios-error-handler'
 
 // Use Vite's built-in DEV mode to detect development vs production
 // import.meta.env.DEV is true when running `pnpm start` (dev server)
@@ -77,15 +78,22 @@ if (hasValidToken) {
   delete axios.defaults.headers.common['Authorization']
 }
 
-// Feature enable/disable toggles
-export const ENABLE_WEATHER = getConfigBoolean('ENABLE_WEATHER', false)
-export const ENABLE_HVV = getConfigBoolean('ENABLE_HVV', false)
-export const ENABLE_TELEGRAM = getConfigBoolean('ENABLE_TELEGRAM', false)
-export const ENABLE_GARAGE = getConfigBoolean('ENABLE_GARAGE', false)
-export const ENABLE_LAUNDRY = getConfigBoolean('ENABLE_LAUNDRY', false)
-export const ENABLE_DOORBELL = getConfigBoolean('ENABLE_DOORBELL', false)
-export const ENABLE_EVERYDAY_CALENDAR = getConfigBoolean('ENABLE_EVERYDAY_CALENDAR', false)
-export const ENABLE_PHYSICAL_BUTTONS = getConfigBoolean('ENABLE_PHYSICAL_BUTTONS', false)
+// Add Axios response interceptor for centralized error logging
+axios.interceptors.response.use(
+  (response) => {
+    // Return successful responses as-is
+    return response
+  },
+  (error) => {
+    // Log all Axios errors with moderate detail
+    // Extract context from error config if available
+    const context = error.config?.url ? `API Call: ${error.config.method?.toUpperCase()} ${error.config.url}` : 'Axios Request'
+    logAxiosError(error, context)
+    
+    // Reject the promise to allow individual error handlers to process the error
+    return Promise.reject(error)
+  }
+)
 
 // Weather API configuration (optional - feature disabled if not set)
 export const WEATHER_API_KEY = getConfig('WEATHER_API_KEY')
@@ -111,6 +119,50 @@ export const ENTITY_DRYER = getConfig('ENTITY_DRYER')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
+
+// Feature enable/disable toggles
+// In development mode, auto-enable features if their entities/config are present
+// In production (add-on), these are set by run.sh based on config
+const getFeatureFlag = (key, autoEnableCondition) => {
+  // First check if explicitly set in config (check raw value, not boolean)
+  const rawValue = getConfig(key, undefined)
+  // If value is explicitly set (not undefined), use it
+  if (rawValue !== undefined) {
+    // Value exists, convert to boolean
+    return getConfigBoolean(key, false)
+  }
+  // Value not explicitly set - in development mode, auto-enable if condition is met
+  if (isDevelopment) {
+    // Check if auto-enable condition is truthy (entity/config exists)
+    if (autoEnableCondition) {
+      return true
+    }
+  }
+  // Default to false
+  return false
+}
+
+// Helper to check if a value is truthy (not empty/null/undefined)
+const isTruthy = (value) => {
+  return value !== undefined && value !== null && value !== '' && value !== 'undefined' && value !== 'null'
+}
+
+export const ENABLE_WEATHER = getFeatureFlag('ENABLE_WEATHER', 
+  isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE)))
+export const ENABLE_HVV = getFeatureFlag('ENABLE_HVV', 
+  isTruthy(GEOFOX_USER) && isTruthy(GEOFOX_SECRET))
+export const ENABLE_TELEGRAM = getFeatureFlag('ENABLE_TELEGRAM', 
+  isTruthy(TELEGRAM_BOT_TOKEN) && isTruthy(TELEGRAM_CHAT_ID))
+export const ENABLE_GARAGE = getFeatureFlag('ENABLE_GARAGE', 
+  isTruthy(ENTITY_GARAGE_DOOR))
+export const ENABLE_LAUNDRY = getFeatureFlag('ENABLE_LAUNDRY', 
+  isTruthy(ENTITY_WASHING_MACHINE_NEW) || isTruthy(ENTITY_WASHING_MACHINE_OLD) || isTruthy(ENTITY_DRYER))
+export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL', 
+  isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
+export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 
+  isTruthy(ENTITY_EVERYDAY_CALENDAR))
+export const ENABLE_PHYSICAL_BUTTONS = getFeatureFlag('ENABLE_PHYSICAL_BUTTONS', 
+  isTruthy(BUTTONS_WS_URL))
 
 // Helper function to build HA API URLs
 // In production mode (add-on/ingress), use simple relative URLs

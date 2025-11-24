@@ -7,6 +7,7 @@ import axios from 'axios'
 import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_WASHING_MACHINE_NEW, ENTITY_WASHING_MACHINE_OLD, ENTITY_DRYER, ENABLE_LAUNDRY, buildHaUrl, isDevelopment } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
@@ -27,11 +28,18 @@ const mapToValue = {
 }
 
 const useWashingMachine = () => {
-  const machineNew = useSubscription(ENTITY_WASHING_MACHINE_NEW)
-  const machineOld = useSubscription(ENTITY_WASHING_MACHINE_OLD)
-  const dryer = useSubscription(ENTITY_DRYER)
+  const [machineNew, errorNew] = useSubscription(ENTITY_WASHING_MACHINE_NEW)
+  const [machineOld, errorOld] = useSubscription(ENTITY_WASHING_MACHINE_OLD)
+  const [dryer, errorDryer] = useSubscription(ENTITY_DRYER)
 
   const [ state, setState ] = React.useState(mapToPresentation['off'])
+  const [ error, setError ] = React.useState(false)
+
+  React.useEffect(() => {
+    // Aggregate errors from all subscriptions
+    const hasError = errorNew !== false || errorOld !== false || errorDryer !== false
+    setError(hasError ? (errorNew || errorOld || errorDryer) : false)
+  }, [errorNew, errorOld, errorDryer])
 
   React.useEffect(() => {
     const sum = mapToValue[machineNew] + mapToValue[machineOld] + mapToValue[dryer]
@@ -76,12 +84,13 @@ const useWashingMachine = () => {
     { label: 'Neue Waschmaschine', state: machineNew },
     { label: 'Alte Waschmaschine', state: machineOld },
     { label: 'Trockner', state: dryer },
-  ]]
+  ], error ]
 }
 
 const useSubscription = ( entity ) => {
 
   const [ state, setState ] = React.useState('off')
+  const [ error, setError ] = React.useState(false)
 
   // Check if entity is configured
   const isConfigured = ENABLE_LAUNDRY && entity
@@ -96,9 +105,11 @@ const useSubscription = ( entity ) => {
     axios(url)
       .then((response) => {
         setState(response.data.state)
+        setError(false)
       })
       .catch((err) => {
-        logger.error(`Failed to fetch state for ${entity}:`, err)
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured, url])
@@ -150,7 +161,10 @@ const useSubscription = ( entity ) => {
             }
         })
       } catch (err) {
-        logger.error(`Failed to setup connection for ${entity}:`, err)
+        if (isMounted) {
+          logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
+          setError(err instanceof Error ? err.message : String(err))
+        }
       }
     }
 
@@ -168,7 +182,7 @@ const useSubscription = ( entity ) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured])
 
-  return state
+  return [ state, error ]
 
 }
 

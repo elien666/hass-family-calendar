@@ -6,6 +6,7 @@ import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
 import { GEOFOX_USER, GEOFOX_SECRET, ENABLE_HVV } from './config'
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
@@ -47,6 +48,7 @@ const transformData = (data) => {
 const useHvv = (endPoint) => {
 
   const [ responseData, set ] = React.useState([])
+  const [ error, setError ] = React.useState(false)
   const timeout = useTimeout(60000) // 60 seconds
 
   // Check if Geofox is configured
@@ -101,14 +103,16 @@ const useHvv = (endPoint) => {
         } else {
           set(response.data)
         }
+        setError(false)
     })
       .catch((error) => {
-        logger.error('Error calling Geofox API', error)
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(error))
       })
 
   }, [endPoint, timeout, isConfigured])
 
-  return responseData
+  return [ responseData, error ]
 
 }
 

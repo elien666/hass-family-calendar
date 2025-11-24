@@ -4,6 +4,7 @@ import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import WhepVideo from './whep-video'
+import { ENABLE_DOORBELL } from '../utils/config'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -60,6 +61,10 @@ const Container = styled.div`
 `
 
 const Doorbell = () => {
+    // Don't render if doorbell feature is disabled
+    if (!ENABLE_DOORBELL) {
+        return null
+    }
 
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()
@@ -126,6 +131,13 @@ const Doorbell = () => {
                         transitionDuration={transitionDuration}
                         transitionTimingFunction='linear'
                     />
+
+                    {error !== false && (
+                        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+                            <h3>Fehler!</h3>
+                            <div>{error instanceof Error ? error.message : String(error)}</div>
+                        </div>
+                    )}
 
                     <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
                         <div onClick={() => openDoor()}> 

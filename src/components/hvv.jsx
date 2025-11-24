@@ -1,7 +1,7 @@
 import React, { memo } from 'react'
 import styled from 'styled-components'
 import useHvv, { SUPPORTED_CALLS } from '../utils/use-hvv'
-import { GEOFOX_USER, GEOFOX_SECRET } from '../utils/config'
+import { ENABLE_HVV } from '../utils/config'
 
 const Div = styled.div`
   margin-top: 2rem;
@@ -66,12 +66,12 @@ const Departure = memo(({ line, direction, realtimeOffset }) => (
   ))
 
 const Hvv = () => {
-  // Don't render if Geofox is not configured
-  if (!GEOFOX_USER || !GEOFOX_SECRET) {
+  // Don't render if HVV feature is disabled
+  if (!ENABLE_HVV) {
     return null
   }
 
-  const data = useHvv(SUPPORTED_CALLS.departureList)
+  const [data, error] = useHvv(SUPPORTED_CALLS.departureList)
 
   return (
     <Div>
@@ -81,14 +81,23 @@ const Hvv = () => {
           <path d="M0,0V11.7l16.4,7.4L0,26.1V37.8L29.5,23.1V15.5Z" transform="translate(-10368 6294)" fill="#00ff00"/>
         </g>
       </svg>
-      <h3>→&nbsp;Wandsbek</h3>
-      {data.to?.map((entry, index) => (
-        <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
-      ))}
-      <h3>→&nbsp;Stadtauswärts</h3>
-      {data.from?.map((entry, index) => (
-        <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
-      ))}
+      {error !== false ? (
+        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
+          <h3>Fehler!</h3>
+          <div>{error instanceof Error ? error.message : String(error)}</div>
+        </div>
+      ) : (
+        <>
+          <h3>→&nbsp;Wandsbek</h3>
+          {data.to?.map((entry, index) => (
+            <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
+          ))}
+          <h3>→&nbsp;Stadtauswärts</h3>
+          {data.from?.map((entry, index) => (
+            <Departure key={index} line={entry.line} direction={entry.direction} realtimeOffset={entry.realtimeOffset} />
+          ))}
+        </>
+      )}
     </Div>
   )
 }

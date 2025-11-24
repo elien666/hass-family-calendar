@@ -6,6 +6,7 @@ import { mdiDelete, mdiCake } from '@mdi/js'
 import useTimeout from './use-timeout'
 import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl } from "./config"
 import logger from './logger'
+import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
@@ -67,6 +68,11 @@ const loadCalendarInto = (calendar, start, end, data) => (
 
       })
     })
+    .catch((err) => {
+      // Error is already logged by interceptor
+      // Re-throw to be handled by Promise.all catch
+      throw err
+    })
 )
 
 // Simple cache to avoid reloading the same date range
@@ -77,7 +83,7 @@ const getCacheKey = (startDate) => {
   return startDate.toISODate()
 }
 
-const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
+const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) => {
   // Set up day buckets
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
@@ -118,11 +124,13 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
             timestamp: Date.now()
           })
           setData(newData)
+          setError(false)
         }
       })
       .catch((err) => {
         if (!abortController.signal.aborted) {
-          logger.error('Could not load calendar', err)
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
         }
       })
       .finally(() => {
@@ -132,7 +140,8 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef) => {
       })
   } catch (err) {
     if (!abortController.signal.aborted) {
-      logger.error('Error loading calendar data:', err)
+      // Error is already logged by interceptor, format for UI
+      setError(formatErrorForUI(err))
       toggleLoading(false)
     }
   }
@@ -143,6 +152,7 @@ const emptyData = []
 const useCalendarData = (startDate) => {
   const [ data, setData ] = React.useState(emptyData)
   const [ isLoading, setIsLoading ] = React.useState(false)
+  const [ error, setError ] = React.useState(false)
   const timeout = useTimeout(60000, 'Calendar')
   const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
   const abortRef = useRef(null)
@@ -157,7 +167,7 @@ const useCalendarData = (startDate) => {
         setCurrentStartDate(startDate)
       }
       
-      loadAll(startDate, data, setData, setIsLoading, abortRef)
+      loadAll(startDate, data, setData, setIsLoading, abortRef, setError)
     }
 
     return () => {
@@ -168,7 +178,7 @@ const useCalendarData = (startDate) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, timeout])
 
-  return data
+  return [ data, error ]
 }
 
 export default useCalendarData
