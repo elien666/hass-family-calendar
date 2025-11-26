@@ -161,21 +161,19 @@ const Doorbell = () => {
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
 
     React.useEffect(() => {
-        // Auto-close disabled for now
-        // if (state === 'off' && showDoorCams) {
-        //     // Turn off with delay
-        //     const timeoutId = window.setTimeout(() => {
-        //         toggle(false)
-        //         setCancelId(undefined)
-        //     }, DELAY_IN_MS)
-        //     setCancelId(timeoutId)
-        //     setTransitionDuration(DELAY_IN_MS + 'ms')
-        //     setProgress(0)
-        //     return () => {
-        //         if (timeoutId) window.clearTimeout(timeoutId)
-        //     }
-        // } else 
-        if (state === 'on') {
+        if (state === 'off' && showDoorCams) {
+            // Turn off with delay
+            const timeoutId = window.setTimeout(() => {
+                toggle(false)
+                setCancelId(undefined)
+            }, DELAY_IN_MS)
+            setCancelId(timeoutId)
+            setTransitionDuration(DELAY_IN_MS + 'ms')
+            setProgress(0)
+            return () => {
+                if (timeoutId) window.clearTimeout(timeoutId)
+            }
+        } else if (state === 'on') {
             setTransitionDuration(0)
             setProgress(100)
             toggle(true)
