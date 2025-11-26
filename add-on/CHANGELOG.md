@@ -1,4 +1,7 @@
-**1.5 - 2025-11-26**
+**1.6 - 2025-11-26**
 
-- feat: improve CCTV overlay layout and responsive behavior
+- Update build artifacts and dependencies
+- Apply video tiling algorithm to doorbell overlay
+- Add video tiling algorithm with LPW layout support
+- feat: re-enable auto-close functionality in CCTV modal
 
