@@ -1,4 +1,4 @@
-**1.3 - 2025-11-26**
+**1.4 - 2025-11-26**
 
-- Refactor normalize_json_array function for better shell compatibility
+- Simplify go2rtc authentication: remove Apache proxy, use direct URL with token in path
 
