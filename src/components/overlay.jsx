@@ -31,8 +31,9 @@ const Div = styled.div`
     overflow-y: scroll;
 
     &.fullsize {
-      width: 90vw;
-      max-height: calc(100vh - 1rem);
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
       border-width: 2px;
       padding: 4px 6px;
     }
@@ -56,7 +57,11 @@ const Div = styled.div`
     justify-content: center;
     align-items: center;
     z-index: 1;
-    background-color: rgba(255,255,255,.2);
+    background-color: rgba(0,0,0,.6);
+    
+    svg {
+      color: white;
+    }
   }
 `
 
