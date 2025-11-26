@@ -24,7 +24,7 @@ const Container = styled.div`
     .grid {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 0;
         flex: 1;
         width: 100%;
         height: 100%;
@@ -36,7 +36,7 @@ const Container = styled.div`
             flex-wrap: wrap;
             justify-content: center;
             align-items: center;
-            gap: 12px;
+            gap: 0;
             width: 100%;
             flex-shrink: 0;
         }
@@ -46,8 +46,7 @@ const Container = styled.div`
             grid-template-columns: auto auto;
             flex: 1;
             min-height: 0;
-            gap: 12px;
-            justify-content: center;
+            gap: 0;
             align-content: stretch;
         }
 
@@ -58,18 +57,18 @@ const Container = styled.div`
 
             &.portrait {
                 height: 100%;
-                width: auto;
+                width: 100%;
                 max-width: 100%;
                 max-height: 100%;
                 aspect-ratio: 360 / 480;
             }
 
             &.landscape {
-                height: 100%;
-                width: auto;
+                width: 100%;
+                height: auto;
                 max-width: 100%;
                 max-height: 100%;
-                aspect-ratio: 420 / 240;
+                aspect-ratio: 1920 / 1072;
             }
 
             &.wide {
@@ -89,6 +88,10 @@ const Container = styled.div`
             min-height: 0;
             height: 100%;
             overflow: hidden;
+
+            &:first-child {
+                justify-content: flex-start;
+            }
         }
 
         .main-section > div:last-child {
@@ -97,6 +100,28 @@ const Container = styled.div`
 
         .main-section > div:only-child {
             grid-column: 1 / -1;
+        }
+
+        .landscape-container {
+            width: 100%;
+            aspect-ratio: 1920 / 1072;
+            min-height: 0;
+        }
+
+        .portrait-container {
+            width: auto;
+            min-width: 0;
+        }
+
+        .portrait-container > div {
+            overflow: hidden;
+            position: relative;
+            width: 100%;
+        }
+
+        .portrait-container iframe.portrait {
+            position: relative;
+            max-width: none;
         }
 
         .wide-section > * {
@@ -136,19 +161,21 @@ const Doorbell = () => {
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
 
     React.useEffect(() => {
-        if (state === 'off' && showDoorCams) {
-            // Turn off with delay
-            const timeoutId = window.setTimeout(() => {
-                toggle(false)
-                setCancelId(undefined)
-            }, DELAY_IN_MS)
-            setCancelId(timeoutId)
-            setTransitionDuration(DELAY_IN_MS + 'ms')
-            setProgress(0)
-            return () => {
-                if (timeoutId) window.clearTimeout(timeoutId)
-            }
-        } else if (state === 'on') {
+        // Auto-close disabled for now
+        // if (state === 'off' && showDoorCams) {
+        //     // Turn off with delay
+        //     const timeoutId = window.setTimeout(() => {
+        //         toggle(false)
+        //         setCancelId(undefined)
+        //     }, DELAY_IN_MS)
+        //     setCancelId(timeoutId)
+        //     setTransitionDuration(DELAY_IN_MS + 'ms')
+        //     setProgress(0)
+        //     return () => {
+        //         if (timeoutId) window.clearTimeout(timeoutId)
+        //     }
+        // } else 
+        if (state === 'on') {
             setTransitionDuration(0)
             setProgress(100)
             toggle(true)
@@ -195,13 +222,6 @@ const Doorbell = () => {
                         transitionTimingFunction='linear'
                     />
 
-                    {error !== false && (
-                        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
-                            <h3>Fehler!</h3>
-                            <div>{error instanceof Error ? error.message : String(error)}</div>
-                        </div>
-                    )}
-
                     <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
                         {(() => {
                             // Separate cameras by orientation
@@ -229,9 +249,9 @@ const Doorbell = () => {
                                     )}
                                     <div className='main-section'>
                                         {portraitCameras.length > 0 && (
-                                            <div onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                            <div className="portrait-container" onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '0', height: '100%' }}>
                                                 {portraitCameras.map((camera, index) => (
-                                                    <div key={index} style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'stretch', height: '100%' }}>
+                                                    <div key={index} style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'flex-start', alignItems: 'center', height: '100%' }}>
                                                         <Go2RTCStream
                                                             src={camera.name}
                                                             show={showDoorCams}
@@ -242,7 +262,7 @@ const Doorbell = () => {
                                             </div>
                                         )}
                                         {landscapeCameras.length > 0 && (
-                                            <div onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                            <div className="landscape-container" onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '0' }}>
                                                 {landscapeCameras.map((camera, index) => (
                                                     <div key={index} style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'stretch', height: '100%' }}>
                                                         <Go2RTCStream
