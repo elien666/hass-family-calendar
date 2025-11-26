@@ -1,44 +1,4 @@
-**1.4 - 2025-11-26**
+**1.5 - 2025-11-26**
 
-- chore: add .local.yaml to .gitignore and remove from history
-- Simplify go2rtc authentication: remove Apache proxy, use direct URL with token in path
-- Refactor normalize_json_array function for better shell compatibility
-- fix: update CHANGELOG generation to overwrite instead of prepend
-- Remove unused Telegram configuration and fix JSON array formatting
-- Downgrade version from 1.5 to 1.0
-- Add wide video orientation and optimize CCTV grid layout
-- chore(config): migrate config renovate.json
-- Change base branch for Renovate configuration
-- chore(deps): update dependency node to v24
-- Add baseBranches to renovate configuration
-- Refactor: Replace WebRTC with go2rtc HTML pages via iframe
-- chore(deps): update actions/setup-node action to v6
-- feat: move CCTV cameras from hardcoded to configurable list
-- Refactor laundry integration to use configurable machines array
-- Remove physical buttons feature entirely
-- Update ENABLED flags to use dedicated config flags
-- Fix bundle size by replacing wildcard icon import with selective imports
-- Ignore .env*.local
-- Refactor calendars from hardcoded to config-based
-- Add comprehensive Axios error handling with UI feedback
-- Update configuration and utility files
-- chore(deps): update actions/checkout action to v6
-- chore(deps): update dependency home-assistant-js-websocket to v9.6.0
-- Add renovate.json
-- fix: add git config to release job for tag creation
-- refactor: restructure GitHub workflow for PR-based builds
-- fix: handle undefined window.APP_CONFIG in ingress mode
-- refactor: remove redundant Authorization header deletion check
-- fix: improve Authorization header removal in ingress mode
-- fix: only include commits since previous release in changelog
-- fix: prevent 401 errors in ingress mode by not using build-time HASS_ACCESS_TOKEN
-- Do not build staging release anymore
-- chore: build staging addon next-6 [skip ci]
-- docs: add build status badge to README
-- fix: change workflow trigger from pull_request to push for reliability
-- chore: build staging addon next-5 [skip ci]
-- feat: update workflow to trigger on PR merge with auto versioning
-- chore: build staging addon next-4 [skip ci]
-- fix: remove invalid 'releases' permission from workflow
-- chore: build staging addon next-3 [skip ci]
+- feat: improve CCTV overlay layout and responsive behavior
 
