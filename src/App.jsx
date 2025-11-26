@@ -1,7 +1,9 @@
 import React from 'react'
+import { Routes, Route } from 'react-router-dom'
 import styled, { createGlobalStyle } from 'styled-components'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
+import TilingDemo from './components/tiling-demo'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import './fonts/fonts.css'
@@ -41,24 +43,33 @@ const Div = styled.div`
   }
 `
 
-function App() {
-  
+function MainApp() {
   useReload()
 
   return (
+    <Div>
+      <GlobalStyle/>
+      <div className={'main'}>
+        <ErrorBoundary>
+          <Week />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <Sidebar />
+        </ErrorBoundary>
+      </div>
+      <ToastContainer />
+    </Div>
+  )
+}
+
+function App() {
+  return (
     <ErrorBoundary>
-      <Div>
-        <GlobalStyle/>
-        <div className={'main'}>
-          <ErrorBoundary>
-            <Week />
-          </ErrorBoundary>
-          <ErrorBoundary>
-            <Sidebar />
-          </ErrorBoundary>
-        </div>
-        <ToastContainer />
-      </Div>
+      <Routes>
+        <Route path="/demo" element={<TilingDemo />} />
+        <Route path="/tiling-demo" element={<TilingDemo />} />
+        <Route path="*" element={<MainApp />} />
+      </Routes>
     </ErrorBoundary>
   )
 }
