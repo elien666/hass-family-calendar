@@ -35,8 +35,6 @@ options:
   calendars: []
   hvv:
     enabled: false
-  telegram:
-    enabled: false
 schema:
   weather:
     enabled: bool
@@ -47,10 +45,6 @@ schema:
     enabled: bool
     geofox_user: str?
     geofox_secret: str?
-  telegram:
-    enabled: bool
-    telegram_bot_token: str?
-    telegram_chat_id: str?
   garage:
     enabled: bool
     entity_garage_door: str?
