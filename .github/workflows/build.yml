@@ -191,15 +191,9 @@ jobs:
           # Format commits as a bulleted list
           FORMATTED_COMMITS=$(echo "$FILTERED_COMMITS" | sed 's/^/- /')
           
-          # Prepend new changelog entry to existing content
-          if [ -f "add-on/CHANGELOG.md" ]; then
-            EXISTING_CONTENT=$(cat add-on/CHANGELOG.md)
-            NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS\n\n"
-            echo -e "$NEW_ENTRY$EXISTING_CONTENT" > add-on/CHANGELOG.md
-          else
-            NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS\n"
-            echo -e "$NEW_ENTRY" > add-on/CHANGELOG.md
-          fi
+          # Overwrite CHANGELOG with only the current release entry
+          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS\n"
+          echo -e "$NEW_ENTRY" > add-on/CHANGELOG.md
           
           COMMIT_COUNT=$(echo "$FILTERED_COMMITS" | grep -v '^$' | wc -l | tr -d ' ')
           echo "Updated add-on/CHANGELOG.md with new entry for version $NEW_VERSION"
