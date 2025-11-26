@@ -1,4 +1,4 @@
-**1.2 - 2025-11-26**
+**1.3 - 2025-11-26**
 
-- fix: update CHANGELOG generation to overwrite instead of prepend
+- Refactor normalize_json_array function for better shell compatibility
 
