@@ -2,6 +2,10 @@
 
 - Remove unused Telegram configuration and fix JSON array formatting
 
+**1.1 - 2025-11-26**
+
+- Remove unused Telegram configuration and fix JSON array formatting
+
 **1.0 - 2025-11-26**
 
 - Add wide video orientation and optimize CCTV grid layout
