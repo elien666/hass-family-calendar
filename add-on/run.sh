@@ -197,35 +197,43 @@ normalize_json_array() {
   # If input is empty or invalid, return empty array
   if [ -z "$json_input" ] || [ "$json_input" = "null" ] || [ "$json_input" = "undefined" ]; then
     echo "[]"
-    return
+    return 0
   fi
   
   # Remove all newlines and carriage returns, then collapse multiple spaces to single space
-  local normalized=$(echo "$json_input" | tr -d '\n\r' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//')
+  local normalized=$(printf '%s' "$json_input" | tr -d '\n\r' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//')
   
   # Check if it's already a valid JSON array (starts with [ and ends with ])
-  if echo "$normalized" | grep -qE '^\[.*\]$'; then
-    echo "$normalized"
-    return
-  fi
-  
-  # If not an array, it might be multiple JSON objects concatenated
-  # Pattern: }{ indicates two objects next to each other without comma
-  # Also handle cases with whitespace: } { or }  {
-  if echo "$normalized" | grep -qE '}\s*{'; then
-    # Replace } followed by optional whitespace and { with },{ to add commas between objects
-    normalized=$(echo "$normalized" | sed 's/}\s*{/},{/g')
-    # Wrap in array brackets
-    echo "[$normalized]"
-  else
-    # Single object or already valid - wrap in array brackets if it's a single object
-    if echo "$normalized" | grep -qE '^{.*}$'; then
-      echo "[$normalized]"
-    else
-      # Already an array or something else, return as-is
+  case "$normalized" in
+    \[*\])
       echo "$normalized"
-    fi
-  fi
+      return 0
+      ;;
+  esac
+  
+  # If not an array, check if objects are concatenated without commas/brackets
+  # Pattern: }{ indicates two objects next to each other without comma
+  case "$normalized" in
+    *}{*)
+      # Replace }{ with },{ to add commas between objects (replace all occurrences)
+      normalized=$(printf '%s' "$normalized" | sed 's/}{/},{/g')
+      # Wrap in array brackets
+      echo "[$normalized]"
+      return 0
+      ;;
+  esac
+  
+  # Single object - wrap in array brackets if it's a JSON object
+  case "$normalized" in
+    {*})
+      echo "[$normalized]"
+      return 0
+      ;;
+  esac
+  
+  # Something else, return as-is
+  echo "$normalized"
+  return 0
 }
 
 # Determine if features are enabled based on dedicated enabled flags
