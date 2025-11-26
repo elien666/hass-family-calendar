@@ -190,6 +190,13 @@ read_bool_config() {
   fi
 }
 
+# Helper function to normalize JSON array to single line (removes newlines and extra spaces)
+normalize_json_array() {
+  local json_input="$1"
+  # Remove all newlines and carriage returns, then collapse multiple spaces to single space
+  echo "$json_input" | tr -d '\n\r' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//'
+}
+
 # Determine if features are enabled based on dedicated enabled flags
 # Note: bashio::config uses dot notation for nested config: "section.key"
 # Weather: read enabled flag from config
@@ -209,14 +216,6 @@ if [ "$ENABLE_HVV" = "true" ]; then
 fi
 output_json_value "ENABLE_HVV" "$ENABLE_HVV" "false" "true" >> "$CONFIG_FILE"
 
-# Telegram: read enabled flag from config
-ENABLE_TELEGRAM=$(read_bool_config "telegram.enabled" "false")
-if [ "$ENABLE_TELEGRAM" = "true" ]; then
-  read_and_output_config "telegram.telegram_bot_token" "TELEGRAM_BOT_TOKEN" "false"
-  read_and_output_config "telegram.telegram_chat_id" "TELEGRAM_CHAT_ID" "false"
-fi
-output_json_value "ENABLE_TELEGRAM" "$ENABLE_TELEGRAM" "false" "true" >> "$CONFIG_FILE"
-
 # Garage: read enabled flag from config
 ENABLE_GARAGE=$(read_bool_config "garage.enabled" "false")
 if [ "$ENABLE_GARAGE" = "true" ]; then
@@ -234,6 +233,8 @@ if [ "$ENABLE_LAUNDRY" = "true" ]; then
     if [ -z "$LAUNDRY_MACHINES_JSON" ] || [ "$LAUNDRY_MACHINES_JSON" = "null" ] || [ "$LAUNDRY_MACHINES_JSON" = "undefined" ]; then
       LAUNDRY_MACHINES_JSON="[]"
     fi
+    # Normalize JSON to single line to prevent newline issues
+    LAUNDRY_MACHINES_JSON=$(normalize_json_array "$LAUNDRY_MACHINES_JSON")
     # Output as JSON array (no quotes needed, it's already JSON)
     echo "  LAUNDRY_MACHINES: $LAUNDRY_MACHINES_JSON," >> "$CONFIG_FILE"
   else
@@ -255,6 +256,8 @@ if [ "$ENABLE_DOORBELL" = "true" ]; then
     if [ -z "$DOORBELL_CAMERAS_JSON" ] || [ "$DOORBELL_CAMERAS_JSON" = "null" ] || [ "$DOORBELL_CAMERAS_JSON" = "undefined" ]; then
       DOORBELL_CAMERAS_JSON="[]"
     fi
+    # Normalize JSON to single line to prevent newline issues
+    DOORBELL_CAMERAS_JSON=$(normalize_json_array "$DOORBELL_CAMERAS_JSON")
     # Output as JSON array (no quotes needed, it's already JSON)
     echo "  DOORBELL_CAMERAS: $DOORBELL_CAMERAS_JSON," >> "$CONFIG_FILE"
   else
@@ -282,6 +285,8 @@ if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
   if [ -z "$CALENDARS_JSON" ] || [ "$CALENDARS_JSON" = "null" ] || [ "$CALENDARS_JSON" = "undefined" ]; then
     CALENDARS_JSON="[]"
   fi
+  # Normalize JSON to single line to prevent newline issues
+  CALENDARS_JSON=$(normalize_json_array "$CALENDARS_JSON")
   # Output as JSON array (no quotes needed, it's already JSON)
   echo "  CALENDARS: $CALENDARS_JSON," >> "$CONFIG_FILE"
 else

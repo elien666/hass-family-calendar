@@ -104,10 +104,6 @@ export const WEATHER_LONGITUDE = getConfig('WEATHER_LONGITUDE')
 export const GEOFOX_SECRET = getConfig('GEOFOX_SECRET')
 export const GEOFOX_USER = getConfig('GEOFOX_USER')
 
-// Telegram configuration (optional - feature disabled if not set)
-export const TELEGRAM_BOT_TOKEN = getConfig('TELEGRAM_BOT_TOKEN')
-export const TELEGRAM_CHAT_ID = getConfig('TELEGRAM_CHAT_ID')
-
 // Entity IDs (optional - feature disabled if not set)
 export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
@@ -208,8 +204,6 @@ export const ENABLE_WEATHER = getFeatureFlag('ENABLE_WEATHER',
   isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE)))
 export const ENABLE_HVV = getFeatureFlag('ENABLE_HVV', 
   isTruthy(GEOFOX_USER) && isTruthy(GEOFOX_SECRET))
-export const ENABLE_TELEGRAM = getFeatureFlag('ENABLE_TELEGRAM', 
-  isTruthy(TELEGRAM_BOT_TOKEN) && isTruthy(TELEGRAM_CHAT_ID))
 export const ENABLE_GARAGE = getFeatureFlag('ENABLE_GARAGE', 
   isTruthy(ENTITY_GARAGE_DOOR))
 export const ENABLE_LAUNDRY = getFeatureFlag('ENABLE_LAUNDRY', 

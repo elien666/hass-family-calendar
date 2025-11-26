@@ -99,12 +99,6 @@ Each feature can be individually enabled or disabled using toggle switches in th
   - `geofox_secret` - Geofox API secret key for HVV departures
 - **Note**: Both Geofox options must be set for the feature to work.
 
-**Telegram Notifications** (`enable_telegram`)
-- Enable Telegram bot notifications
-- When enabled, configure:
-  - `telegram_bot_token` - Telegram bot token for sending notifications
-  - `telegram_chat_id` - Telegram chat ID for receiving notifications
-
 #### Home Assistant Entity Integrations
 
 **Garage Door** (`enable_garage`)
