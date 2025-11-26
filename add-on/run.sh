@@ -444,7 +444,8 @@ else
   echo "=== END DEBUG ==="
 fi
 
-# Start Apache (try common paths)
+# Generate Apache proxy configuration for go2rtc
+# Test Apache configuration before starting
 HTTPD_BIN=""
 if [ -x "/usr/sbin/httpd" ]; then
   HTTPD_BIN="/usr/sbin/httpd"
@@ -454,6 +455,12 @@ elif command -v httpd > /dev/null 2>&1; then
   HTTPD_BIN="httpd"
 else
   echo "Error: Apache httpd not found" >&2
+  exit 1
+fi
+
+# Test configuration syntax
+if ! "$HTTPD_BIN" -f /usr/local/apache2/conf/httpd.conf -t 2>&1; then
+  echo "ERROR: Apache configuration test failed!" >&2
   exit 1
 fi
 
