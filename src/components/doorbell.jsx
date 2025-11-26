@@ -12,6 +12,10 @@ const DELAY_IN_MS = 45000
 const Container = styled.div`
 
     position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 
     h3 {
         margin-top: 6px;
@@ -19,30 +23,89 @@ const Container = styled.div`
 
     .grid {
         display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+
+        .wide-section {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        .main-section {
+            display: grid;
+            grid-template-columns: auto auto;
+            flex: 1;
+            min-height: 0;
+            gap: 12px;
+            justify-content: center;
+            align-content: stretch;
+        }
 
         iframe {
-
             border: none;
+            flex-shrink: 0;
+            display: block;
 
             &.portrait {
-                
+                height: 100%;
+                width: auto;
+                max-width: 100%;
+                max-height: 100%;
+                aspect-ratio: 360 / 480;
             }
 
             &.landscape {
-                width: 420px;
-                height: 240px;
+                height: 100%;
+                width: auto;
+                max-width: 100%;
+                max-height: 100%;
+                aspect-ratio: 420 / 240;
+            }
+
+            &.wide {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                max-height: 100%;
+                aspect-ratio: 770 / 216;
             }
         }
 
-        > div {
+        .main-section > div {
             display: flex;
-            flex-grow: 1;
             justify-content: center;
+            align-items: stretch;
+            min-width: 0;
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
         }
 
-        > div:last-child {
+        .main-section > div:last-child {
             flex-direction: column;
+        }
+
+        .main-section > div:only-child {
+            grid-column: 1 / -1;
+        }
+
+        .wide-section > * {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            justify-content: center;
             align-items: center;
+            overflow: hidden;
         }
     }
 
@@ -143,38 +206,55 @@ const Doorbell = () => {
                         {(() => {
                             // Separate cameras by orientation
                             const portraitCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait')
-                            const landscapeCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'landscape')
+                            const landscapeCameras = DOORBELL_CAMERAS.filter(cam => {
+                                const orientation = cam.orientation || 'landscape'
+                                return orientation === 'landscape'
+                            })
+                            const wideCameras = DOORBELL_CAMERAS.filter(cam => cam.orientation === 'wide')
                             
                             return (
                                 <>
-                                    {portraitCameras.length > 0 && (
-                                        <div onClick={() => openDoor()} style={{ flexDirection: 'column' }}>
-                                            {portraitCameras.map((camera, index) => (
-                                                <Go2RTCStream
-                                                    key={index}
-                                                    src={camera.name}
-                                                    show={showDoorCams}
-                                                    orientation="portrait"
-                                                    width='360'
-                                                    height='480'
-                                                />
+                                    {wideCameras.length > 0 && (
+                                        <div className='wide-section' onClick={() => openDoor()}>
+                                            {wideCameras.map((camera, index) => (
+                                                <div key={index} style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Go2RTCStream
+                                                        src={camera.name}
+                                                        show={showDoorCams}
+                                                        orientation="wide"
+                                                    />
+                                                </div>
                                             ))}
                                         </div>
                                     )}
-                                    {landscapeCameras.length > 0 && (
-                                        <div onClick={() => openDoor()}>
-                                            {landscapeCameras.map((camera, index) => (
-                                                <Go2RTCStream
-                                                    key={index}
-                                                    src={camera.name}
-                                                    show={showDoorCams}
-                                                    orientation="landscape"
-                                                    width='100%'
-                                                    height={index === landscapeCameras.length - 1 ? '240px' : undefined}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
+                                    <div className='main-section'>
+                                        {portraitCameras.length > 0 && (
+                                            <div onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                                {portraitCameras.map((camera, index) => (
+                                                    <div key={index} style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'stretch', height: '100%' }}>
+                                                        <Go2RTCStream
+                                                            src={camera.name}
+                                                            show={showDoorCams}
+                                                            orientation="portrait"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {landscapeCameras.length > 0 && (
+                                            <div onClick={() => openDoor()} style={{ flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                                {landscapeCameras.map((camera, index) => (
+                                                    <div key={index} style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'stretch', height: '100%' }}>
+                                                        <Go2RTCStream
+                                                            src={camera.name}
+                                                            show={showDoorCams}
+                                                            orientation="landscape"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             )
                         })()}
