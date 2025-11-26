@@ -67,4 +67,4 @@ configuration:
     description: List of calendar entities to display.
   go2rtc_base_url:
     name: Go2RTC Base URL
-    description: Configure the Go2RTC base URL used for the camera streams.
+    description: Configure the Go2RTC base URL used for the camera streams. If authentication is required, embed the token in the URL path (e.g., https://domain.com/streams/token).
