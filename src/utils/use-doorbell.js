@@ -4,37 +4,31 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENTITY_DOORBELL_PERSON_OCCUPANCY, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
-const doorbellUrl = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
-const personOccupancyUrl = ENTITY_DOORBELL_PERSON_OCCUPANCY ? buildHaUrl(`/api/states/${ENTITY_DOORBELL_PERSON_OCCUPANCY}`) : null
+const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
 
 const useDoorbell = () => {
 
-  const [ doorbellState, setDoorbellState ] = React.useState('off')
-  const [ personOccupancyState, setPersonOccupancyState ] = React.useState('off')
+  const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
-  // Check if doorbell is configured (either entity is enough)
-  const isConfigured = ENABLE_DOORBELL && (ENTITY_DOORBELL || ENTITY_DOORBELL_PERSON_OCCUPANCY)
+  // Check if doorbell is configured
+  const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
 
-  // Combined state: 'on' if either entity is 'on'
-  const state = doorbellState === 'on' || personOccupancyState === 'on' ? 'on' : 'off'
-
-  // Fetch initial state for doorbell entity
   React.useEffect(() => {
-    // Skip if not configured or no entity
-    if (!isConfigured || !doorbellUrl) {
+    // Skip if not configured
+    if (!isConfigured || !url) {
       return
     }
 
-    axios(doorbellUrl)
+    axios(url)
       .then((response) => {
-        setDoorbellState(response.data.state)
+        setState(response.data.state)
         setError(false)
       })
       .catch((err) => {
@@ -42,56 +36,54 @@ const useDoorbell = () => {
         setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, doorbellUrl])
-
-  // Fetch initial state for person occupancy entity
-  React.useEffect(() => {
-    // Skip if not configured or no entity
-    if (!isConfigured || !personOccupancyUrl) {
-      return
-    }
-
-    axios(personOccupancyUrl)
-      .then((response) => {
-        setPersonOccupancyState(response.data.state)
-        setError(false)
-      })
-      .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, personOccupancyUrl])
+  }, [isConfigured, url])
 
   React.useEffect(() => {
     let connection = null
     let isMounted = true
 
     async function connect() {
-      // Skip if not configured or no entities to monitor
-      if (!isConfigured || (!ENTITY_DOORBELL && !ENTITY_DOORBELL_PERSON_OCCUPANCY)) {
+      // Skip if not configured
+      if (!isConfigured || !ENTITY_DOORBELL) {
         return
       }
 
+      // In production mode (add-on/ingress), construct host URL including ingress path
+      // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
+      // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
+      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+      let host
+      if (isDevelopment && HASS_HOST) {
+        host = HASS_HOST
+      } else if (typeof window !== 'undefined' && window.location) {
+        // Include the ingress path in the host URL so the library constructs the correct WebSocket URL
+        // This matches how buildHaUrl constructs URLs for REST API calls
+        const basePath = window.location.pathname.replace(/\/$/, '')
+        host = `${window.location.origin}${basePath}`
+      } else {
+        host = ''
+      }
+      
+      // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
+      // In development, use HASS_ACCESS_TOKEN
+      const token = isDevelopment 
+        ? (HASS_ACCESS_TOKEN || '')
+        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
+
+      // Skip WebSocket connection if no token
+      if (!token) {
+        logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
+        logger.debug(`isDevelopment: ${isDevelopment}, SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN ? 'present' : 'missing'}, HASS_ACCESS_TOKEN: ${HASS_ACCESS_TOKEN ? 'present' : 'missing'}`)
+        return
+      }
+
+      logger.debug(`Connecting WebSocket - host: ${host}, token: ${token ? 'present' : 'missing'}, mode: ${isDevelopment ? 'development' : 'production'}`)
+
       let auth
       try {
-        // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
-        // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
-        if (!isDevelopment) {
-          logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
-          return
-        }
-
-        const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
-        const token = HASS_ACCESS_TOKEN || ''
-
-        // Skip WebSocket connection if no token
-        if (!token) {
-          logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
-          return
-        }
-
+        logger.debug(`Creating auth with host: ${host}, token length: ${token ? token.length : 0}`)
         auth = createLongLivedTokenAuth(host, token)
+        logger.debug(`Auth created - wsUrl: ${auth?.wsUrl}, accessToken present: ${!!auth?.accessToken}`)
         if (isMounted) setError(false)
       } catch (err) {
         if (isMounted) {
@@ -102,46 +94,45 @@ const useDoorbell = () => {
       }
 
       try {
+        logger.debug(`Creating WebSocket connection with auth - wsUrl: ${auth.wsUrl}`)
+        logger.debug('About to call createConnection - this should trigger WebSocket upgrade request')
+        // The library will attempt to connect to the WebSocket URL
+        // If no request appears in the access log, the connection is failing before reaching the server
         connection = await createConnection({ auth })
+        logger.debug('WebSocket connection established successfully')
 
-        // Subscribe to doorbell entity if configured
-        if (ENTITY_DOORBELL) {
-          const doorbellTrigger = (result) => {
-            if (isMounted) {
-              setDoorbellState(result.variables.trigger.to_state.state)
-            }
+        const trigger = (result) => {
+          if (isMounted) {
+            const newState = result.variables.trigger.to_state.state
+            logger.debug(`Doorbell state update via WebSocket: ${newState}`)
+            setState(newState)
           }
-
-          await connection.subscribeMessage(doorbellTrigger, {
-            "type": "subscribe_trigger",
-            "trigger":
-              {
-                "platform": "state",
-                "entity_id": ENTITY_DOORBELL,
-              }
-          })
         }
 
-        // Subscribe to person occupancy entity if configured
-        if (ENTITY_DOORBELL_PERSON_OCCUPANCY) {
-          const personOccupancyTrigger = (result) => {
-            if (isMounted) {
-              setPersonOccupancyState(result.variables.trigger.to_state.state)
+        await connection.subscribeMessage(trigger, {
+          "type": "subscribe_trigger",
+          "trigger":
+            {
+              "platform": "state",
+              "entity_id": ENTITY_DOORBELL,
             }
-          }
-
-          await connection.subscribeMessage(personOccupancyTrigger, {
-            "type": "subscribe_trigger",
-            "trigger":
-              {
-                "platform": "state",
-                "entity_id": ENTITY_DOORBELL_PERSON_OCCUPANCY,
-              }
-          })
-        }
+        })
+        logger.debug(`Subscribed to doorbell entity: ${ENTITY_DOORBELL}`)
       } catch (err) {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)
+          logger.error('WebSocket error details:', {
+            message: err instanceof Error ? err.message : String(err),
+            code: err.code,
+            name: err.name,
+            wsUrl: auth?.wsUrl,
+            host: host,
+            tokenLength: token ? token.length : 0
+          })
+          // Error code 2 = ERR_INVALID_AUTH - authentication failed
+          if (err.code === 2) {
+            logger.error('Authentication failed - check if SUPERVISOR_TOKEN is valid and correctly formatted')
+          }
           setError(err instanceof Error ? err.message : String(err))
         }
       }

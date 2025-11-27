@@ -126,6 +126,12 @@ if [ -n "$HASS_ACCESS_TOKEN" ]; then
   output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "false" >> "$CONFIG_FILE"
 fi
 
+# Output SUPERVISOR_TOKEN for WebSocket authentication in HA mode
+# This allows the frontend to use WebSocket connections with supervisor authentication
+if [ "$IN_HA" = true ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+  output_json_value "SUPERVISOR_TOKEN" "$SUPERVISOR_TOKEN" "false" "false" >> "$CONFIG_FILE"
+fi
+
 # Helper function to check if a config value exists and is not empty
 has_config_value() {
   local config_key=$1
@@ -288,7 +294,6 @@ ENABLE_DOORBELL=$(read_bool_config "doorbell.enabled" "false")
 if [ "$ENABLE_DOORBELL" = "true" ]; then
   read_and_output_config "doorbell.entity_doorbell" "ENTITY_DOORBELL" "false"
   read_and_output_config "doorbell.entity_doorbell_button" "ENTITY_DOORBELL_BUTTON" "false"
-  read_and_output_config "doorbell.entity_doorbell_person_occupancy" "ENTITY_DOORBELL_PERSON_OCCUPANCY" "false"
   # Read cameras array from config
   if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
     DOORBELL_CAMERAS_JSON=$(bashio::config "doorbell.cameras" 2>/dev/null || echo "[]")
@@ -407,6 +412,19 @@ if [ "$IN_HA" = true ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
     # Add SUPERVISOR_TOKEN as Bearer token for authentication
     RequestHeader set Authorization "Bearer ${SUPERVISOR_TOKEN_ESCAPED}"
 
+    # Preserve original request headers
+    ProxyPreserveHost On
+</Location>
+
+# Proxy Home Assistant WebSocket API to ws://supervisor/core/websocket
+# This allows the frontend to use WebSocket connections to supervisor
+# The supervisor WebSocket API uses standard WebSocket auth flow (auth_required -> auth message -> auth_ok)
+# Authentication is handled by the frontend using SUPERVISOR_TOKEN from config.js in the auth message
+# Note: mod_proxy_wstunnel handles WebSocket upgrades automatically
+<Location /api/websocket>
+    ProxyPass ws://supervisor/core/websocket
+    ProxyPassReverse ws://supervisor/core/websocket
+    
     # Preserve original request headers
     ProxyPreserveHost On
 </Location>

@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, LAUNDRY_MACHINES, ENABLE_LAUNDRY, buildHaUrl, isDevelopment } from "./config";
+import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, LAUNDRY_MACHINES, ENABLE_LAUNDRY, buildHaUrl, isDevelopment } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
@@ -145,15 +145,26 @@ const useSubscription = ( entity ) => {
         return
       }
 
-      // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
+      // In production mode (add-on/ingress), construct host URL including ingress path
+      // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
+      // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
       // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
-      if (!isDevelopment) {
-        logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
-        return
+      let host
+      if (isDevelopment && HASS_HOST) {
+        host = HASS_HOST
+      } else if (typeof window !== 'undefined' && window.location) {
+        // Include the ingress path in the host URL so the library constructs the correct WebSocket URL
+        const basePath = window.location.pathname.replace(/\/$/, '')
+        host = `${window.location.origin}${basePath}`
+      } else {
+        host = ''
       }
-
-      const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
-      const token = HASS_ACCESS_TOKEN || ''
+      
+      // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
+      // In development, use HASS_ACCESS_TOKEN
+      const token = isDevelopment 
+        ? (HASS_ACCESS_TOKEN || '')
+        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
 
       // Skip WebSocket connection if no token
       if (!token) {
@@ -163,7 +174,6 @@ const useSubscription = ( entity ) => {
 
       try {
         const auth = createLongLivedTokenAuth(host, token)
-
         connection = await createConnection({ auth });
 
         const trigger = (result) => {
