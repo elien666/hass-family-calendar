@@ -1,7 +1,4 @@
-**1.6 - 2025-11-26**
+**1.7 - 2025-11-27**
 
-- Update build artifacts and dependencies
-- Apply video tiling algorithm to doorbell overlay
-- Add video tiling algorithm with LPW layout support
-- feat: re-enable auto-close functionality in CCTV modal
+- Fix doorbell CCTV modal: add person occupancy sensor and make modal clickable
 
