@@ -108,8 +108,10 @@ export const GEOFOX_USER = getConfig('GEOFOX_USER')
 export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
-export const ENTITY_DOORBELL_PERSON_OCCUPANCY = getConfig('ENTITY_DOORBELL_PERSON_OCCUPANCY')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
+
+// Supervisor token for WebSocket authentication in production mode (HA add-on)
+export const SUPERVISOR_TOKEN = getConfig('SUPERVISOR_TOKEN')
 
 // Calendars configuration (array of calendar objects with name and optional icon)
 export const CALENDARS = (() => {
