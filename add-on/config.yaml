@@ -57,6 +57,7 @@ schema:
     enabled: bool
     entity_doorbell: str?
     entity_doorbell_button: str?
+    entity_doorbell_person_occupancy: str?
     cameras:
       - name: str
         orientation: str?

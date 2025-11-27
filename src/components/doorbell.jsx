@@ -45,6 +45,7 @@ const Container = styled.div`
             height: 100%;
             max-width: 100%;
             max-height: 100%;
+            pointer-events: none;
 
             &.portrait {
                 aspect-ratio: 360 / 480;
@@ -57,6 +58,16 @@ const Container = styled.div`
             &.wide {
                 aspect-ratio: 770 / 216;
             }
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: pointer;
         }
     }
 
@@ -133,8 +144,8 @@ const Doorbell = () => {
     return (
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
-                <Container>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => toggle(false)} fullsize={true}>
+                <Container onClick={openDoor}>
                 
                     <ProgressBar
                         completed={progress}
@@ -194,7 +205,6 @@ const Doorbell = () => {
                                     <div
                                         key={`${orientation}-${cameraIndex}-${index}`}
                                         className="video-container"
-                                        onClick={() => openDoor()}
                                         style={{
                                             left: `${videoLayout.x}px`,
                                             top: `${videoLayout.y}px`,
@@ -206,6 +216,10 @@ const Doorbell = () => {
                                             src={camera.name}
                                             show={showDoorCams}
                                             orientation={orientation}
+                                        />
+                                        <div 
+                                            className="video-overlay"
+                                            onClick={() => openDoor()}
                                         />
                                     </div>
                                 )
