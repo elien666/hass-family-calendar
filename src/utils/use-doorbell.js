@@ -4,31 +4,37 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENTITY_DOORBELL_PERSON_OCCUPANCY, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
-const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
+const doorbellUrl = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
+const personOccupancyUrl = ENTITY_DOORBELL_PERSON_OCCUPANCY ? buildHaUrl(`/api/states/${ENTITY_DOORBELL_PERSON_OCCUPANCY}`) : null
 
 const useDoorbell = () => {
 
-  const [ state, setState ] = React.useState('off')
+  const [ doorbellState, setDoorbellState ] = React.useState('off')
+  const [ personOccupancyState, setPersonOccupancyState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
-  // Check if doorbell is configured
-  const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
+  // Check if doorbell is configured (either entity is enough)
+  const isConfigured = ENABLE_DOORBELL && (ENTITY_DOORBELL || ENTITY_DOORBELL_PERSON_OCCUPANCY)
 
+  // Combined state: 'on' if either entity is 'on'
+  const state = doorbellState === 'on' || personOccupancyState === 'on' ? 'on' : 'off'
+
+  // Fetch initial state for doorbell entity
   React.useEffect(() => {
-    // Skip if not configured
-    if (!isConfigured || !url) {
+    // Skip if not configured or no entity
+    if (!isConfigured || !doorbellUrl) {
       return
     }
 
-    axios(url)
+    axios(doorbellUrl)
       .then((response) => {
-        setState(response.data.state)
+        setDoorbellState(response.data.state)
         setError(false)
       })
       .catch((err) => {
@@ -36,15 +42,34 @@ const useDoorbell = () => {
         setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+  }, [isConfigured, doorbellUrl])
+
+  // Fetch initial state for person occupancy entity
+  React.useEffect(() => {
+    // Skip if not configured or no entity
+    if (!isConfigured || !personOccupancyUrl) {
+      return
+    }
+
+    axios(personOccupancyUrl)
+      .then((response) => {
+        setPersonOccupancyState(response.data.state)
+        setError(false)
+      })
+      .catch((err) => {
+        // Error is already logged by interceptor, format for UI
+        setError(formatErrorForUI(err))
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConfigured, personOccupancyUrl])
 
   React.useEffect(() => {
     let connection = null
     let isMounted = true
 
     async function connect() {
-      // Skip if not configured
-      if (!isConfigured || !ENTITY_DOORBELL) {
+      // Skip if not configured or no entities to monitor
+      if (!isConfigured || (!ENTITY_DOORBELL && !ENTITY_DOORBELL_PERSON_OCCUPANCY)) {
         return
       }
 
@@ -79,20 +104,41 @@ const useDoorbell = () => {
       try {
         connection = await createConnection({ auth })
 
-        const trigger = (result) => {
-          if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
+        // Subscribe to doorbell entity if configured
+        if (ENTITY_DOORBELL) {
+          const doorbellTrigger = (result) => {
+            if (isMounted) {
+              setDoorbellState(result.variables.trigger.to_state.state)
+            }
           }
+
+          await connection.subscribeMessage(doorbellTrigger, {
+            "type": "subscribe_trigger",
+            "trigger":
+              {
+                "platform": "state",
+                "entity_id": ENTITY_DOORBELL,
+              }
+          })
         }
 
-        await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
-              "platform": "state",
-              "entity_id": ENTITY_DOORBELL,
+        // Subscribe to person occupancy entity if configured
+        if (ENTITY_DOORBELL_PERSON_OCCUPANCY) {
+          const personOccupancyTrigger = (result) => {
+            if (isMounted) {
+              setPersonOccupancyState(result.variables.trigger.to_state.state)
             }
-        })
+          }
+
+          await connection.subscribeMessage(personOccupancyTrigger, {
+            "type": "subscribe_trigger",
+            "trigger":
+              {
+                "platform": "state",
+                "entity_id": ENTITY_DOORBELL_PERSON_OCCUPANCY,
+              }
+          })
+        }
       } catch (err) {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)

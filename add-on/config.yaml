@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.6"
+version: "1.7"
 slug: "family-calendar"
 init: false
 arch:
@@ -57,6 +57,7 @@ schema:
     enabled: bool
     entity_doorbell: str?
     entity_doorbell_button: str?
+    entity_doorbell_person_occupancy: str?
     cameras:
       - name: str
         orientation: str?
