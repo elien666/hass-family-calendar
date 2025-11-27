@@ -56,7 +56,7 @@ const Div = styled.div`
     display: grid;
     justify-content: center;
     align-items: center;
-    z-index: 100;
+    z-index: 1;
     background-color: rgba(0,0,0,.6);
     
     svg {
@@ -65,21 +65,11 @@ const Div = styled.div`
   }
 `
 
-const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
-  // Use onClose if provided, otherwise fall back to onClick
-  const handleClose = onClose || onClick
-
-  const handleCloseClick = (e) => {
-    e.stopPropagation()
-    e.preventDefault()
-    handleClose()
-  }
+const Overlay = ({ visible, children, onClick, fullsize = false }) => {
 
  return (
    <Div className={clsx({ visible })} onClick={onClick}>
-    <div className='close' onClick={handleCloseClick}>
-      <Icon path={mdiClose} size={2} />
-    </div>
+    <div className='close'><Icon path={mdiClose} size={2} onClick={onClick}/></div>
     <div className={clsx('content', { fullsize })} onClick={(event) => event.stopPropagation()}>  
       {children}
     </div>

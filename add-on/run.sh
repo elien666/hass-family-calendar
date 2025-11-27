@@ -288,7 +288,6 @@ ENABLE_DOORBELL=$(read_bool_config "doorbell.enabled" "false")
 if [ "$ENABLE_DOORBELL" = "true" ]; then
   read_and_output_config "doorbell.entity_doorbell" "ENTITY_DOORBELL" "false"
   read_and_output_config "doorbell.entity_doorbell_button" "ENTITY_DOORBELL_BUTTON" "false"
-  read_and_output_config "doorbell.entity_doorbell_person_occupancy" "ENTITY_DOORBELL_PERSON_OCCUPANCY" "false"
   # Read cameras array from config
   if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
     DOORBELL_CAMERAS_JSON=$(bashio::config "doorbell.cameras" 2>/dev/null || echo "[]")
