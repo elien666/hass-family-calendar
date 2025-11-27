@@ -51,6 +51,9 @@ configuration:
         name: Doorbell Entity
       entity_doorbell_button:
         name: Doorbell Button Entity
+      entity_doorbell_person_occupancy:
+        name: Doorbell Person Occupancy Entity
+        description: The entity that tracks the presence of a person at the door and open the CCTV overlay when a person is detected.
       cameras:
         name: Cameras
         description: List of camera URLs to display
