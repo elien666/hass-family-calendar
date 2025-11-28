@@ -14,12 +14,7 @@ const Div = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  visibility: hidden;
   z-index: 10;
-  
-  &.visible {
-    visibility: visible;
-  }
   
   .content {
     background-color: #1c1c1c;
@@ -75,8 +70,12 @@ const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
     handleClose()
   }
 
+ if (!visible) {
+   return null
+ }
+
  return (
-   <Div className={clsx({ visible })} onClick={onClick}>
+   <Div onClick={onClick}>
     <div className='close' onClick={handleCloseClick}>
       <Icon path={mdiClose} size={2} />
     </div>

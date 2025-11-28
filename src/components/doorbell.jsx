@@ -3,12 +3,38 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import Go2RTCStream from './go2rtc-stream'
-import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
+import { ENABLE_DOORBELL, DOORBELL_CAMERAS, GO2RTC_BASE_URL } from '../utils/config'
 import { calculateOptimalTiling } from '../utils/video-tiling'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
+
+/**
+ * Extract stream name from a URL or return as-is if it's already a stream name
+ * Examples:
+ * - "http://192.168.188.10:8555/eingang/whep" -> "eingang"
+ * - "garage" -> "garage"
+ * - "/eingang/whep" -> "eingang"
+ */
+const extractStreamName = (urlOrName) => {
+  if (!urlOrName) return ''
+  
+  // If it's already just a stream name (no slashes, no protocol), use as-is
+  if (!urlOrName.includes('/') && !urlOrName.includes(':')) {
+    return urlOrName
+  }
+  
+  // Try to extract stream name from URL path
+  // Match patterns like: /stream-name/whep, /stream-name, stream-name/whep
+  const match = urlOrName.match(/\/([^\/]+?)(?:\/whep)?(?:\?|$)/)
+  if (match) {
+    return match[1]
+  }
+  
+  // Fallback: try to get last segment before query params
+  const pathPart = urlOrName.split('?')[0].split('/').filter(Boolean).pop()
+  return pathPart || urlOrName
+}
 
 const Container = styled.div`
 
@@ -201,6 +227,9 @@ const Doorbell = () => {
 
                                 usedIndices[orientation]++
 
+                                const streamName = extractStreamName(camera.name)
+                                const streamUrl = `${GO2RTC_BASE_URL}/stream.html?src=${streamName}`
+
                                 return (
                                     <div
                                         key={`${orientation}-${cameraIndex}-${index}`}
@@ -212,11 +241,13 @@ const Doorbell = () => {
                                             height: `${videoLayout.height}px`
                                         }}
                                     >
-                                        <Go2RTCStream
-                                            src={camera.name}
-                                            show={showDoorCams}
-                                            orientation={orientation}
-                                        />
+                                        {showDoorCams && (
+                                            <iframe
+                                                src={streamUrl}
+                                                className={orientation}
+                                                allow="autoplay; fullscreen"
+                                            />
+                                        )}
                                         <div 
                                             className="video-overlay"
                                             onClick={() => openDoor()}
