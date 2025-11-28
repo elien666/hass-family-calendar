@@ -1,7 +1,4 @@
-**1.8 - 2025-11-27**
+**1.9 - 2025-11-28**
 
-- Fix doorbell CCTV modal occupancy sensor changes
-- Fix WebSocket connection in production mode with ingress
-- Reapply "Fix doorbell CCTV modal: add person occupancy sensor and make modal clickable"
-- Revert "Fix doorbell CCTV modal: add person occupancy sensor and make modal clickable"
+- Inline iframe and fix modal unmounting
 
