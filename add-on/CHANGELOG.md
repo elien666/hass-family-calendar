@@ -1,4 +1,4 @@
-**1.11 - 2025-11-29**
+**1.12 - 2025-11-29**
 
-- Revert index.html to simple config.js loading
+- Make camera streams bypass ingress proxy and use direct HA host
 

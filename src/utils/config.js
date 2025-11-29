@@ -248,7 +248,9 @@ export const buildHaUrl = (path) => {
 
 // Helper function to build HA camera stream URL
 // Uses the HA camera proxy stream API endpoint with access_token as query parameter
-// Format: /api/camera_proxy_stream/<camera entity_id>?token=<access_token>
+// Format: <protocol>//<host>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
+// Camera streams must go directly to HA host (bypassing ingress proxy) for better performance
+// Uses the current window location's protocol, hostname, and port
 // Based on advanced-camera-card implementation pattern
 // entityId should be the full entity ID (e.g., "camera.front_door")
 // accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
@@ -257,17 +259,22 @@ export const buildCameraStreamUrl = (entityId, accessToken = null) => {
   if (!entityId) {
     return null
   }
-  // Use camera_proxy_stream endpoint (supports video streaming)
-  // camera_proxy only returns static images
-  let path = `/api/camera_proxy_stream/${entityId}`
   
-  // Add access_token as query parameter if provided (from camera entity attributes)
+  // Build path with access_token if provided
+  let path = `/api/camera_proxy_stream/${entityId}`
   if (accessToken) {
     path = `${path}?token=${encodeURIComponent(accessToken)}`
   }
   
-  // Use the same pattern as buildHaUrl for consistency with other API calls
-  // In dev: returns full URL to HASS_HOST
-  // In prod: returns relative path through ingress/Apache proxy
+  // Camera streams go directly to HA host (bypass ingress proxy)
+  // Use current window location's host and port to construct direct HA URL
+  if (typeof window !== 'undefined' && window.location) {
+    // Use same protocol, hostname, and port from current URL
+    const protocol = window.location.protocol
+    const host = window.location.host // includes hostname:port
+    return `${protocol}//${host}${path}`
+  }
+  
+  // Fallback: use buildHaUrl if window is not available (SSR or test)
   return buildHaUrl(path)
 }
