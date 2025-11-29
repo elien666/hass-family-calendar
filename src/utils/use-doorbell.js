@@ -72,18 +72,12 @@ const useDoorbell = () => {
 
       // Skip WebSocket connection if no token
       if (!token) {
-        logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
-        logger.debug(`isDevelopment: ${isDevelopment}, SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN ? 'present' : 'missing'}, HASS_ACCESS_TOKEN: ${HASS_ACCESS_TOKEN ? 'present' : 'missing'}`)
         return
       }
 
-      logger.debug(`Connecting WebSocket - host: ${host}, token: ${token ? 'present' : 'missing'}, mode: ${isDevelopment ? 'development' : 'production'}`)
-
       let auth
       try {
-        logger.debug(`Creating auth with host: ${host}, token length: ${token ? token.length : 0}`)
         auth = createLongLivedTokenAuth(host, token)
-        logger.debug(`Auth created - wsUrl: ${auth?.wsUrl}, accessToken present: ${!!auth?.accessToken}`)
         if (isMounted) setError(false)
       } catch (err) {
         if (isMounted) {
@@ -94,17 +88,11 @@ const useDoorbell = () => {
       }
 
       try {
-        logger.debug(`Creating WebSocket connection with auth - wsUrl: ${auth.wsUrl}`)
-        logger.debug('About to call createConnection - this should trigger WebSocket upgrade request')
-        // The library will attempt to connect to the WebSocket URL
-        // If no request appears in the access log, the connection is failing before reaching the server
         connection = await createConnection({ auth })
-        logger.debug('WebSocket connection established successfully')
 
         const trigger = (result) => {
           if (isMounted) {
             const newState = result.variables.trigger.to_state.state
-            logger.debug(`Doorbell state update via WebSocket: ${newState}`)
             setState(newState)
           }
         }
@@ -117,7 +105,6 @@ const useDoorbell = () => {
               "entity_id": ENTITY_DOORBELL,
             }
         })
-        logger.debug(`Subscribed to doorbell entity: ${ENTITY_DOORBELL}`)
       } catch (err) {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)

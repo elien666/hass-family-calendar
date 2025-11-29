@@ -151,10 +151,7 @@ export const LAUNDRY_MACHINES = (() => {
   return []
 })()
 
-// go2rtc base URL for stream HTML pages
-export const GO2RTC_BASE_URL = getConfig('GO2RTC_BASE_URL', 'http://192.168.188.10:1984')
-
-// Doorbell cameras configuration (array of camera objects with name and optional orientation)
+// Doorbell cameras configuration (array of camera objects with entity_id and optional orientation)
 export const DOORBELL_CAMERAS = (() => {
   const camerasValue = getConfig('DOORBELL_CAMERAS', '[]')
   if (typeof camerasValue === 'string') {
@@ -247,4 +244,30 @@ export const buildHaUrl = (path) => {
     return normalizedPath
   }
   return `${host}${normalizedPath}`
+}
+
+// Helper function to build HA camera stream URL
+// Uses the HA camera proxy stream API endpoint with access_token as query parameter
+// Format: /api/camera_proxy_stream/<camera entity_id>?token=<access_token>
+// Based on advanced-camera-card implementation pattern
+// entityId should be the full entity ID (e.g., "camera.front_door")
+// accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
+// Video elements can't send Authorization headers, so token is passed as query parameter
+export const buildCameraStreamUrl = (entityId, accessToken = null) => {
+  if (!entityId) {
+    return null
+  }
+  // Use camera_proxy_stream endpoint (supports video streaming)
+  // camera_proxy only returns static images
+  let path = `/api/camera_proxy_stream/${entityId}`
+  
+  // Add access_token as query parameter if provided (from camera entity attributes)
+  if (accessToken) {
+    path = `${path}?token=${encodeURIComponent(accessToken)}`
+  }
+  
+  // Use the same pattern as buildHaUrl for consistency with other API calls
+  // In dev: returns full URL to HASS_HOST
+  // In prod: returns relative path through ingress/Apache proxy
+  return buildHaUrl(path)
 }
