@@ -1,4 +1,5 @@
-**1.9 - 2025-11-28**
+**1.10 - 2025-11-29**
 
-- Inline iframe and fix modal unmounting
+- Replace go2rtc with Home Assistant camera entities
+- Fix toast notifications not auto-closing
 
