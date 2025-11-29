@@ -57,7 +57,14 @@ function MainApp() {
           <Sidebar />
         </ErrorBoundary>
       </div>
-      <ToastContainer />
+      <ToastContainer 
+        autoClose={5000}
+        hideProgressBar={false}
+        closeOnClick={false}
+        pauseOnHover={false}
+        draggable={false}
+        theme="dark"
+      />
     </Div>
   )
 }
