@@ -3,38 +3,12 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import { ENABLE_DOORBELL, DOORBELL_CAMERAS, GO2RTC_BASE_URL } from '../utils/config'
+import { ENABLE_DOORBELL, DOORBELL_CAMERAS, buildCameraStreamUrl } from '../utils/config'
 import { calculateOptimalTiling } from '../utils/video-tiling'
+import { useCameraAccessTokens } from '../utils/use-camera-access-tokens'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
-
-/**
- * Extract stream name from a URL or return as-is if it's already a stream name
- * Examples:
- * - "http://192.168.188.10:8555/eingang/whep" -> "eingang"
- * - "garage" -> "garage"
- * - "/eingang/whep" -> "eingang"
- */
-const extractStreamName = (urlOrName) => {
-  if (!urlOrName) return ''
-  
-  // If it's already just a stream name (no slashes, no protocol), use as-is
-  if (!urlOrName.includes('/') && !urlOrName.includes(':')) {
-    return urlOrName
-  }
-  
-  // Try to extract stream name from URL path
-  // Match patterns like: /stream-name/whep, /stream-name, stream-name/whep
-  const match = urlOrName.match(/\/([^\/]+?)(?:\/whep)?(?:\?|$)/)
-  if (match) {
-    return match[1]
-  }
-  
-  // Fallback: try to get last segment before query params
-  const pathPart = urlOrName.split('?')[0].split('/').filter(Boolean).pop()
-  return pathPart || urlOrName
-}
 
 const Container = styled.div`
 
@@ -64,7 +38,7 @@ const Container = styled.div`
         align-items: center;
         overflow: hidden;
 
-        iframe {
+        video, img {
             border: none;
             display: block;
             width: 100%;
@@ -72,6 +46,7 @@ const Container = styled.div`
             max-width: 100%;
             max-height: 100%;
             pointer-events: none;
+            object-fit: cover;
 
             &.portrait {
                 aspect-ratio: 360 / 480;
@@ -122,6 +97,15 @@ const Doorbell = () => {
     const [ cancelId, setCancelId ] = React.useState(undefined)
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
+
+    // Extract camera entity IDs and fetch access tokens
+    const cameraEntityIds = React.useMemo(() => {
+        return DOORBELL_CAMERAS
+            .map(cam => cam.entity_id)
+            .filter(Boolean) // Remove any undefined/null values
+    }, [DOORBELL_CAMERAS])
+
+    const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
@@ -227,8 +211,13 @@ const Doorbell = () => {
 
                                 usedIndices[orientation]++
 
-                                const streamName = extractStreamName(camera.name)
-                                const streamUrl = `${GO2RTC_BASE_URL}/stream.html?src=${streamName}`
+                                // Get access token for this camera entity
+                                const accessToken = accessTokens[camera.entity_id] || null
+                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken)
+
+                                if (!streamUrl) {
+                                    return null
+                                }
 
                                 return (
                                     <div
@@ -242,10 +231,10 @@ const Doorbell = () => {
                                         }}
                                     >
                                         {showDoorCams && (
-                                            <iframe
+                                            <img
                                                 src={streamUrl}
                                                 className={orientation}
-                                                allow="autoplay; fullscreen"
+                                                alt="Camera stream"
                                             />
                                         )}
                                         <div 

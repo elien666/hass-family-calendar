@@ -120,7 +120,11 @@ const Status = ({ garageDoor, animate = false }) => (
 const showToast = (promise, garageDoor) => (
   toast.promise(promise, {
     pending: 'Garagentor ist in Bewegung …',
-    success: { render({ data }) { return (<Status garageDoor={data} />) }},
+    success: { 
+      render({ data }) { 
+        return (<Status garageDoor={data} />)
+      }
+    },
     error: 'Nope'
   }, {
     position: "bottom-center",
@@ -131,6 +135,7 @@ const showToast = (promise, garageDoor) => (
     draggable: false,
     progress: undefined,
     theme: "dark",
+    transition: undefined,
   })
 )
 
