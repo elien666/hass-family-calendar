@@ -1,4 +1,4 @@
-**1.12 - 2025-11-29**
+**1.13 - 2025-11-30**
 
-- Make camera streams bypass ingress proxy and use direct HA host
+- Subscribe to camera state changes via WebSocket for automatic token refresh
 
