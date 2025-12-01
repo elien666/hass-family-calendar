@@ -193,3 +193,40 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
   return [tokens, loading, error]
 }
 
+// Helper function to build HA camera stream URL
+// Uses the HA camera proxy stream API endpoint with access_token as query parameter
+// Format: <protocol>//<host>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
+// Camera streams must go directly to HA host (bypassing ingress proxy) for better performance
+// Uses the current window location's protocol, hostname, and port
+// Based on advanced-camera-card implementation pattern
+// entityId should be the full entity ID (e.g., "camera.front_door")
+// accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
+// Video elements can't send Authorization headers, so token is passed as query parameter
+export const buildCameraStreamUrl = (entityId, accessToken = null) => {
+  if (!entityId) {
+    return null
+  }
+
+  // In DEV directly construct the URL
+  if (isDevelopment) {
+    return `${HASS_HOST}/api/camera_proxy_stream/${entityId}?token=${accessToken}`
+  }
+  
+  // Build path with access_token if provided
+  let path = `/api/camera_proxy_stream/${entityId}`
+  if (accessToken) {
+    path = `${path}?token=${encodeURIComponent(accessToken)}`
+  }
+  
+  // Camera streams go directly to HA host (bypass ingress proxy)
+  // Use current window location's host and port to construct direct HA URL
+  if (typeof window !== 'undefined' && window.location) {
+    // Use same protocol, hostname, and port from current URL
+    const protocol = window.location.protocol
+    const host = window.location.host // includes hostname:port
+    return `${protocol}//${host}${path}`
+  }
+  
+  // Fallback: use buildHaUrl if window is not available (SSR or test)
+  return path
+}
