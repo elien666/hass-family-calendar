@@ -3,9 +3,9 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import { ENABLE_DOORBELL, DOORBELL_CAMERAS, buildCameraStreamUrl } from '../utils/config'
+import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
 import { calculateOptimalTiling } from '../utils/video-tiling'
-import { useCameraAccessTokens } from '../utils/use-camera-access-tokens'
+import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -167,7 +167,7 @@ const Doorbell = () => {
                         transitionTimingFunction='linear'
                     />
 
-                    <div className='grid' style={{ display: showDoorCams ? 'block' : 'none'}}>
+                    <div className='grid'>
                         {(() => {
                             if (DOORBELL_CAMERAS.length === 0) {
                                 return null
@@ -230,13 +230,11 @@ const Doorbell = () => {
                                             height: `${videoLayout.height}px`
                                         }}
                                     >
-                                        {showDoorCams && (
-                                            <img
-                                                src={streamUrl}
-                                                className={orientation}
-                                                alt="Camera stream"
-                                            />
-                                        )}
+                                        <img
+                                            src={streamUrl}
+                                            className={orientation}
+                                            alt="Camera stream"
+                                        />   
                                         <div 
                                             className="video-overlay"
                                             onClick={() => openDoor()}

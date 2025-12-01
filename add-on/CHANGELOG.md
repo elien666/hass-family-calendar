@@ -1,4 +1,5 @@
-**1.13 - 2025-11-30**
+**1.14 - 2025-12-01**
 
-- Subscribe to camera state changes via WebSocket for automatic token refresh
+- Fix: Prevent camera access tokens from becoming null
+- Simplified and refactored a bit
 
