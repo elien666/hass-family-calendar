@@ -11,6 +11,14 @@ import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera
 const DELAY_IN_MS = 45000
 
 const Container = styled.div`
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
 
     position: relative;
     width: 100vw;
@@ -93,15 +101,6 @@ const Container = styled.div`
             background-color: rgba(255, 165, 0, 0.8);
             color: #fff;
             animation: fadeOut 3s ease-out forwards;
-        }
-        
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
-            }
-            to {
-                opacity: 0;
-            }
         }
 
         &.opening {

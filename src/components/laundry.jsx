@@ -20,6 +20,7 @@ const Div = styled.div`
   .status {
     display: flex;
     align-items: center;
+    justify-content: center;
     position: relative;
     cursor: pointer;
 
