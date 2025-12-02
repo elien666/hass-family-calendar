@@ -322,6 +322,17 @@ if [ "$ENABLE_EVERYDAY_CALENDAR" = "true" ]; then
 fi
 output_json_value "ENABLE_EVERYDAY_CALENDAR" "$ENABLE_EVERYDAY_CALENDAR" "false" "true" >> "$CONFIG_FILE"
 
+# EV: read enabled flag from config
+ENABLE_EV=$(read_bool_config "ev.enabled" "false")
+if [ "$ENABLE_EV" = "true" ]; then
+  read_and_output_config "ev.entity_preclimate_status" "ENTITY_PRECLIMATE_STATUS" "false"
+  read_and_output_config "ev.entity_preclimate_start" "ENTITY_PRECLIMATE_START" "false"
+  read_and_output_config "ev.entity_preclimate_stop" "ENTITY_PRECLIMATE_STOP" "false"
+  read_and_output_config "ev.entity_charging_state" "ENTITY_CHARGING_STATE" "false"
+  read_and_output_config "ev.entity_state_of_charge" "ENTITY_STATE_OF_CHARGE" "false"
+fi
+output_json_value "ENABLE_EV" "$ENABLE_EV" "false" "true" >> "$CONFIG_FILE"
+
 # Calendars: read array from config and output as JSON array
 if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
   # Read calendars array from config

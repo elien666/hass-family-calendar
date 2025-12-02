@@ -11,6 +11,14 @@ import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera
 const DELAY_IN_MS = 45000
 
 const Container = styled.div`
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
 
     position: relative;
     width: 100vw;
@@ -83,6 +91,22 @@ const Container = styled.div`
         justify-content: center;
         align-content: center;
         border-radius: 24px;
+        font-size: 24px;
+        font-weight: bold;
+        z-index: 10;
+        text-align: center;
+        opacity: 1;
+
+        &.confirm {
+            background-color: rgba(255, 165, 0, 0.8);
+            color: #fff;
+            animation: fadeOut 3s ease-out forwards;
+        }
+
+        &.opening {
+            background-color: rgba(127, 32, 34, 0.8);
+            color: #fff;
+        }
     }
 `
 
@@ -139,22 +163,45 @@ const Doorbell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ cancelId, state ])
 
-    const [ showOpenDoor, setShowOpenDoor ] = React.useState(false)
+    const [ confirmationState, setConfirmationState ] = React.useState(null) // null, 'confirm', 'opening'
+    
     const openDoor = () => {
-        unlatchFrontDoor();
-        setShowOpenDoor(true)
-    }
-    React.useEffect(() => {
-        if (showOpenDoor) {
-            const timeoutId = setTimeout(() => setShowOpenDoor(false), 1000)
-            return () => clearTimeout(timeoutId)
+        if (confirmationState === null) {
+            // First click: show confirmation
+            setConfirmationState('confirm')
+        } else if (confirmationState === 'confirm') {
+            // Second click: open door
+            setConfirmationState('opening')
+            unlatchFrontDoor()
+            // Reset after showing the message
+            setTimeout(() => setConfirmationState(null), 2000)
         }
-    }, [ showOpenDoor ])
+    }
+
+    // Reset confirmation state after 3 seconds when in 'confirm' state
+    React.useEffect(() => {
+        if (confirmationState === 'confirm') {
+            // Reset state after 3 seconds
+            const resetTimeoutId = setTimeout(() => {
+                setConfirmationState(null)
+            }, 3000)
+            return () => {
+                clearTimeout(resetTimeoutId)
+            }
+        }
+    }, [confirmationState])
+
+    // Reset confirmation state when overlay closes
+    React.useEffect(() => {
+        if (!showDoorCams) {
+            setConfirmationState(null)
+        }
+    }, [showDoorCams])
 
     return (
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => toggle(false)} fullsize={true}>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { toggle(false); setConfirmationState(null) }} fullsize={true}>
                 <Container onClick={openDoor}>
                 
                     <ProgressBar
@@ -244,12 +291,15 @@ const Doorbell = () => {
                             })
                         })()}
                     </div>    
-                    {showOpenDoor && (
-                    
-                    <div className='open-door'>
-                        Tür öffnet sich
-                    </div>
-
+                    {confirmationState === 'confirm' && (
+                        <div className='open-door confirm'>
+                            Haustür öffnen?
+                        </div>
+                    )}
+                    {confirmationState === 'opening' && (
+                        <div className='open-door opening'>
+                            Öffne die Tür!
+                        </div>
                     )}            
                 </Container>
             </Overlay>

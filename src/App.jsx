@@ -27,13 +27,19 @@ const GlobalStyle = createGlobalStyle`
 
 const Div = styled.div`
   padding: 0 12px;
-  overflow: scroll;
   min-width: 100vw;
   box-sizing: border-box;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 
   .main {
     display: grid;
     grid-template-columns: 1fr 300px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   @media only screen and (max-width: 1200px) {

@@ -20,6 +20,7 @@ const Div = styled.div`
   .status {
     display: flex;
     align-items: center;
+    justify-content: center;
     position: relative;
     cursor: pointer;
 
@@ -63,19 +64,30 @@ const Div = styled.div`
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     justify-content: space-between;
     column-gap: 2rem;
+    
+    h2 {
+      grid-column: 1 / -1;
+      text-align: center;
+      margin: 0 0 1rem 0;
+      padding: 1rem 0;
+      font-size: 2rem;
+      font-weight: 400;
+      color: #ffffff;
+      display: block;
+      width: 100%;
+    }
 
     > div {
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: .4rem 1rem;
-      background-color: #262626;
       border-radius: 12px;
     }
   }
   
   .subtitle {
-    margin: 1rem 0 0 0;
+    margin: 0 0 1rem 0;
     font-size: 1.2rem;
   }
 `
@@ -116,11 +128,12 @@ const Laundry = () => {
       </div>
       <Overlay visible={showLaundry && error === false} onClick={closeLaundry}>
         <div className={'states'}>
+          <h2>Wäsche</h2>
           {states.map((state, index) => (
             <div key={index}>
+              <div className='subtitle'>{state.label}</div>
               <div className={clsx({ animate: mapToPresentation[state.state].animate })}><Icon path={mapToPresentation[state.state].icon} size={2}/></div>
               <div>{mapToPresentation[state.state].label}</div>
-              <div className='subtitle'>{state.label}</div>
             </div>
           ))}
         </div>
