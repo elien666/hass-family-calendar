@@ -2,6 +2,7 @@ import styled from 'styled-components'
 import clsx from 'clsx'
 import Icon from '@mdi/react'
 import { mdiClose } from '@mdi/js'
+import React from 'react'
 
 const Div = styled.div`
   position: absolute;
@@ -69,6 +70,27 @@ const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
     e.preventDefault()
     handleClose()
   }
+
+  // Prevent body scroll when overlay is visible
+  React.useEffect(() => {
+    if (visible) {
+      // Save current scroll position and prevent scrolling
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+      
+      return () => {
+        // Restore scroll position when overlay closes
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        document.body.style.overflow = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [visible])
 
  if (!visible) {
    return null

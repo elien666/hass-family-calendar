@@ -88,6 +88,11 @@ const Div = styled.div`
     .forecast {
       display: none;
     }
+    
+    /* Keep forecast visible in overlay */
+    .full-weather .forecast {
+      display: flex;
+    }
   }
   
   .detail-header {
@@ -163,8 +168,8 @@ const Weather = () => {
   const forecastDays = useMemo(() => [1,2,3,4,5,6,7], [])
 
   React.useEffect(() => {
-    // Next 24 hours
-    if (!merryWeatherNext24h.current || !data || !data.hourly || timelineData.length === 0) return
+    // Next 24 hours - only render when overlay is visible and data is available
+    if (!showWeather || !merryWeatherNext24h.current || !data || !data.hourly || timelineData.length === 0) return
     const options = { timezone: "Europe/Berlin" };
     const timeLine = document.createElement('div')
     merryWeatherNext24h.current.textContent = ''
@@ -177,7 +182,7 @@ const Weather = () => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timelineData])
+  }, [showWeather, timelineData])
 
   // Toggle weather on keypress
   React.useEffect(() => {
@@ -242,7 +247,6 @@ const Weather = () => {
               <div><span>Regen:</span> {data.daily.data[0].precipProbability * 100} %</div>
               <div><span>UV Index:</span> {data.daily.data[0].uvIndex}</div>
               <div><span>Luftdruck:</span> {Math.round(data.daily.data[0].pressure)}</div>
-              <div><span>Windgeschwindigkeit:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
             </div>
           </div>
           <h3>Die nächsten 24 Stunden</h3>
