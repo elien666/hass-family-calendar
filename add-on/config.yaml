@@ -35,6 +35,8 @@ options:
   calendars: []
   hvv:
     enabled: false
+  ev:
+    enabled: false
 schema:
   weather:
     enabled: bool
@@ -64,6 +66,13 @@ schema:
   everyday_calendar:
     enabled: bool
     entity_everyday_calendar: str?
+  ev:
+    enabled: bool
+    entity_preclimate_status: str?
+    entity_preclimate_start: str?
+    entity_preclimate_stop: str?
+    entity_charging_state: str?
+    entity_state_of_charge: str?
   calendars:
     - name: str
       icon: str?

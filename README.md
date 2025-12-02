@@ -87,6 +87,11 @@ For local development, create a `.env` file in the root directory based on `.env
 - `VITE_ENTITY_DOORBELL` - Doorbell sensor entity
 - `VITE_ENTITY_DOORBELL_BUTTON` - Doorbell unlatch button entity
 - `VITE_ENTITY_EVERYDAY_CALENDAR` - Everyday calendar sensor entity
+- `VITE_ENTITY_PRECLIMATE_STATUS` - EV preclimate status binary sensor entity
+- `VITE_ENTITY_PRECLIMATE_START` - EV preclimate start button entity
+- `VITE_ENTITY_PRECLIMATE_STOP` - EV preclimate stop button entity
+- `VITE_ENTITY_CHARGING_STATE` - EV charging state binary sensor entity
+- `VITE_ENTITY_STATE_OF_CHARGE` - EV state of charge sensor entity (percentage)
 
 ### Home Assistant Add-on Configuration
 

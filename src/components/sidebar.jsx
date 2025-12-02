@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import styled from 'styled-components'
 import Weather from './weather'
 import Hvv from './hvv'
+import Ev from './ev'
 import Garage from './garage'
 import Laundry from './laundry'
 
@@ -55,6 +56,7 @@ const Sidebar = () => {
       <div className={'top-content'}>
         <Weather />
         <Hvv />
+        <Ev />
       </div>
       <div className={'two-cols'}>
         <Garage />

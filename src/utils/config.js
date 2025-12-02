@@ -109,6 +109,11 @@ export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
+export const ENTITY_PRECLIMATE_STATUS = getConfig('ENTITY_PRECLIMATE_STATUS')
+export const ENTITY_PRECLIMATE_START = getConfig('ENTITY_PRECLIMATE_START')
+export const ENTITY_PRECLIMATE_STOP = getConfig('ENTITY_PRECLIMATE_STOP')
+export const ENTITY_CHARGING_STATE = getConfig('ENTITY_CHARGING_STATE')
+export const ENTITY_STATE_OF_CHARGE = getConfig('ENTITY_STATE_OF_CHARGE')
 
 // Supervisor token for WebSocket authentication in production mode (HA add-on)
 export const SUPERVISOR_TOKEN = getConfig('SUPERVISOR_TOKEN')
@@ -212,6 +217,8 @@ export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL',
   isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
 export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 
   isTruthy(ENTITY_EVERYDAY_CALENDAR))
+export const ENABLE_EV = getFeatureFlag('ENABLE_EV', 
+  isTruthy(ENTITY_PRECLIMATE_STATUS) || isTruthy(ENTITY_CHARGING_STATE) || isTruthy(ENTITY_STATE_OF_CHARGE))
 
 // Helper function to build HA API URLs
 // In production mode (add-on/ingress), use simple relative URLs
