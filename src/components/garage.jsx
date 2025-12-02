@@ -117,14 +117,10 @@ const Status = ({ garageDoor, animate = false }) => (
   </StatusDiv>
 )
 
-const showToast = (promise, garageDoor) => (
+const showToast = (promise) => (
   toast.promise(promise, {
     pending: 'Garagentor ist in Bewegung …',
-    success: { 
-      render({ data }) { 
-        return (<Status garageDoor={data} />)
-      }
-    },
+    success: ({ data }) => toPresentation(data).label,
     error: 'Nope'
   }, {
     position: "bottom-center",
