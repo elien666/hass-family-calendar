@@ -20,6 +20,10 @@ const Div = styled.div`
 
   h2 {
     margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.1rem;
   }
 
   &.disabled {
@@ -45,13 +49,13 @@ const Div = styled.div`
   .battery-info {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.1rem;
   }
 
   .charge-percentage {
     font-size: 0.9rem;
     font-weight: 400;
-    color: #ffffff;
+    color: #a1a0a0;
   }
 
   .preclimate-button {
@@ -109,6 +113,13 @@ const getBatteryIcon = (stateOfCharge, isCharging) => {
   }
 }
 
+const getBatteryColor = (stateOfCharge) => {
+  // Color code based on battery percentage
+  if (stateOfCharge >= 90) return '#17e146' // green
+  if (stateOfCharge >= 40) return '#ff9800' // orange
+  return '#f85a5a' // red
+}
+
 const Ev = () => {
   // Don't render if EV feature is disabled
   if (!ENABLE_EV) {
@@ -129,28 +140,29 @@ const Ev = () => {
   }, [preclimateStatus, error])
 
   const batteryIcon = getBatteryIcon(stateOfCharge || 0, chargingState)
+  const batteryColor = getBatteryColor(stateOfCharge || 0)
   const chargeDisplay = Math.round(stateOfCharge || 0)
 
   return (
     <Div className={clsx({ disabled: error !== false })}>
-      <h2>Auto</h2>
-      <div className="status">
+      <h2>
+        Auto
         {error !== false ? (
-          <>
-            <Icon path={mdiAlertCircle} size={'2rem'} color='#f85a5a'/>
+          <div className="battery-info">
+            <Icon path={mdiAlertCircle} size={'1.2rem'} color='#f85a5a'/>
             <span>Fehler</span>
-          </>
+          </div>
         ) : (
           <div className="battery-info">
+            <span className="charge-percentage">{chargeDisplay}%</span>
             <Icon 
               path={batteryIcon} 
-              size={'2rem'} 
-              color={chargingState ? '#17e146' : '#ffffff'}
+              size={'1.2rem'} 
+              color={batteryColor}
             />
-            <span className="charge-percentage">{chargeDisplay}%</span>
           </div>
         )}
-      </div>
+      </h2>
       {error === false && (
         <button 
           className={clsx('preclimate-button', { spinning: preclimateStatus })}
