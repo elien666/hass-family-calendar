@@ -1,9 +1,7 @@
-**1.15 - 2025-12-02**
+**1.16 - 2025-12-03**
 
-- Add EV preclimate feature to sidebar
-- Add 'Wäsche' title to laundry overlay and improve tile layout
-- Add 'Garagentor' title to garage overlay
-- Fix layout: fixed header/sidebar with scrollable calendar
-- Fix weather overlay and prevent background scroll
-- Add door confirmation flow and fix toast auto-close
+- Add animated progress border for preclimate button
+- UI improvements: EV component layout and HVV logo removal
+- Add automatic WebSocket reconnection with exponential backoff
+- chore(deps): update dependency vite to v7.2.6
 

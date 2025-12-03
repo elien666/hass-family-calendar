@@ -158,6 +158,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     let unsubscribes = []
     let isMounted = true
     let reconnectTimeout = null
+    let reconnectAttempts = 0
     let isConnecting = false
 
     async function setupWebSocket() {
@@ -227,13 +228,16 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
       try {
         connection = await createConnection({ auth })
 
-        // Handle connection close events - attempt to reconnect
+        // Handle connection ready event
         connection.addEventListener('ready', () => {
           if (isMounted) {
             logger.debug('WebSocket connection ready for camera tokens')
+            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+            setError(false) // Clear error state on successful connection
           }
         })
 
+        // Handle disconnection events - attempt to reconnect
         connection.addEventListener('disconnected', () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for camera tokens, will attempt to reconnect')
@@ -244,13 +248,16 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
             // Clear connection reference
             connection = null
             unsubscribes = []
-            // Attempt to reconnect after a delay
+            // Calculate exponential backoff delay
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            // Attempt to reconnect after delay
             reconnectTimeout = setTimeout(() => {
               if (isMounted && !isConnecting) {
-                logger.debug('Attempting to reconnect WebSocket for camera tokens')
+                logger.debug(`Attempting to reconnect WebSocket for camera tokens (attempt ${reconnectAttempts})`)
                 setupWebSocket()
               }
-            }, 5000) // Wait 5 seconds before reconnecting
+            }, delay)
           }
         })
 
@@ -293,13 +300,15 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection for camera tokens:', err)
           setError(err instanceof Error ? err.message : String(err))
-          // Attempt to reconnect after a delay
+          // Attempt to reconnect after a delay with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          reconnectAttempts++
           reconnectTimeout = setTimeout(() => {
             if (isMounted) {
-              logger.debug('Attempting to reconnect WebSocket for camera tokens after error')
+              logger.debug(`Attempting to reconnect WebSocket for camera tokens after error (attempt ${reconnectAttempts})`)
               setupWebSocket()
             }
-          }, 10000) // Wait 10 seconds before reconnecting after error
+          }, delay)
         }
       }
     }

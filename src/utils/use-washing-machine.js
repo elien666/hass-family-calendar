@@ -138,12 +138,36 @@ const useSubscription = ( entity ) => {
     let connection = null
     let unsubscribe = null
     let isMounted = true
+    let reconnectTimeout = null
+    let reconnectAttempts = 0
+    let isConnecting = false
 
     async function setupConnection() {
       // Skip if not configured
       if (!isConfigured || !entity) {
         return
       }
+
+      // Prevent multiple simultaneous connection attempts
+      if (isConnecting) {
+        return
+      }
+
+      // Close existing connection if any
+      if (connection) {
+        try {
+          if (unsubscribe) {
+            unsubscribe()
+            unsubscribe = null
+          }
+          connection.close()
+        } catch (err) {
+          logger.debug(`Error closing existing WebSocket connection for ${entity}:`, err)
+        }
+        connection = null
+      }
+
+      isConnecting = true
 
       // In production mode (add-on/ingress), construct host URL including ingress path
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
@@ -169,12 +193,46 @@ const useSubscription = ( entity ) => {
       // Skip WebSocket connection if no token
       if (!token) {
         logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
+        isConnecting = false
         return
       }
 
       try {
         const auth = createLongLivedTokenAuth(host, token)
-        connection = await createConnection({ auth });
+        connection = await createConnection({ auth })
+
+        // Handle connection ready event
+        connection.addEventListener('ready', () => {
+          if (isMounted) {
+            logger.debug(`WebSocket connection ready for ${entity}`)
+            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+            setError(false) // Clear error state on successful connection
+          }
+        })
+
+        // Handle disconnection events - attempt to reconnect
+        connection.addEventListener('disconnected', () => {
+          if (isMounted && !isConnecting) {
+            logger.debug(`WebSocket disconnected for ${entity}, will attempt to reconnect`)
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+            }
+            // Clear connection reference
+            connection = null
+            unsubscribe = null
+            // Calculate exponential backoff delay
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            // Attempt to reconnect after delay
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting) {
+                logger.debug(`Attempting to reconnect WebSocket for ${entity} (attempt ${reconnectAttempts})`)
+                setupConnection()
+              }
+            }, delay)
+          }
+        })
 
         const trigger = (result) => {
           if (isMounted) {
@@ -190,10 +248,22 @@ const useSubscription = ( entity ) => {
               "entity_id": entity,
             }
         })
+
+        isConnecting = false
       } catch (err) {
+        isConnecting = false
         if (isMounted) {
           logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
           setError(err instanceof Error ? err.message : String(err))
+          // Attempt to reconnect after a delay
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          reconnectAttempts++
+          reconnectTimeout = setTimeout(() => {
+            if (isMounted) {
+              logger.debug(`Attempting to reconnect WebSocket for ${entity} after error (attempt ${reconnectAttempts})`)
+              setupConnection()
+            }
+          }, delay)
         }
       }
     }
@@ -202,9 +272,15 @@ const useSubscription = ( entity ) => {
 
     return () => {
       isMounted = false
+      // Clear reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      // Unsubscribe from state changes
       if (unsubscribe) {
         unsubscribe()
       }
+      // Close connection
       if (connection) {
         connection.close()
       }
