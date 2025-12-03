@@ -40,13 +40,38 @@ const useDoorbell = () => {
 
   React.useEffect(() => {
     let connection = null
+    let unsubscribe = null
     let isMounted = true
+    let reconnectTimeout = null
+    let reconnectAttempts = 0
+    let isConnecting = false
 
     async function connect() {
       // Skip if not configured
       if (!isConfigured || !ENTITY_DOORBELL) {
         return
       }
+
+      // Prevent multiple simultaneous connection attempts
+      if (isConnecting) {
+        return
+      }
+
+      // Close existing connection if any
+      if (connection) {
+        try {
+          if (unsubscribe) {
+            unsubscribe()
+            unsubscribe = null
+          }
+          connection.close()
+        } catch (err) {
+          logger.debug('Error closing existing WebSocket connection:', err)
+        }
+        connection = null
+      }
+
+      isConnecting = true
 
       // In production mode (add-on/ingress), construct host URL including ingress path
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
@@ -72,6 +97,7 @@ const useDoorbell = () => {
 
       // Skip WebSocket connection if no token
       if (!token) {
+        isConnecting = false
         return
       }
 
@@ -84,11 +110,45 @@ const useDoorbell = () => {
           logger.error('Failed to create WebSocket auth:', err)
           setError(err instanceof Error ? err.message : String(err))
         }
+        isConnecting = false
         return
       }
 
       try {
         connection = await createConnection({ auth })
+
+        // Handle connection ready event
+        connection.addEventListener('ready', () => {
+          if (isMounted) {
+            logger.debug('WebSocket connection ready for doorbell')
+            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+            setError(false) // Clear error state on successful connection
+          }
+        })
+
+        // Handle disconnection events - attempt to reconnect
+        connection.addEventListener('disconnected', () => {
+          if (isMounted && !isConnecting) {
+            logger.debug('WebSocket disconnected for doorbell, will attempt to reconnect')
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+            }
+            // Clear connection reference
+            connection = null
+            unsubscribe = null
+            // Calculate exponential backoff delay
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            // Attempt to reconnect after delay
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting) {
+                logger.debug(`Attempting to reconnect WebSocket for doorbell (attempt ${reconnectAttempts})`)
+                connect()
+              }
+            }, delay)
+          }
+        })
 
         const trigger = (result) => {
           if (isMounted) {
@@ -97,7 +157,7 @@ const useDoorbell = () => {
           }
         }
 
-        await connection.subscribeMessage(trigger, {
+        unsubscribe = await connection.subscribeMessage(trigger, {
           "type": "subscribe_trigger",
           "trigger":
             {
@@ -105,7 +165,10 @@ const useDoorbell = () => {
               "entity_id": ENTITY_DOORBELL,
             }
         })
+
+        isConnecting = false
       } catch (err) {
+        isConnecting = false
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)
           logger.error('WebSocket error details:', {
@@ -121,6 +184,15 @@ const useDoorbell = () => {
             logger.error('Authentication failed - check if SUPERVISOR_TOKEN is valid and correctly formatted')
           }
           setError(err instanceof Error ? err.message : String(err))
+          // Attempt to reconnect after a delay
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          reconnectAttempts++
+          reconnectTimeout = setTimeout(() => {
+            if (isMounted) {
+              logger.debug(`Attempting to reconnect WebSocket for doorbell after error (attempt ${reconnectAttempts})`)
+              connect()
+            }
+          }, delay)
         }
       }
     }
@@ -129,6 +201,15 @@ const useDoorbell = () => {
 
     return () => {
       isMounted = false
+      // Clear reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      // Unsubscribe from state changes
+      if (unsubscribe) {
+        unsubscribe()
+      }
+      // Close connection
       if (connection) {
         connection.close()
       }
