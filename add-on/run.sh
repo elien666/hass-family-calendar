@@ -132,6 +132,15 @@ if [ "$IN_HA" = true ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
   output_json_value "SUPERVISOR_TOKEN" "$SUPERVISOR_TOKEN" "false" "false" >> "$CONFIG_FILE"
 fi
 
+# Output INGRESS_URL for reliable URL construction
+# This provides the ingress path from bashio API instead of relying on window.location
+if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
+  INGRESS_URL=$(bashio::addon.ingress_url 2>/dev/null || echo "")
+  if [ -n "$INGRESS_URL" ]; then
+    output_json_value "INGRESS_URL" "$INGRESS_URL" "false" "false" >> "$CONFIG_FILE"
+  fi
+fi
+
 # Helper function to check if a config value exists and is not empty
 has_config_value() {
   local config_key=$1

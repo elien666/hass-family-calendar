@@ -1,6 +1,6 @@
-**1.17 - 2025-12-04**
+**1.18 - 2025-12-04**
 
-- chore(deps): update dependency react-router-dom to v7.10.1
-- fix(deps): update dependency react-router-dom to v7
-- chore(deps): update react monorepo to v19.2.1
+- Fix WebSocket URL construction using ingress URL from bashio API
+- Remove margin-top from bottom sidebar
+- Add comprehensive axios request/response logging for debugging connection issues
 
