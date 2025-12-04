@@ -14,7 +14,8 @@ import {
   ENTITY_CHARGING_STATE,
   ENTITY_STATE_OF_CHARGE,
   ENABLE_EV, 
-  buildHaUrl, 
+  buildHaUrl,
+  buildWebSocketHost, 
   isDevelopment 
 } from "./config"
 import logger from './logger'
@@ -129,20 +130,10 @@ const useEv = () => {
 
       isConnecting = true
 
-      // In production mode (add-on/ingress), construct host URL including ingress path
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
-      let host
-      if (isDevelopment && HASS_HOST) {
-        host = HASS_HOST
-      } else if (typeof window !== 'undefined' && window.location) {
-        // Include the ingress path in the host URL so the library constructs the correct WebSocket URL
-        const basePath = window.location.pathname.replace(/\/$/, '')
-        host = `${window.location.origin}${basePath}`
-      } else {
-        host = ''
-      }
+      const host = buildWebSocketHost()
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN

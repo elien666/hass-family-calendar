@@ -168,6 +168,9 @@ export const ENTITY_STATE_OF_CHARGE = getConfig('ENTITY_STATE_OF_CHARGE')
 // Supervisor token for WebSocket authentication in production mode (HA add-on)
 export const SUPERVISOR_TOKEN = getConfig('SUPERVISOR_TOKEN')
 
+// Ingress URL for reliable URL construction (from bashio API, only in HA mode)
+export const INGRESS_URL = getConfig('INGRESS_URL')
+
 // Calendars configuration (array of calendar objects with name and optional icon)
 export const CALENDARS = (() => {
   const calendarsValue = getConfig('CALENDARS', '[]')
@@ -271,8 +274,7 @@ export const ENABLE_EV = getFeatureFlag('ENABLE_EV',
   isTruthy(ENTITY_PRECLIMATE_STATUS) || isTruthy(ENTITY_CHARGING_STATE) || isTruthy(ENTITY_STATE_OF_CHARGE))
 
 // Helper function to build HA API URLs
-// In production mode (add-on/ingress), use simple relative URLs
-// Remove leading slash to make it relative to current directory, not origin root
+// In production mode (add-on/ingress), use INGRESS_URL from bashio API when available
 // This ensures requests go through the ingress proxy to the add-on's Apache, which then
 // proxies to http://supervisor/core/api/ with SUPERVISOR_TOKEN authentication
 // In development mode, use HASS_HOST if provided
@@ -280,14 +282,19 @@ export const buildHaUrl = (path) => {
   // Ensure path starts with /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
 
-  // In production mode (add-on/ingress), construct absolute URL from window.location
-  // This ensures requests go through the ingress proxy to the add-on's Apache
-  // which then proxies to http://supervisor/core/api/ with SUPERVISOR_TOKEN
+  // In production mode (add-on/ingress), use INGRESS_URL from bashio API when available
+  // This is more reliable than reading from window.location, especially for cloud access
   if (!isDevelopment) {
     if (typeof window !== 'undefined' && window.location) {
-      // Get the current pathname and remove trailing slash
+      // Use INGRESS_URL from config if available (injected by run.sh from bashio API)
+      if (INGRESS_URL && typeof INGRESS_URL === 'string' && INGRESS_URL.trim() !== '') {
+        // INGRESS_URL has trailing slash, normalizedPath starts with /
+        // Remove leading slash from normalizedPath to avoid double slashes
+        const pathWithoutLeadingSlash = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath
+        return `${window.location.origin}${INGRESS_URL}${pathWithoutLeadingSlash}`
+      }
+      // Fallback to window.location.pathname if INGRESS_URL not available
       const basePath = window.location.pathname.replace(/\/$/, '')
-      // Construct full URL: origin + pathname + API path
       return `${window.location.origin}${basePath}${normalizedPath}`
     }
     // Fallback to relative URL if window is not available
@@ -301,4 +308,28 @@ export const buildHaUrl = (path) => {
     return normalizedPath
   }
   return `${host}${normalizedPath}`
+}
+
+// Helper function to build WebSocket host URL
+// Uses INGRESS_URL from bashio API when available for reliable URL construction
+// This is especially important for cloud access (e.g., Nabu Casa)
+export const buildWebSocketHost = () => {
+  // In development mode, use HASS_HOST if provided
+  if (isDevelopment && HASS_HOST) {
+    return HASS_HOST
+  }
+
+  // In production mode, use INGRESS_URL from config if available
+  if (typeof window !== 'undefined' && window.location) {
+    // Use INGRESS_URL from config if available (injected by run.sh from bashio API)
+    if (INGRESS_URL && typeof INGRESS_URL === 'string' && INGRESS_URL.trim() !== '') {
+      // Combine origin with ingress URL (INGRESS_URL has trailing slash)
+      return `${window.location.origin}${INGRESS_URL.replace(/\/$/, '')}`
+    }
+    // Fallback to window.location.pathname if INGRESS_URL not available
+    const basePath = window.location.pathname.replace(/\/$/, '')
+    return `${window.location.origin}${basePath}`
+  }
+
+  return ''
 }
