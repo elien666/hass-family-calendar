@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { logAxiosError } from './axios-error-handler'
+import { logAxiosError, logAxiosSuccess } from './axios-error-handler'
+import logger from './logger'
 
 // Use Vite's built-in DEV mode to detect development vs production
 // import.meta.env.DEV is true when running `pnpm start` (dev server)
@@ -78,17 +79,66 @@ if (hasValidToken) {
   delete axios.defaults.headers.common['Authorization']
 }
 
+// Add Axios request interceptor for logging outgoing requests
+axios.interceptors.request.use(
+  (config) => {
+    // Log request details for debugging
+    const requestId = Date.now()
+    config.metadata = { requestId, startTime: Date.now() }
+    
+    // Log axios defaults state periodically (every 50th request) or on first error
+    if (typeof window !== 'undefined' && (requestId % 50 === 0 || !window._axiosDefaultsLogged)) {
+      window._axiosDefaultsLogged = true
+      logger.debug('Axios Defaults State:', {
+        baseURL: axios.defaults.baseURL,
+        timeout: axios.defaults.timeout,
+        hasAuthHeader: !!axios.defaults.headers?.common?.Authorization,
+        authHeaderLength: axios.defaults.headers?.common?.Authorization?.length || 0,
+        headers: Object.keys(axios.defaults.headers?.common || {}),
+      })
+    }
+    
+    return config
+  },
+  (error) => {
+    // Request setup error
+    logger.error('Axios Request Setup Error:', error)
+    return Promise.reject(error)
+  }
+)
+
 // Add Axios response interceptor for centralized error logging
 axios.interceptors.response.use(
   (response) => {
-    // Return successful responses as-is
+    // Log successful responses
+    if (response.config) {
+      logAxiosSuccess(response.config)
+    }
     return response
   },
   (error) => {
-    // Log all Axios errors with moderate detail
+    // Log all Axios errors with comprehensive detail
     // Extract context from error config if available
-    const context = error.config?.url ? `API Call: ${error.config.method?.toUpperCase()} ${error.config.url}` : 'Axios Request'
+    const context = error.config?.url 
+      ? `API Call: ${error.config.method?.toUpperCase()} ${error.config.url}` 
+      : 'Axios Request'
+    
     logAxiosError(error, context)
+    
+    // Log additional diagnostic info when errors occur
+    if (error.config?.metadata) {
+      const duration = Date.now() - error.config.metadata.startTime
+      logger.error('Request Duration:', `${duration}ms`, 'Request ID:', error.config.metadata.requestId)
+    }
+    
+    // Log window.location state if in production (for ingress debugging)
+    if (!isDevelopment && typeof window !== 'undefined' && window.location) {
+      logger.error('Window Location State:', {
+        origin: window.location.origin,
+        pathname: window.location.pathname,
+        href: window.location.href,
+      })
+    }
     
     // Reject the promise to allow individual error handlers to process the error
     return Promise.reject(error)
