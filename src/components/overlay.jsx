@@ -2,6 +2,7 @@ import styled from 'styled-components'
 import clsx from 'clsx'
 import Icon from '@mdi/react'
 import { mdiClose } from '@mdi/js'
+import React from 'react'
 
 const Div = styled.div`
   position: absolute;
@@ -14,12 +15,7 @@ const Div = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  visibility: hidden;
   z-index: 10;
-  
-  &.visible {
-    visibility: visible;
-  }
   
   .content {
     background-color: #1c1c1c;
@@ -31,8 +27,9 @@ const Div = styled.div`
     overflow-y: scroll;
 
     &.fullsize {
-      width: 90vw;
-      max-height: calc(100vh - 1rem);
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
       border-width: 2px;
       padding: 4px 6px;
     }
@@ -55,16 +52,55 @@ const Div = styled.div`
     display: grid;
     justify-content: center;
     align-items: center;
-    z-index: 1;
-    background-color: rgba(255,255,255,.2);
+    z-index: 100;
+    background-color: rgba(0,0,0,.6);
+    
+    svg {
+      color: white;
+    }
   }
 `
 
-const Overlay = ({ visible, children, onClick, fullsize = false }) => {
+const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
+  // Use onClose if provided, otherwise fall back to onClick
+  const handleClose = onClose || onClick
+
+  const handleCloseClick = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    handleClose()
+  }
+
+  // Prevent body scroll when overlay is visible
+  React.useEffect(() => {
+    if (visible) {
+      // Save current scroll position and prevent scrolling
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+      
+      return () => {
+        // Restore scroll position when overlay closes
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        document.body.style.overflow = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [visible])
+
+ if (!visible) {
+   return null
+ }
 
  return (
-   <Div className={clsx({ visible })} onClick={onClick}>
-    <div className='close'><Icon path={mdiClose} size={2} onClick={onClick}/></div>
+   <Div onClick={onClick}>
+    <div className='close' onClick={handleCloseClick}>
+      <Icon path={mdiClose} size={2} />
+    </div>
     <div className={clsx('content', { fullsize })} onClick={(event) => event.stopPropagation()}>  
       {children}
     </div>

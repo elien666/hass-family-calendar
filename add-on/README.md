@@ -99,12 +99,6 @@ Each feature can be individually enabled or disabled using toggle switches in th
   - `geofox_secret` - Geofox API secret key for HVV departures
 - **Note**: Both Geofox options must be set for the feature to work.
 
-**Telegram Notifications** (`enable_telegram`)
-- Enable Telegram bot notifications
-- When enabled, configure:
-  - `telegram_bot_token` - Telegram bot token for sending notifications
-  - `telegram_chat_id` - Telegram chat ID for receiving notifications
-
 #### Home Assistant Entity Integrations
 
 **Garage Door** (`enable_garage`)
@@ -129,6 +123,58 @@ Each feature can be individually enabled or disabled using toggle switches in th
 - Enable everyday calendar visual tracking for daily habits
 - When enabled, configure:
   - `entity_everyday_calendar` - Entity ID for the everyday calendar sensor
+
+**Go2RTC Base URL** (`go2rtc_base_url`)
+- Configure the base URL for your go2rtc installation
+- The iframe will connect directly to this URL
+- If your go2rtc requires authentication, embed the token in the URL path (see Nginx example below)
+
+### Nginx Proxy Example with Token in Path
+
+If you're using nginx as a reverse proxy in front of go2rtc, you can configure nginx to extract the token from the URL path. Set `go2rtc_base_url` to include the token in the path (e.g., `https://your-domain.com/streams/your-secret-token`).
+
+**Example nginx configuration** that proxies go2rtc under `/streams/{token}/` path:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $http_connection;
+    proxy_http_version 1.1;
+
+    # Proxy go2rtc under /streams/ path with token in URL
+    location /streams/your-secret-token/ {
+        # Remove /streams/<token> prefix and proxy to go2rtc
+        rewrite ^/streams/your-secret-token/(.*)$ /$1 break;
+
+        proxy_pass http://go2rtc_installation:1984;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Preserve the Authorization header for go2rtc
+        proxy_set_header Authorization $http_authorization;
+
+        # Timeouts for long-lived connections (streaming)
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+**Configuration:**
+1. Replace `your-secret-token` with your actual token in the nginx location path and rewrite rule
+2. Replace `go2rtc_installation:1984` with your actual go2rtc hostname and port
+3. Replace `your-domain.com` with your actual domain name
+4. Set `go2rtc_base_url` in the add-on configuration to: `https://your-domain.com/streams/your-secret-token`
+5. The iframe will connect directly to URLs like `https://your-domain.com/streams/your-secret-token/stream.html?src=camera`
+6. nginx strips the token from the path and proxies to go2rtc, preserving any Authorization headers from the client
 
 ## How It Works
 

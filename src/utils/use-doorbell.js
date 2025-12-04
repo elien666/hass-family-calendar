@@ -4,7 +4,7 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
+import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
@@ -40,7 +40,11 @@ const useDoorbell = () => {
 
   React.useEffect(() => {
     let connection = null
+    let unsubscribe = null
     let isMounted = true
+    let reconnectTimeout = null
+    let reconnectAttempts = 0
+    let isConnecting = false
 
     async function connect() {
       // Skip if not configured
@@ -48,24 +52,57 @@ const useDoorbell = () => {
         return
       }
 
+      // Prevent multiple simultaneous connection attempts
+      if (isConnecting) {
+        return
+      }
+
+      // Close existing connection if any
+      if (connection) {
+        try {
+          if (unsubscribe) {
+            unsubscribe()
+            unsubscribe = null
+          }
+          connection.close()
+        } catch (err) {
+          logger.debug('Error closing existing WebSocket connection:', err)
+        }
+        connection = null
+      }
+
+      isConnecting = true
+
+      // In production mode (add-on/ingress), construct host URL including ingress path
+      // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
+      // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
+      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
+      let host
+      if (isDevelopment && HASS_HOST) {
+        host = HASS_HOST
+      } else if (typeof window !== 'undefined' && window.location) {
+        // Include the ingress path in the host URL so the library constructs the correct WebSocket URL
+        // This matches how buildHaUrl constructs URLs for REST API calls
+        const basePath = window.location.pathname.replace(/\/$/, '')
+        host = `${window.location.origin}${basePath}`
+      } else {
+        host = ''
+      }
+      
+      // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
+      // In development, use HASS_ACCESS_TOKEN
+      const token = isDevelopment 
+        ? (HASS_ACCESS_TOKEN || '')
+        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
+
+      // Skip WebSocket connection if no token
+      if (!token) {
+        isConnecting = false
+        return
+      }
+
       let auth
       try {
-        // In production mode (add-on/ingress), skip WebSocket as ingress may not support it
-        // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
-        if (!isDevelopment) {
-          logger.debug('Skipping WebSocket connection in production mode (using REST API only)')
-          return
-        }
-
-        const host = HASS_HOST || (typeof window !== 'undefined' ? window.location.origin : '')
-        const token = HASS_ACCESS_TOKEN || ''
-
-        // Skip WebSocket connection if no token
-        if (!token) {
-          logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
-          return
-        }
-
         auth = createLongLivedTokenAuth(host, token)
         if (isMounted) setError(false)
       } catch (err) {
@@ -73,19 +110,54 @@ const useDoorbell = () => {
           logger.error('Failed to create WebSocket auth:', err)
           setError(err instanceof Error ? err.message : String(err))
         }
+        isConnecting = false
         return
       }
 
       try {
         connection = await createConnection({ auth })
 
+        // Handle connection ready event
+        connection.addEventListener('ready', () => {
+          if (isMounted) {
+            logger.debug('WebSocket connection ready for doorbell')
+            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+            setError(false) // Clear error state on successful connection
+          }
+        })
+
+        // Handle disconnection events - attempt to reconnect
+        connection.addEventListener('disconnected', () => {
+          if (isMounted && !isConnecting) {
+            logger.debug('WebSocket disconnected for doorbell, will attempt to reconnect')
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+            }
+            // Clear connection reference
+            connection = null
+            unsubscribe = null
+            // Calculate exponential backoff delay
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            // Attempt to reconnect after delay
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting) {
+                logger.debug(`Attempting to reconnect WebSocket for doorbell (attempt ${reconnectAttempts})`)
+                connect()
+              }
+            }, delay)
+          }
+        })
+
         const trigger = (result) => {
           if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
+            const newState = result.variables.trigger.to_state.state
+            setState(newState)
           }
         }
 
-        await connection.subscribeMessage(trigger, {
+        unsubscribe = await connection.subscribeMessage(trigger, {
           "type": "subscribe_trigger",
           "trigger":
             {
@@ -93,10 +165,34 @@ const useDoorbell = () => {
               "entity_id": ENTITY_DOORBELL,
             }
         })
+
+        isConnecting = false
       } catch (err) {
+        isConnecting = false
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)
+          logger.error('WebSocket error details:', {
+            message: err instanceof Error ? err.message : String(err),
+            code: err.code,
+            name: err.name,
+            wsUrl: auth?.wsUrl,
+            host: host,
+            tokenLength: token ? token.length : 0
+          })
+          // Error code 2 = ERR_INVALID_AUTH - authentication failed
+          if (err.code === 2) {
+            logger.error('Authentication failed - check if SUPERVISOR_TOKEN is valid and correctly formatted')
+          }
           setError(err instanceof Error ? err.message : String(err))
+          // Attempt to reconnect after a delay
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          reconnectAttempts++
+          reconnectTimeout = setTimeout(() => {
+            if (isMounted) {
+              logger.debug(`Attempting to reconnect WebSocket for doorbell after error (attempt ${reconnectAttempts})`)
+              connect()
+            }
+          }, delay)
         }
       }
     }
@@ -105,6 +201,15 @@ const useDoorbell = () => {
 
     return () => {
       isMounted = false
+      // Clear reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      // Unsubscribe from state changes
+      if (unsubscribe) {
+        unsubscribe()
+      }
+      // Close connection
       if (connection) {
         connection.close()
       }

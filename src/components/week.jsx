@@ -16,16 +16,19 @@ const isWeekend = (date) => date.toFormat('c') >= 6
 const isToday = (date) => date.hasSame(DateTime.now(), 'day')
 
 const Div = styled.div`
-
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 
   .schedule {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     grid-template-rows: repeat(2, max-content) 1fr;
     grid-column-gap: 12px;
-    flex-grow: 1;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 
     background-color: #2f2f2f;
     border-radius: 4px;

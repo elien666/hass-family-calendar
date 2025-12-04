@@ -4,50 +4,105 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl, isDevelopment } from "./config"
+import { 
+  HASS_HOST, 
+  HASS_ACCESS_TOKEN, 
+  SUPERVISOR_TOKEN, 
+  ENTITY_PRECLIMATE_STATUS,
+  ENTITY_PRECLIMATE_START,
+  ENTITY_PRECLIMATE_STOP,
+  ENTITY_CHARGING_STATE,
+  ENTITY_STATE_OF_CHARGE,
+  ENABLE_EV, 
+  buildHaUrl, 
+  isDevelopment 
+} from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
 // Authorization header is configured centrally in config.js
 
-const useGarageDoor = () => {
-
-  const [ state, setState ] = React.useState('closed')
+const useEv = () => {
+  const [ state, setState ] = React.useState({
+    preclimateStatus: false,
+    chargingState: false,
+    stateOfCharge: 0
+  })
   const [ error, setError ] = React.useState(false)
 
-  // Check if garage door is configured
-  const isConfigured = ENABLE_GARAGE && ENTITY_GARAGE_DOOR
-  const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
+  // Check if EV is configured
+  const isConfigured = ENABLE_EV && (
+    ENTITY_PRECLIMATE_STATUS || 
+    ENTITY_CHARGING_STATE || 
+    ENTITY_STATE_OF_CHARGE
+  )
 
+  // Fetch initial state for all entities
   React.useEffect(() => {
-    // Skip if not configured
-    if (!isConfigured || !url) {
+    if (!isConfigured) {
       return
     }
 
-    axios(url)
-      .then((response) => {
-        setState(response.data.state)
-        setError(false)
-      })
-      .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+    const fetchStates = async () => {
+      const promises = []
+      
+      if (ENTITY_PRECLIMATE_STATUS) {
+        promises.push(
+          axios(buildHaUrl(`/api/states/${ENTITY_PRECLIMATE_STATUS}`))
+            .then(response => ({ type: 'preclimateStatus', value: response.data.state === 'on' }))
+            .catch(err => ({ type: 'preclimateStatus', error: formatErrorForUI(err) }))
+        )
+      }
+      
+      if (ENTITY_CHARGING_STATE) {
+        promises.push(
+          axios(buildHaUrl(`/api/states/${ENTITY_CHARGING_STATE}`))
+            .then(response => ({ type: 'chargingState', value: response.data.state === 'on' }))
+            .catch(err => ({ type: 'chargingState', error: formatErrorForUI(err) }))
+        )
+      }
+      
+      if (ENTITY_STATE_OF_CHARGE) {
+        promises.push(
+          axios(buildHaUrl(`/api/states/${ENTITY_STATE_OF_CHARGE}`))
+            .then(response => ({ type: 'stateOfCharge', value: parseFloat(response.data.state) || 0 }))
+            .catch(err => ({ type: 'stateOfCharge', error: formatErrorForUI(err) }))
+        )
+      }
 
+      const results = await Promise.all(promises)
+      let hasError = false
+      
+      results.forEach(result => {
+        if (result.error) {
+          hasError = result.error
+        } else {
+          setState(prev => ({ ...prev, [result.type]: result.value }))
+        }
+      })
+
+      if (hasError) {
+        setError(hasError)
+      } else {
+        setError(false)
+      }
+    }
+
+    fetchStates()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConfigured])
+
+  // WebSocket subscription for all entities
   React.useEffect(() => {
     let connection = null
-    let unsubscribe = null
+    let unsubscribes = []
     let isMounted = true
     let reconnectTimeout = null
     let reconnectAttempts = 0
     let isConnecting = false
 
     async function connect() {
-      // Skip if not configured
-      if (!isConfigured || !ENTITY_GARAGE_DOOR) {
+      if (!isConfigured) {
         return
       }
 
@@ -59,10 +114,12 @@ const useGarageDoor = () => {
       // Close existing connection if any
       if (connection) {
         try {
-          if (unsubscribe) {
-            unsubscribe()
-            unsubscribe = null
-          }
+          unsubscribes.forEach(unsubscribe => {
+            if (unsubscribe) {
+              unsubscribe()
+            }
+          })
+          unsubscribes = []
           connection.close()
         } catch (err) {
           logger.debug('Error closing existing WebSocket connection:', err)
@@ -119,7 +176,7 @@ const useGarageDoor = () => {
         // Handle connection ready event
         connection.addEventListener('ready', () => {
           if (isMounted) {
-            logger.debug('WebSocket connection ready for garage door')
+            logger.debug('WebSocket connection ready for EV entities')
             reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
@@ -128,21 +185,21 @@ const useGarageDoor = () => {
         // Handle disconnection events - attempt to reconnect
         connection.addEventListener('disconnected', () => {
           if (isMounted && !isConnecting) {
-            logger.debug('WebSocket disconnected for garage door, will attempt to reconnect')
+            logger.debug('WebSocket disconnected for EV entities, will attempt to reconnect')
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
             }
             // Clear connection reference
             connection = null
-            unsubscribe = null
+            unsubscribes = []
             // Calculate exponential backoff delay
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
             reconnectAttempts++
             // Attempt to reconnect after delay
             reconnectTimeout = setTimeout(() => {
               if (isMounted && !isConnecting) {
-                logger.debug(`Attempting to reconnect WebSocket for garage door (attempt ${reconnectAttempts})`)
+                logger.debug(`Attempting to reconnect WebSocket for EV entities (attempt ${reconnectAttempts})`)
                 connect()
               }
             }, delay)
@@ -151,18 +208,42 @@ const useGarageDoor = () => {
 
         const trigger = (result) => {
           if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
+            const entityId = result.variables.trigger.to_state.entity_id
+            const newState = result.variables.trigger.to_state.state
+
+            setState(prev => {
+              const updated = { ...prev }
+              
+              if (entityId === ENTITY_PRECLIMATE_STATUS) {
+                updated.preclimateStatus = newState === 'on'
+              } else if (entityId === ENTITY_CHARGING_STATE) {
+                updated.chargingState = newState === 'on'
+              } else if (entityId === ENTITY_STATE_OF_CHARGE) {
+                updated.stateOfCharge = parseFloat(newState) || 0
+              }
+              
+              return updated
+            })
           }
         }
 
-        unsubscribe = await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
+        // Subscribe to all configured entities
+        const entityIds = []
+        if (ENTITY_PRECLIMATE_STATUS) entityIds.push(ENTITY_PRECLIMATE_STATUS)
+        if (ENTITY_CHARGING_STATE) entityIds.push(ENTITY_CHARGING_STATE)
+        if (ENTITY_STATE_OF_CHARGE) entityIds.push(ENTITY_STATE_OF_CHARGE)
+
+        // Subscribe to each entity
+        for (const entityId of entityIds) {
+          const unsubscribe = await connection.subscribeMessage(trigger, {
+            "type": "subscribe_trigger",
+            "trigger": {
               "platform": "state",
-              "entity_id": ENTITY_GARAGE_DOOR,
+              "entity_id": entityId,
             }
-        })
+          })
+          unsubscribes.push(unsubscribe)
+        }
 
         isConnecting = false
       } catch (err) {
@@ -175,7 +256,7 @@ const useGarageDoor = () => {
           reconnectAttempts++
           reconnectTimeout = setTimeout(() => {
             if (isMounted) {
-              logger.debug(`Attempting to reconnect WebSocket for garage door after error (attempt ${reconnectAttempts})`)
+              logger.debug(`Attempting to reconnect WebSocket for EV entities after error (attempt ${reconnectAttempts})`)
               connect()
             }
           }, delay)
@@ -191,10 +272,12 @@ const useGarageDoor = () => {
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
       }
-      // Unsubscribe from state changes
-      if (unsubscribe) {
-        unsubscribe()
-      }
+      // Unsubscribe from all state changes
+      unsubscribes.forEach(unsubscribe => {
+        if (unsubscribe) {
+          unsubscribe()
+        }
+      })
       // Close connection
       if (connection) {
         connection.close()
@@ -204,58 +287,29 @@ const useGarageDoor = () => {
   }, [isConfigured])
 
   return [ state, error ]
-
 }
 
-export const toggleGarageDoor = (isLoading) => {
-  if (!ENTITY_GARAGE_DOOR) return
-  isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/toggle'), {
-    entity_id: ENTITY_GARAGE_DOOR
+export const startPreclimate = () => {
+  if (!ENTITY_PRECLIMATE_START) return
+  axios.post(buildHaUrl('/api/services/button/press'), {
+    entity_id: ENTITY_PRECLIMATE_START
   })
     .catch((err) => {
       // Error is already logged by interceptor
-      logger.error('Failed to toggle garage door:', err)
-    })
-    .finally(() => {
-      clearTimeout(timeoutId)
-      isLoading(false)
+      logger.error('Failed to start preclimate:', err)
     })
 }
 
-export const openGarageDoor = (isLoading) => {
-  if (!ENTITY_GARAGE_DOOR) return
-  isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/open_cover'), {
-    entity_id: ENTITY_GARAGE_DOOR
+export const stopPreclimate = () => {
+  if (!ENTITY_PRECLIMATE_STOP) return
+  axios.post(buildHaUrl('/api/services/button/press'), {
+    entity_id: ENTITY_PRECLIMATE_STOP
   })
     .catch((err) => {
       // Error is already logged by interceptor
-      logger.error('Failed to open garage door:', err)
-    })
-    .finally(() => {
-      clearTimeout(timeoutId)
-      isLoading(false)
+      logger.error('Failed to stop preclimate:', err)
     })
 }
 
-export const closeGarageDoor = (isLoading) => {
-  if (!ENTITY_GARAGE_DOOR) return
-  isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/close_cover'), {
-    entity_id: ENTITY_GARAGE_DOOR
-  })
-    .catch((err) => {
-      // Error is already logged by interceptor
-      logger.error('Failed to close garage door:', err)
-    })
-    .finally(() => {
-      clearTimeout(timeoutId)
-      isLoading(false)
-    })
-}
+export default useEv
 
-export default useGarageDoor

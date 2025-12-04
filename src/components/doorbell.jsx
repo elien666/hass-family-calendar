@@ -3,46 +3,80 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import Go2RTCStream from './go2rtc-stream'
 import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
+import { calculateOptimalTiling } from '../utils/video-tiling'
+import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
 
 const Container = styled.div`
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
 
     position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 
     h3 {
         margin-top: 6px;
     }
 
     .grid {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .video-container {
+        position: absolute;
         display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
 
-        iframe {
-
+        video, img {
             border: none;
+            display: block;
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            pointer-events: none;
+            object-fit: cover;
 
             &.portrait {
-                
+                aspect-ratio: 360 / 480;
             }
 
             &.landscape {
-                width: 420px;
-                height: 240px;
+                aspect-ratio: 1920 / 1072;
+            }
+
+            &.wide {
+                aspect-ratio: 770 / 216;
             }
         }
 
-        > div {
-            display: flex;
-            flex-grow: 1;
-            justify-content: center;
-        }
-
-        > div:last-child {
-            flex-direction: column;
-            align-items: center;
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: pointer;
         }
     }
 
@@ -57,6 +91,22 @@ const Container = styled.div`
         justify-content: center;
         align-content: center;
         border-radius: 24px;
+        font-size: 24px;
+        font-weight: bold;
+        z-index: 10;
+        text-align: center;
+        opacity: 1;
+
+        &.confirm {
+            background-color: rgba(255, 165, 0, 0.8);
+            color: #fff;
+            animation: fadeOut 3s ease-out forwards;
+        }
+
+        &.opening {
+            background-color: rgba(127, 32, 34, 0.8);
+            color: #fff;
+        }
     }
 `
 
@@ -71,6 +121,15 @@ const Doorbell = () => {
     const [ cancelId, setCancelId ] = React.useState(undefined)
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
+
+    // Extract camera entity IDs and fetch access tokens
+    const cameraEntityIds = React.useMemo(() => {
+        return DOORBELL_CAMERAS
+            .map(cam => cam.entity_id)
+            .filter(Boolean) // Remove any undefined/null values
+    }, [DOORBELL_CAMERAS])
+
+    const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
@@ -104,23 +163,46 @@ const Doorbell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ cancelId, state ])
 
-    const [ showOpenDoor, setShowOpenDoor ] = React.useState(false)
+    const [ confirmationState, setConfirmationState ] = React.useState(null) // null, 'confirm', 'opening'
+    
     const openDoor = () => {
-        unlatchFrontDoor();
-        setShowOpenDoor(true)
-    }
-    React.useEffect(() => {
-        if (showOpenDoor) {
-            const timeoutId = setTimeout(() => setShowOpenDoor(false), 1000)
-            return () => clearTimeout(timeoutId)
+        if (confirmationState === null) {
+            // First click: show confirmation
+            setConfirmationState('confirm')
+        } else if (confirmationState === 'confirm') {
+            // Second click: open door
+            setConfirmationState('opening')
+            unlatchFrontDoor()
+            // Reset after showing the message
+            setTimeout(() => setConfirmationState(null), 2000)
         }
-    }, [ showOpenDoor ])
+    }
+
+    // Reset confirmation state after 3 seconds when in 'confirm' state
+    React.useEffect(() => {
+        if (confirmationState === 'confirm') {
+            // Reset state after 3 seconds
+            const resetTimeoutId = setTimeout(() => {
+                setConfirmationState(null)
+            }, 3000)
+            return () => {
+                clearTimeout(resetTimeoutId)
+            }
+        }
+    }, [confirmationState])
+
+    // Reset confirmation state when overlay closes
+    React.useEffect(() => {
+        if (!showDoorCams) {
+            setConfirmationState(null)
+        }
+    }, [showDoorCams])
 
     return (
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={() => toggle(false)} fullsize={true}>
-                <Container>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { toggle(false); setConfirmationState(null) }} fullsize={true}>
+                <Container onClick={openDoor}>
                 
                     <ProgressBar
                         completed={progress}
@@ -132,59 +214,92 @@ const Doorbell = () => {
                         transitionTimingFunction='linear'
                     />
 
-                    {error !== false && (
-                        <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center' }}>
-                            <h3>Fehler!</h3>
-                            <div>{error instanceof Error ? error.message : String(error)}</div>
-                        </div>
-                    )}
-
-                    <div className='grid' style={{ display: showDoorCams ? 'flex' : 'none'}}>
+                    <div className='grid'>
                         {(() => {
-                            // Separate cameras by orientation
-                            const portraitCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait')
-                            const landscapeCameras = DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'landscape')
-                            
-                            return (
-                                <>
-                                    {portraitCameras.length > 0 && (
-                                        <div onClick={() => openDoor()} style={{ flexDirection: 'column' }}>
-                                            {portraitCameras.map((camera, index) => (
-                                                <Go2RTCStream
-                                                    key={index}
-                                                    src={camera.name}
-                                                    show={showDoorCams}
-                                                    orientation="portrait"
-                                                    width='360'
-                                                    height='480'
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                    {landscapeCameras.length > 0 && (
-                                        <div onClick={() => openDoor()}>
-                                            {landscapeCameras.map((camera, index) => (
-                                                <Go2RTCStream
-                                                    key={index}
-                                                    src={camera.name}
-                                                    show={showDoorCams}
-                                                    orientation="landscape"
-                                                    width='100%'
-                                                    height={index === landscapeCameras.length - 1 ? '240px' : undefined}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </>
-                            )
+                            if (DOORBELL_CAMERAS.length === 0) {
+                                return null
+                            }
+
+                            // Convert cameras to format expected by tiling algorithm
+                            const videos = DOORBELL_CAMERAS.map(cam => ({
+                                orientation: cam.orientation || 'landscape'
+                            }))
+
+                            // Calculate optimal layout using the tiling algorithm
+                            const canvasWidth = window.innerWidth
+                            const canvasHeight = window.innerHeight - 10 // Account for progress bar
+                            const layout = calculateOptimalTiling(videos, canvasWidth, canvasHeight)
+
+                            // Create a map of cameras by orientation for lookup
+                            const camerasByOrientation = {
+                                portrait: DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait'),
+                                landscape: DOORBELL_CAMERAS.filter(cam => {
+                                    const orientation = cam.orientation || 'landscape'
+                                    return orientation === 'landscape'
+                                }),
+                                wide: DOORBELL_CAMERAS.filter(cam => cam.orientation === 'wide')
+                            }
+
+                            // Track which camera of each orientation we've used
+                            const usedIndices = {
+                                portrait: 0,
+                                landscape: 0,
+                                wide: 0
+                            }
+
+                            return layout.videos.map((videoLayout, index) => {
+                                const orientation = videoLayout.orientation
+                                const cameraIndex = usedIndices[orientation]
+                                const camera = camerasByOrientation[orientation][cameraIndex]
+                                
+                                if (!camera) {
+                                    return null
+                                }
+
+                                usedIndices[orientation]++
+
+                                // Get access token for this camera entity
+                                const accessToken = accessTokens[camera.entity_id] || null
+                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken)
+
+                                if (!streamUrl) {
+                                    return null
+                                }
+
+                                return (
+                                    <div
+                                        key={`${orientation}-${cameraIndex}-${index}`}
+                                        className="video-container"
+                                        style={{
+                                            left: `${videoLayout.x}px`,
+                                            top: `${videoLayout.y}px`,
+                                            width: `${videoLayout.width}px`,
+                                            height: `${videoLayout.height}px`
+                                        }}
+                                    >
+                                        <img
+                                            src={streamUrl}
+                                            className={orientation}
+                                            alt="Camera stream"
+                                        />   
+                                        <div 
+                                            className="video-overlay"
+                                            onClick={() => openDoor()}
+                                        />
+                                    </div>
+                                )
+                            })
                         })()}
                     </div>    
-                    {showOpenDoor && (
-                    
-                    <div className='open-door'>
-                        Tür öffnet sich
-                    </div>
-
+                    {confirmationState === 'confirm' && (
+                        <div className='open-door confirm'>
+                            Haustür öffnen?
+                        </div>
+                    )}
+                    {confirmationState === 'opening' && (
+                        <div className='open-door opening'>
+                            Öffne die Tür!
+                        </div>
                     )}            
                 </Container>
             </Overlay>

@@ -1,7 +1,9 @@
 import React from 'react'
+import { Routes, Route } from 'react-router-dom'
 import styled, { createGlobalStyle } from 'styled-components'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
+import TilingDemo from './components/tiling-demo'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import './fonts/fonts.css'
@@ -25,13 +27,19 @@ const GlobalStyle = createGlobalStyle`
 
 const Div = styled.div`
   padding: 0 12px;
-  overflow: scroll;
   min-width: 100vw;
   box-sizing: border-box;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 
   .main {
     display: grid;
     grid-template-columns: 1fr 300px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   @media only screen and (max-width: 1200px) {
@@ -41,24 +49,40 @@ const Div = styled.div`
   }
 `
 
-function App() {
-  
+function MainApp() {
   useReload()
 
   return (
+    <Div>
+      <GlobalStyle/>
+      <div className={'main'}>
+        <ErrorBoundary>
+          <Week />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <Sidebar />
+        </ErrorBoundary>
+      </div>
+      <ToastContainer 
+        autoClose={5000}
+        hideProgressBar={false}
+        closeOnClick={false}
+        pauseOnHover={false}
+        draggable={false}
+        theme="dark"
+      />
+    </Div>
+  )
+}
+
+function App() {
+  return (
     <ErrorBoundary>
-      <Div>
-        <GlobalStyle/>
-        <div className={'main'}>
-          <ErrorBoundary>
-            <Week />
-          </ErrorBoundary>
-          <ErrorBoundary>
-            <Sidebar />
-          </ErrorBoundary>
-        </div>
-        <ToastContainer />
-      </Div>
+      <Routes>
+        <Route path="/demo" element={<TilingDemo />} />
+        <Route path="/tiling-demo" element={<TilingDemo />} />
+        <Route path="*" element={<MainApp />} />
+      </Routes>
     </ErrorBoundary>
   )
 }

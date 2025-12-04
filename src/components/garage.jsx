@@ -35,6 +35,20 @@ const Div = styled.div`
   .controls {
       display: grid;
       grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      
+      h2 {
+        grid-column: 1 / -1;
+        text-align: center;
+        margin: 0 0 1rem 0;
+        padding: 1rem 0;
+        font-size: 2rem;
+        font-weight: 400;
+        color: #ffffff;
+        display: block;
+        width: 100%;
+      }
+      
       > div { 
         display: flex;
         justify-content: center;
@@ -54,6 +68,7 @@ const Div = styled.div`
 const StatusDiv = styled.div`
   display: flex;
   align-items: center;
+  justify-content: center;
   position: relative;
 
   span {
@@ -117,10 +132,14 @@ const Status = ({ garageDoor, animate = false }) => (
   </StatusDiv>
 )
 
-const showToast = (promise, garageDoor) => (
+const showToast = (promise) => (
   toast.promise(promise, {
     pending: 'Garagentor ist in Bewegung …',
-    success: { render({ data }) { return (<Status garageDoor={data} />) }},
+    success: {
+      render({ data }) {
+        return toPresentation(data).label
+      }
+    },
     error: 'Nope'
   }, {
     position: "bottom-center",
@@ -131,6 +150,7 @@ const showToast = (promise, garageDoor) => (
     draggable: false,
     progress: undefined,
     theme: "dark",
+    transition: undefined,
   })
 )
 
@@ -210,6 +230,7 @@ const Garage = () => {
       </div> 
       <Overlay visible={showControls && error === false} onClick={() => toggle(false)}>
         <div className={'controls'}>
+          <h2>Garagentor</h2>
           <div onClick={() => controlGarage('open')}>Öffnen</div>
           <div onClick={() => controlGarage('close')}>Schließen</div>
         </div>

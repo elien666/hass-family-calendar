@@ -104,15 +104,19 @@ export const WEATHER_LONGITUDE = getConfig('WEATHER_LONGITUDE')
 export const GEOFOX_SECRET = getConfig('GEOFOX_SECRET')
 export const GEOFOX_USER = getConfig('GEOFOX_USER')
 
-// Telegram configuration (optional - feature disabled if not set)
-export const TELEGRAM_BOT_TOKEN = getConfig('TELEGRAM_BOT_TOKEN')
-export const TELEGRAM_CHAT_ID = getConfig('TELEGRAM_CHAT_ID')
-
 // Entity IDs (optional - feature disabled if not set)
 export const ENTITY_GARAGE_DOOR = getConfig('ENTITY_GARAGE_DOOR')
 export const ENTITY_DOORBELL = getConfig('ENTITY_DOORBELL')
 export const ENTITY_DOORBELL_BUTTON = getConfig('ENTITY_DOORBELL_BUTTON')
 export const ENTITY_EVERYDAY_CALENDAR = getConfig('ENTITY_EVERYDAY_CALENDAR')
+export const ENTITY_PRECLIMATE_STATUS = getConfig('ENTITY_PRECLIMATE_STATUS')
+export const ENTITY_PRECLIMATE_START = getConfig('ENTITY_PRECLIMATE_START')
+export const ENTITY_PRECLIMATE_STOP = getConfig('ENTITY_PRECLIMATE_STOP')
+export const ENTITY_CHARGING_STATE = getConfig('ENTITY_CHARGING_STATE')
+export const ENTITY_STATE_OF_CHARGE = getConfig('ENTITY_STATE_OF_CHARGE')
+
+// Supervisor token for WebSocket authentication in production mode (HA add-on)
+export const SUPERVISOR_TOKEN = getConfig('SUPERVISOR_TOKEN')
 
 // Calendars configuration (array of calendar objects with name and optional icon)
 export const CALENDARS = (() => {
@@ -152,10 +156,7 @@ export const LAUNDRY_MACHINES = (() => {
   return []
 })()
 
-// go2rtc base URL for stream HTML pages
-export const GO2RTC_BASE_URL = getConfig('GO2RTC_BASE_URL', 'http://192.168.188.10:1984')
-
-// Doorbell cameras configuration (array of camera objects with name and optional orientation)
+// Doorbell cameras configuration (array of camera objects with entity_id and optional orientation)
 export const DOORBELL_CAMERAS = (() => {
   const camerasValue = getConfig('DOORBELL_CAMERAS', '[]')
   if (typeof camerasValue === 'string') {
@@ -208,8 +209,6 @@ export const ENABLE_WEATHER = getFeatureFlag('ENABLE_WEATHER',
   isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE)))
 export const ENABLE_HVV = getFeatureFlag('ENABLE_HVV', 
   isTruthy(GEOFOX_USER) && isTruthy(GEOFOX_SECRET))
-export const ENABLE_TELEGRAM = getFeatureFlag('ENABLE_TELEGRAM', 
-  isTruthy(TELEGRAM_BOT_TOKEN) && isTruthy(TELEGRAM_CHAT_ID))
 export const ENABLE_GARAGE = getFeatureFlag('ENABLE_GARAGE', 
   isTruthy(ENTITY_GARAGE_DOOR))
 export const ENABLE_LAUNDRY = getFeatureFlag('ENABLE_LAUNDRY', 
@@ -218,6 +217,8 @@ export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL',
   isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
 export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 
   isTruthy(ENTITY_EVERYDAY_CALENDAR))
+export const ENABLE_EV = getFeatureFlag('ENABLE_EV', 
+  isTruthy(ENTITY_PRECLIMATE_STATUS) || isTruthy(ENTITY_CHARGING_STATE) || isTruthy(ENTITY_STATE_OF_CHARGE))
 
 // Helper function to build HA API URLs
 // In production mode (add-on/ingress), use simple relative URLs

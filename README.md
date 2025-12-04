@@ -82,13 +82,16 @@ For local development, create a `.env` file in the root directory based on `.env
 - `VITE_WEATHER_LONGITUDE` - Longitude for weather location
 - `VITE_GEOFOX_SECRET` - Geofox API secret key (disables HVV departures if not set)
 - `VITE_GEOFOX_USER` - Geofox API username
-- `VITE_TELEGRAM_BOT_TOKEN` - Telegram bot token (optional)
-- `VITE_TELEGRAM_CHAT_ID` - Telegram chat ID for notifications (optional)
 - `VITE_ENTITY_GARAGE_DOOR` - Garage door entity ID (disables garage feature if not set)
 - `VITE_LAUNDRY_MACHINES` - JSON array of laundry machines, e.g., `[{"name":"New Washer","entity_id":"sensor.washing_machine_new"},{"name":"Dryer","entity_id":"sensor.dryer"}]`
 - `VITE_ENTITY_DOORBELL` - Doorbell sensor entity
 - `VITE_ENTITY_DOORBELL_BUTTON` - Doorbell unlatch button entity
 - `VITE_ENTITY_EVERYDAY_CALENDAR` - Everyday calendar sensor entity
+- `VITE_ENTITY_PRECLIMATE_STATUS` - EV preclimate status binary sensor entity
+- `VITE_ENTITY_PRECLIMATE_START` - EV preclimate start button entity
+- `VITE_ENTITY_PRECLIMATE_STOP` - EV preclimate stop button entity
+- `VITE_ENTITY_CHARGING_STATE` - EV charging state binary sensor entity
+- `VITE_ENTITY_STATE_OF_CHARGE` - EV state of charge sensor entity (percentage)
 
 ### Home Assistant Add-on Configuration
 

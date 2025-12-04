@@ -126,6 +126,12 @@ if [ -n "$HASS_ACCESS_TOKEN" ]; then
   output_json_value "HASS_ACCESS_TOKEN" "$HASS_ACCESS_TOKEN" "false" "false" >> "$CONFIG_FILE"
 fi
 
+# Output SUPERVISOR_TOKEN for WebSocket authentication in HA mode
+# This allows the frontend to use WebSocket connections with supervisor authentication
+if [ "$IN_HA" = true ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+  output_json_value "SUPERVISOR_TOKEN" "$SUPERVISOR_TOKEN" "false" "false" >> "$CONFIG_FILE"
+fi
+
 # Helper function to check if a config value exists and is not empty
 has_config_value() {
   local config_key=$1
@@ -190,6 +196,52 @@ read_bool_config() {
   fi
 }
 
+# Helper function to normalize JSON array to single line (removes newlines and extra spaces)
+normalize_json_array() {
+  local json_input="$1"
+  
+  # If input is empty or invalid, return empty array
+  if [ -z "$json_input" ] || [ "$json_input" = "null" ] || [ "$json_input" = "undefined" ]; then
+    echo "[]"
+    return 0
+  fi
+  
+  # Remove all newlines and carriage returns, then collapse multiple spaces to single space
+  local normalized=$(printf '%s' "$json_input" | tr -d '\n\r' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//')
+  
+  # Check if it's already a valid JSON array (starts with [ and ends with ])
+  case "$normalized" in
+    \[*\])
+      echo "$normalized"
+      return 0
+      ;;
+  esac
+  
+  # If not an array, check if objects are concatenated without commas/brackets
+  # Pattern: }{ indicates two objects next to each other without comma
+  case "$normalized" in
+    *}{*)
+      # Replace }{ with },{ to add commas between objects (replace all occurrences)
+      normalized=$(printf '%s' "$normalized" | sed 's/}{/},{/g')
+      # Wrap in array brackets
+      echo "[$normalized]"
+      return 0
+      ;;
+  esac
+  
+  # Single object - wrap in array brackets if it's a JSON object
+  case "$normalized" in
+    {*})
+      echo "[$normalized]"
+      return 0
+      ;;
+  esac
+  
+  # Something else, return as-is
+  echo "$normalized"
+  return 0
+}
+
 # Determine if features are enabled based on dedicated enabled flags
 # Note: bashio::config uses dot notation for nested config: "section.key"
 # Weather: read enabled flag from config
@@ -209,14 +261,6 @@ if [ "$ENABLE_HVV" = "true" ]; then
 fi
 output_json_value "ENABLE_HVV" "$ENABLE_HVV" "false" "true" >> "$CONFIG_FILE"
 
-# Telegram: read enabled flag from config
-ENABLE_TELEGRAM=$(read_bool_config "telegram.enabled" "false")
-if [ "$ENABLE_TELEGRAM" = "true" ]; then
-  read_and_output_config "telegram.telegram_bot_token" "TELEGRAM_BOT_TOKEN" "false"
-  read_and_output_config "telegram.telegram_chat_id" "TELEGRAM_CHAT_ID" "false"
-fi
-output_json_value "ENABLE_TELEGRAM" "$ENABLE_TELEGRAM" "false" "true" >> "$CONFIG_FILE"
-
 # Garage: read enabled flag from config
 ENABLE_GARAGE=$(read_bool_config "garage.enabled" "false")
 if [ "$ENABLE_GARAGE" = "true" ]; then
@@ -234,6 +278,8 @@ if [ "$ENABLE_LAUNDRY" = "true" ]; then
     if [ -z "$LAUNDRY_MACHINES_JSON" ] || [ "$LAUNDRY_MACHINES_JSON" = "null" ] || [ "$LAUNDRY_MACHINES_JSON" = "undefined" ]; then
       LAUNDRY_MACHINES_JSON="[]"
     fi
+    # Normalize JSON to single line to prevent newline issues
+    LAUNDRY_MACHINES_JSON=$(normalize_json_array "$LAUNDRY_MACHINES_JSON")
     # Output as JSON array (no quotes needed, it's already JSON)
     echo "  LAUNDRY_MACHINES: $LAUNDRY_MACHINES_JSON," >> "$CONFIG_FILE"
   else
@@ -255,6 +301,8 @@ if [ "$ENABLE_DOORBELL" = "true" ]; then
     if [ -z "$DOORBELL_CAMERAS_JSON" ] || [ "$DOORBELL_CAMERAS_JSON" = "null" ] || [ "$DOORBELL_CAMERAS_JSON" = "undefined" ]; then
       DOORBELL_CAMERAS_JSON="[]"
     fi
+    # Normalize JSON to single line to prevent newline issues
+    DOORBELL_CAMERAS_JSON=$(normalize_json_array "$DOORBELL_CAMERAS_JSON")
     # Output as JSON array (no quotes needed, it's already JSON)
     echo "  DOORBELL_CAMERAS: $DOORBELL_CAMERAS_JSON," >> "$CONFIG_FILE"
   else
@@ -264,8 +312,8 @@ if [ "$ENABLE_DOORBELL" = "true" ]; then
 fi
 output_json_value "ENABLE_DOORBELL" "$ENABLE_DOORBELL" "false" "true" >> "$CONFIG_FILE"
 
-# go2rtc base URL configuration
-read_and_output_config "go2rtc_base_url" "GO2RTC_BASE_URL" "false"
+# go2rtc base URL configuration - REMOVED: no longer used, replaced with HA camera entities
+# read_and_output_config "go2rtc_base_url" "GO2RTC_BASE_URL" "false"
 
 # Everyday calendar: read enabled flag from config
 ENABLE_EVERYDAY_CALENDAR=$(read_bool_config "everyday_calendar.enabled" "false")
@@ -273,6 +321,17 @@ if [ "$ENABLE_EVERYDAY_CALENDAR" = "true" ]; then
   read_and_output_config "everyday_calendar.entity_everyday_calendar" "ENTITY_EVERYDAY_CALENDAR" "false"
 fi
 output_json_value "ENABLE_EVERYDAY_CALENDAR" "$ENABLE_EVERYDAY_CALENDAR" "false" "true" >> "$CONFIG_FILE"
+
+# EV: read enabled flag from config
+ENABLE_EV=$(read_bool_config "ev.enabled" "false")
+if [ "$ENABLE_EV" = "true" ]; then
+  read_and_output_config "ev.entity_preclimate_status" "ENTITY_PRECLIMATE_STATUS" "false"
+  read_and_output_config "ev.entity_preclimate_start" "ENTITY_PRECLIMATE_START" "false"
+  read_and_output_config "ev.entity_preclimate_stop" "ENTITY_PRECLIMATE_STOP" "false"
+  read_and_output_config "ev.entity_charging_state" "ENTITY_CHARGING_STATE" "false"
+  read_and_output_config "ev.entity_state_of_charge" "ENTITY_STATE_OF_CHARGE" "false"
+fi
+output_json_value "ENABLE_EV" "$ENABLE_EV" "false" "true" >> "$CONFIG_FILE"
 
 # Calendars: read array from config and output as JSON array
 if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
@@ -282,6 +341,8 @@ if [ "$IN_HA" = true ] && command -v bashio > /dev/null 2>&1; then
   if [ -z "$CALENDARS_JSON" ] || [ "$CALENDARS_JSON" = "null" ] || [ "$CALENDARS_JSON" = "undefined" ]; then
     CALENDARS_JSON="[]"
   fi
+  # Normalize JSON to single line to prevent newline issues
+  CALENDARS_JSON=$(normalize_json_array "$CALENDARS_JSON")
   # Output as JSON array (no quotes needed, it's already JSON)
   echo "  CALENDARS: $CALENDARS_JSON," >> "$CONFIG_FILE"
 else
@@ -365,6 +426,19 @@ if [ "$IN_HA" = true ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
     # Preserve original request headers
     ProxyPreserveHost On
 </Location>
+
+# Proxy Home Assistant WebSocket API to ws://supervisor/core/websocket
+# This allows the frontend to use WebSocket connections to supervisor
+# The supervisor WebSocket API uses standard WebSocket auth flow (auth_required -> auth message -> auth_ok)
+# Authentication is handled by the frontend using SUPERVISOR_TOKEN from config.js in the auth message
+# Note: mod_proxy_wstunnel handles WebSocket upgrades automatically
+<Location /api/websocket>
+    ProxyPass ws://supervisor/core/websocket
+    ProxyPassReverse ws://supervisor/core/websocket
+    
+    # Preserve original request headers
+    ProxyPreserveHost On
+</Location>
 EOF
   echo "Generated Apache proxy configuration for Home Assistant API at $SUPERVISOR_PROXY_CONF"
   echo "=== DEBUG: Contents of generated proxy config ==="
@@ -400,7 +474,8 @@ else
   echo "=== END DEBUG ==="
 fi
 
-# Start Apache (try common paths)
+# Generate Apache proxy configuration for go2rtc
+# Test Apache configuration before starting
 HTTPD_BIN=""
 if [ -x "/usr/sbin/httpd" ]; then
   HTTPD_BIN="/usr/sbin/httpd"
@@ -410,6 +485,12 @@ elif command -v httpd > /dev/null 2>&1; then
   HTTPD_BIN="httpd"
 else
   echo "Error: Apache httpd not found" >&2
+  exit 1
+fi
+
+# Test configuration syntax
+if ! "$HTTPD_BIN" -f /usr/local/apache2/conf/httpd.conf -t 2>&1; then
+  echo "ERROR: Apache configuration test failed!" >&2
   exit 1
 fi
 

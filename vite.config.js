@@ -1,7 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  // Load env vars
+  const env = loadEnv(mode, process.cwd(), '');
+  
   return {
     base: './',
     build: {
@@ -57,7 +60,26 @@ export default defineConfig(() => {
     server: {
         proxy: {
             '/forecast': 'https://api.pirateweather.net',
-            '/gti': 'http://gti.geofox.de'
+            '/gti': 'http://gti.geofox.de',
+            // Proxy Home Assistant API requests (including camera streams) in development
+            // Only configure if HASS_HOST is set
+            ...(env.VITE_HASS_HOST ? {
+                '/api': {
+                    target: env.VITE_HASS_HOST,
+                    changeOrigin: true,
+                    secure: env.VITE_HASS_HOST.startsWith('https'),
+                    rewrite: (path) => path, // Don't rewrite the path
+                    configure: (proxy, _options) => {
+                        proxy.on('proxyReq', (proxyReq, req, res) => {
+                            // Add Authorization header if token is available
+                            const token = env.VITE_HASS_ACCESS_TOKEN;
+                            if (token) {
+                                proxyReq.setHeader('Authorization', `Bearer ${token}`);
+                            }
+                        });
+                    }
+                }
+            } : {})
         }
     },
   };

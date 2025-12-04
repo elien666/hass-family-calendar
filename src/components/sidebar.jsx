@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import styled from 'styled-components'
 import Weather from './weather'
 import Hvv from './hvv'
+import Ev from './ev'
 import Garage from './garage'
 import Laundry from './laundry'
 
@@ -10,12 +11,14 @@ const Div = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  height: 100%;
+  overflow-y: auto;
 
-  @media only screen and (max-width: 1200px) {
-    justify-content: flex-start;
+  .top-content {
+    flex-shrink: 0;
   }
-  
-  > * + * {
+
+  .top-content > * + * {
     margin-top: 24px;
   }
   
@@ -26,6 +29,8 @@ const Div = styled.div`
   
   .two-cols {
     display: flex;
+    margin-top: auto;
+    flex-shrink: 0;
 
     @media only screen and (max-width: 1200px) {
       margin-top: 3rem;
@@ -48,8 +53,11 @@ const Div = styled.div`
 const Sidebar = () => {
   return (
     <Div>
-      <Weather />
-      <Hvv />
+      <div className={'top-content'}>
+        <Weather />
+        <Hvv />
+        <Ev />
+      </div>
       <div className={'two-cols'}>
         <Garage />
         <Laundry />
