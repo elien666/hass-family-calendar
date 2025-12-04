@@ -1,7 +1,6 @@
-**1.16 - 2025-12-03**
+**1.17 - 2025-12-04**
 
-- Add animated progress border for preclimate button
-- UI improvements: EV component layout and HVV logo removal
-- Add automatic WebSocket reconnection with exponential backoff
-- chore(deps): update dependency vite to v7.2.6
+- chore(deps): update dependency react-router-dom to v7.10.1
+- fix(deps): update dependency react-router-dom to v7
+- chore(deps): update react monorepo to v19.2.1
 
