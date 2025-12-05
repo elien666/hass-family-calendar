@@ -4,16 +4,8 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
+import { useConfig } from './ConfigProvider'
 import { 
-  HASS_HOST, 
-  HASS_ACCESS_TOKEN, 
-  SUPERVISOR_TOKEN, 
-  ENTITY_PRECLIMATE_STATUS,
-  ENTITY_PRECLIMATE_START,
-  ENTITY_PRECLIMATE_STOP,
-  ENTITY_CHARGING_STATE,
-  ENTITY_STATE_OF_CHARGE,
-  ENABLE_EV, 
   buildHaUrl,
   buildWebSocketHost, 
   isDevelopment 
@@ -24,6 +16,16 @@ import { formatErrorForUI } from './axios-error-handler'
 // Authorization header is configured centrally in config.js
 
 const useEv = () => {
+  const config = useConfig()
+  const ENABLE_EV = config.ENABLE_EV || false
+  const ENTITY_PRECLIMATE_STATUS = config.ENTITY_PRECLIMATE_STATUS || ''
+  const ENTITY_PRECLIMATE_START = config.ENTITY_PRECLIMATE_START || ''
+  const ENTITY_PRECLIMATE_STOP = config.ENTITY_PRECLIMATE_STOP || ''
+  const ENTITY_CHARGING_STATE = config.ENTITY_CHARGING_STATE || ''
+  const ENTITY_STATE_OF_CHARGE = config.ENTITY_STATE_OF_CHARGE || ''
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
+
   const [ state, setState ] = React.useState({
     preclimateStatus: false,
     chargingState: false,
@@ -91,7 +93,7 @@ const useEv = () => {
 
     fetchStates()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured])
+  }, [isConfigured, ENABLE_EV, ENTITY_PRECLIMATE_STATUS, ENTITY_CHARGING_STATE, ENTITY_STATE_OF_CHARGE])
 
   // WebSocket subscription for all entities
   React.useEffect(() => {
@@ -275,12 +277,13 @@ const useEv = () => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured])
+  }, [isConfigured, ENABLE_EV, ENTITY_PRECLIMATE_STATUS, ENTITY_CHARGING_STATE, ENTITY_STATE_OF_CHARGE, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN])
 
   return [ state, error ]
 }
 
-export const startPreclimate = () => {
+export const startPreclimate = (config) => {
+  const ENTITY_PRECLIMATE_START = config?.ENTITY_PRECLIMATE_START || ''
   if (!ENTITY_PRECLIMATE_START) return
   axios.post(buildHaUrl('/api/services/button/press'), {
     entity_id: ENTITY_PRECLIMATE_START
@@ -291,7 +294,8 @@ export const startPreclimate = () => {
     })
 }
 
-export const stopPreclimate = () => {
+export const stopPreclimate = (config) => {
+  const ENTITY_PRECLIMATE_STOP = config?.ENTITY_PRECLIMATE_STOP || ''
   if (!ENTITY_PRECLIMATE_STOP) return
   axios.post(buildHaUrl('/api/services/button/press'), {
     entity_id: ENTITY_PRECLIMATE_STOP

@@ -1,21 +1,22 @@
 // WebSocket imports not needed - this component only uses REST API
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, ENTITY_EVERYDAY_CALENDAR, ENABLE_EVERYDAY_CALENDAR, buildHaUrl } from "./config"
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
-// Authorization header is configured centrally in config.js
-
-const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`) : null
-
 const useEverydayCalendar = () => {
+  const config = useConfig()
+  const ENABLE_EVERYDAY_CALENDAR = config.ENABLE_EVERYDAY_CALENDAR || false
+  const ENTITY_EVERYDAY_CALENDAR = config.ENTITY_EVERYDAY_CALENDAR || ''
 
   const [ store, setStore ] = React.useState(null)
   const [ error, setError ] = React.useState(false)
 
   // Check if configured
   const isConfigured = ENABLE_EVERYDAY_CALENDAR && ENTITY_EVERYDAY_CALENDAR
+  const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -38,14 +39,16 @@ const useEverydayCalendar = () => {
         setStore([])
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+  }, [isConfigured, url, ENABLE_EVERYDAY_CALENDAR, ENTITY_EVERYDAY_CALENDAR])
 
   return [ store, error ]
 
 }
 
-export const storeData = (data) => {
-  if (!url) return
+export const storeData = (data, config) => {
+  const entityId = config?.ENTITY_EVERYDAY_CALENDAR
+  if (!entityId) return
+  const url = buildHaUrl(`/api/states/${entityId}`)
   axios.post(url, {
     state: new Date(),
     attributes: { store: data }

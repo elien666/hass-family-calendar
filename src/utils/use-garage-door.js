@@ -4,13 +4,17 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_GARAGE_DOOR, ENABLE_GARAGE, buildHaUrl, buildWebSocketHost, isDevelopment } from "./config"
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl, buildWebSocketHost, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
-// Authorization header is configured centrally in config.js
-
 const useGarageDoor = () => {
+  const config = useConfig()
+  const ENABLE_GARAGE = config.ENABLE_GARAGE || false
+  const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
 
   const [ state, setState ] = React.useState('closed')
   const [ error, setError ] = React.useState(false)
@@ -35,7 +39,7 @@ const useGarageDoor = () => {
         setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+  }, [isConfigured, url, ENABLE_GARAGE, ENTITY_GARAGE_DOOR])
 
   React.useEffect(() => {
     let connection = null

@@ -1,7 +1,7 @@
 import React, { memo } from 'react'
 import styled from 'styled-components'
 import useHvv, { SUPPORTED_CALLS } from '../utils/use-hvv'
-import { ENABLE_HVV } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 
 const Div = styled.div`
   margin-top: 2rem;
@@ -61,6 +61,9 @@ const Departure = memo(({ line, direction, realtimeOffset }) => (
   ))
 
 const Hvv = () => {
+  const config = useConfig()
+  const ENABLE_HVV = config.ENABLE_HVV || false
+  
   // Don't render if HVV feature is disabled
   if (!ENABLE_HVV) {
     return null

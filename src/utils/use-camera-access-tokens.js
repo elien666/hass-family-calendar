@@ -4,7 +4,8 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { buildHaUrl, buildWebSocketHost, HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, isDevelopment } from './config'
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl, buildWebSocketHost, isDevelopment } from './config'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
@@ -14,6 +15,11 @@ import { formatErrorForUI } from './axios-error-handler'
  * Subscribes to state_changed events via WebSocket to automatically refresh tokens
  */
 export const useCameraAccessTokens = (cameraEntityIds) => {
+  const config = useConfig()
+  const HASS_HOST = config.HASS_HOST || ''
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
+
   const [tokens, setTokens] = React.useState({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState(null)
@@ -194,6 +200,8 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
       const token = isDevelopment 
         ? (HASS_ACCESS_TOKEN || '')
         : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
+      
+      logger.debug('Camera tokens WebSocket auth:', { isDevelopment, hasSupervisorToken: !!SUPERVISOR_TOKEN, hasAccessToken: !!HASS_ACCESS_TOKEN })
 
       // Skip WebSocket connection if no token
       if (!token) {
@@ -336,31 +344,34 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
 // entityId should be the full entity ID (e.g., "camera.front_door")
 // accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
 // Video elements can't send Authorization headers, so token is passed as query parameter
-export const buildCameraStreamUrl = (entityId, accessToken = null) => {
+export const buildCameraStreamUrl = (entityId, accessToken = null, hassHost = null) => {
   if (!entityId) {
     return null
   }
 
-  // In DEV directly construct the URL
-  if (isDevelopment) {
-    return `${HASS_HOST}/api/camera_proxy_stream/${entityId}?token=${accessToken}`
-  }
+  let host = hassHost || ''
   
-  // Build path with access_token if provided
-  let path = `/api/camera_proxy_stream/${entityId}`
-  if (accessToken) {
-    path = `${path}?token=${encodeURIComponent(accessToken)}`
-  }
-  
-  // Camera streams go directly to HA host (bypass ingress proxy)
-  // Use current window location's host and port to construct direct HA URL
-  if (typeof window !== 'undefined' && window.location) {
-    // Use same protocol, hostname, and port from current URL
+  // In production (HA add-on), HASS_HOST might be empty
+  // Try to construct from window.location if available
+  if (!host && !isDevelopment && typeof window !== 'undefined' && window.location) {
+    // In production, try to use window.location to construct HA host
+    // This assumes the app is served from the same origin as HA
+    // For ingress, this might not work - camera streams may need to go through proxy
     const protocol = window.location.protocol
-    const host = window.location.host // includes hostname:port
-    return `${protocol}//${host}${path}`
+    const hostname = window.location.hostname
+    const port = window.location.port ? `:${window.location.port}` : ''
+    host = `${protocol}//${hostname}${port}`
   }
   
-  // Fallback: use buildHaUrl if window is not available (SSR or test)
-  return path
+  if (!host) {
+    logger.warn('HASS_HOST not configured and cannot derive from window.location, cannot build camera stream URL')
+    return null
+  }
+  
+  // Build direct URL to HA camera stream endpoint
+  const url = `${host}/api/camera_proxy_stream/${entityId}`
+  if (accessToken) {
+    return `${url}?token=${encodeURIComponent(accessToken)}`
+  }
+  return url
 }

@@ -3,7 +3,7 @@ import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloud
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
-import { ENABLE_GARAGE } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import useKeyPress from '../utils/use-key-press'
 import { toast } from 'react-toastify'
 import Overlay from './overlay'
@@ -155,6 +155,9 @@ const showToast = (promise) => (
 )
 
 const Garage = () => {
+  const config = useConfig()
+  const ENABLE_GARAGE = config.ENABLE_GARAGE || false
+  
   // Don't render if garage feature is disabled
   if (!ENABLE_GARAGE) {
     return null

@@ -59,10 +59,13 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
         proxy: {
+            // Note: These proxies are only used when running Vite dev server directly
+            // When using the FastAPI backend (recommended), the backend handles all proxying
             '/forecast': 'https://api.pirateweather.net',
             '/gti': 'http://gti.geofox.de',
-            // Proxy Home Assistant API requests (including camera streams) in development
-            // Only configure if HASS_HOST is set
+            // Proxy Home Assistant API requests (optional - only if VITE_HASS_HOST is set)
+            // This is only needed if you're NOT using the FastAPI backend
+            // The FastAPI backend handles all API proxying, so this is optional
             ...(env.VITE_HASS_HOST ? {
                 '/api': {
                     target: env.VITE_HASS_HOST,

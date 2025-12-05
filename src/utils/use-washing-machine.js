@@ -4,7 +4,8 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, LAUNDRY_MACHINES, ENABLE_LAUNDRY, buildHaUrl, buildWebSocketHost, isDevelopment } from "./config";
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl, buildWebSocketHost, isDevelopment } from "./config";
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
@@ -28,6 +29,12 @@ const mapToValue = {
 }
 
 const useWashingMachine = () => {
+  const config = useConfig()
+  const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
+  const LAUNDRY_MACHINES = config.LAUNDRY_MACHINES || []
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
+  
   // LAUNDRY_MACHINES is stable (from config, doesn't change during component lifecycle)
   // so it's safe to call hooks in a map - the number of hooks will be consistent
   const machines = Array.isArray(LAUNDRY_MACHINES) ? LAUNDRY_MACHINES : []
