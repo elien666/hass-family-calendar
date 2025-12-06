@@ -4,21 +4,25 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, buildWebSocketHost, isDevelopment } from "./config"
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl, buildWebSocketHost, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
-// Authorization header is configured centrally in config.js
-
-const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
-
 const useDoorbell = () => {
+  const config = useConfig()
+  const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
+  const ENTITY_DOORBELL = config.ENTITY_DOORBELL || ''
+  const ENTITY_DOORBELL_BUTTON = config.ENTITY_DOORBELL_BUTTON || ''
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
 
   const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
   // Check if doorbell is configured
   const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
+  const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -36,7 +40,7 @@ const useDoorbell = () => {
         setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+  }, [isConfigured, url, ENABLE_DOORBELL, ENTITY_DOORBELL])
 
   React.useEffect(() => {
     let connection = null

@@ -1,15 +1,16 @@
 import React  from 'react'
-import createSignature from './create-signature'
 import axios from 'axios'
 import akWandsbek from './station-ak-wandsbek.json'
 import { DateTime } from 'luxon'
 import useTimeout from './use-timeout'
-import { GEOFOX_USER, GEOFOX_SECRET, ENABLE_HVV } from './config'
+import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
+// Backend now handles Geofox authentication (signature generation)
+// Frontend just sends the request body
 const callApi = async (endPoint, data) => (
   axios({
     method: 'post',
@@ -18,9 +19,6 @@ const callApi = async (endPoint, data) => (
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json;charset=UTF-8',
-      'geofox-auth-user': GEOFOX_USER,
-      'geofox-auth-signature': await createSignature(data),
-      'Authorization': undefined,
     }
   })
 )
@@ -46,13 +44,15 @@ const transformData = (data) => {
 }
 
 const useHvv = (endPoint) => {
+  const config = useConfig()
+  const ENABLE_HVV = config.ENABLE_HVV || false
 
   const [ responseData, set ] = React.useState([])
   const [ error, setError ] = React.useState(false)
   const timeout = useTimeout(60000) // 60 seconds
 
   // Check if Geofox is configured
-  const isConfigured = ENABLE_HVV && GEOFOX_USER && GEOFOX_SECRET
+  const isConfigured = ENABLE_HVV
 
   React.useEffect(() => {
 
@@ -110,7 +110,7 @@ const useHvv = (endPoint) => {
         setError(formatErrorForUI(error))
       })
 
-  }, [endPoint, timeout, isConfigured])
+  }, [endPoint, timeout, isConfigured, ENABLE_HVV])
 
   return [ responseData, error ]
 
