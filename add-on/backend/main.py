@@ -309,7 +309,17 @@ async def proxy_api(path: str, request: Request):
     headers = {}
     for key, value in request.headers.items():
         if key.lower() not in ("host", "authorization", "content-length"):
-            headers[key] = value
+            # Ensure header values are strings and handle encoding properly
+            try:
+                # Convert to string if needed, handling any encoding issues
+                if isinstance(value, bytes):
+                    headers[key] = value.decode('utf-8', errors='replace')
+                else:
+                    headers[key] = str(value)
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                # Skip headers that can't be properly encoded
+                logger.debug(f"Skipping header {key} due to encoding issue")
+                continue
     
     # Camera streams use token as query parameter, not Authorization header
     # Other API requests use Authorization header
@@ -355,7 +365,17 @@ async def proxy_api(path: str, request: Request):
                     }
                     for key, value in stream_response.headers.items():
                         if key.lower() not in excluded_headers:
-                            response_headers[key] = value
+                            # Ensure header values are strings and handle encoding properly
+                            try:
+                                # Convert to string if needed, handling any encoding issues
+                                if isinstance(value, bytes):
+                                    response_headers[key] = value.decode('utf-8', errors='replace')
+                                else:
+                                    response_headers[key] = str(value)
+                            except (UnicodeDecodeError, UnicodeEncodeError):
+                                # Skip headers that can't be properly encoded
+                                logger.debug(f"Skipping stream response header {key} due to encoding issue")
+                                continue
                     
                     # Preserve Content-Type for MJPEG streams
                     if "content-type" in stream_response.headers:
@@ -424,7 +444,17 @@ async def proxy_api(path: str, request: Request):
                 
                 for key, value in response.headers.items():
                     if key.lower() not in excluded_headers:
-                        response_headers[key] = value
+                        # Ensure header values are strings and handle encoding properly
+                        try:
+                            # Convert to string if needed, handling any encoding issues
+                            if isinstance(value, bytes):
+                                response_headers[key] = value.decode('utf-8', errors='replace')
+                            else:
+                                response_headers[key] = str(value)
+                        except (UnicodeDecodeError, UnicodeEncodeError):
+                            # Skip headers that can't be properly encoded
+                            logger.debug(f"Skipping response header {key} due to encoding issue")
+                            continue
                 
                 return Response(
                     content=response.content,
@@ -435,8 +465,18 @@ async def proxy_api(path: str, request: Request):
         logger.error(f"Timeout connecting to Home Assistant API: {target_url}")
         raise HTTPException(status_code=504, detail="Timeout connecting to Home Assistant API")
     except Exception as e:
-        logger.error(f"Error proxying to Home Assistant API: {e}")
-        raise HTTPException(status_code=502, detail=f"Error connecting to Home Assistant API: {str(e)}")
+        # Safely encode error message to avoid encoding issues
+        try:
+            error_msg = str(e)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            error_msg = repr(e)
+        logger.error(f"Error proxying to Home Assistant API: {error_msg}")
+        # Use a safe error detail that won't cause encoding issues
+        try:
+            detail_msg = f"Error connecting to Home Assistant API: {error_msg}"
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            detail_msg = "Error connecting to Home Assistant API"
+        raise HTTPException(status_code=502, detail=detail_msg)
 
 
 @app.websocket("/api/websocket")
