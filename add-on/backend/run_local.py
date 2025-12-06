@@ -7,9 +7,10 @@ import os
 import sys
 from pathlib import Path
 
-# Add the backend directory to Python path
+# Add the parent directory (add-on) to Python path so we can import backend as a package
 backend_dir = Path(__file__).parent
-sys.path.insert(0, str(backend_dir))
+addon_dir = backend_dir.parent
+sys.path.insert(0, str(addon_dir))
 
 # Load environment variables from .env file
 try:
@@ -62,8 +63,9 @@ if __name__ == "__main__":
     print("\nPress Ctrl+C to stop the server\n")
     
     # Use import string for reload to work properly
+    # Import as backend.main to match Docker setup and support relative imports
     uvicorn.run(
-        "main:app",  # Import string instead of app object
+        "backend.main:app",  # Import string - matches Docker setup
         host="0.0.0.0",
         port=8000,
         reload=True,  # Enable auto-reload for development

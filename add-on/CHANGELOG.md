@@ -1,4 +1,4 @@
-**1.19 - 2025-12-06**
+**1.20 - 2025-12-06**
 
-- Refactor: Replace Apache proxy with FastAPI backend
+- Fix ModuleNotFoundError by using relative imports
 
