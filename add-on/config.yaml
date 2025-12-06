@@ -76,3 +76,7 @@ schema:
   calendars:
     - name: str
       icon: str?
+  frigate:
+    host: str?
+    user: str?
+    password: str?

@@ -65,6 +65,7 @@ const getDefaultConfig = () => {
         return []
       }
     })(),
+    FRIGATE_HOST: getEnv('FRIGATE_HOST', ''),
   }
 }
 

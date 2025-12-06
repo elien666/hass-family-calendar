@@ -282,6 +282,14 @@ def load_config() -> Dict[str, Any]:
     calendars = _get_config_value("CALENDARS", "calendars", [], in_ha)
     config["CALENDARS"] = calendars if isinstance(calendars, list) else []
     
+    # Frigate configuration
+    frigate_host = _get_config_value("FRIGATE_HOST", "frigate.host", "", in_ha)
+    frigate_user = _get_config_value("FRIGATE_USER", "frigate.user", "", in_ha)
+    frigate_password = _get_config_value("FRIGATE_PASSWORD", "frigate.password", "", in_ha)
+    config["FRIGATE_HOST"] = frigate_host.rstrip("/") if frigate_host else ""
+    config["FRIGATE_USER"] = frigate_user or ""
+    config["FRIGATE_PASSWORD"] = frigate_password or ""
+    
     _config_cache = config
     return config
 

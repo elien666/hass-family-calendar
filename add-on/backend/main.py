@@ -16,9 +16,11 @@ from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, 
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse as StarletteStreamingResponse
 
 from config import get_config, clear_cache
 from proxy import create_geofox_signature
+from frigate_auth import get_frigate_auth
 
 # Configure logging with consistent format across all loggers
 logging.basicConfig(
@@ -98,6 +100,335 @@ async def get_config_endpoint():
     """Provide configuration to frontend."""
     config = get_config()
     return JSONResponse(content=config)
+
+
+@app.post("/api/frigate/login")
+async def frigate_login():
+    """Perform login to Frigate and return cookie information.
+    
+    The backend handles CSRF token properly. The cookie must be set by Frigate itself
+    when the browser makes direct requests to Frigate (with CORS configured).
+    """
+    config = get_config()
+    
+    frigate_host = config.get("FRIGATE_HOST", "")
+    frigate_user = config.get("FRIGATE_USER", "")
+    frigate_password = config.get("FRIGATE_PASSWORD", "")
+    
+    if not frigate_host or not frigate_user or not frigate_password:
+        raise HTTPException(
+            status_code=500,
+            detail="Frigate configuration not complete (host, user, password required)"
+        )
+    
+    try:
+        auth = get_frigate_auth(frigate_host, frigate_user, frigate_password)
+        cookie_info = await auth.login()
+        
+        return JSONResponse(content={
+            "cookie": cookie_info,
+            "frigate_host": frigate_host
+        })
+    except Exception as e:
+        logger.error(f"Frigate login error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Frigate login failed: {str(e)}"
+        )
+
+
+@app.get("/api/frigate/login-redirect")
+async def frigate_login_redirect():
+    """Redirect to Frigate login page so Frigate can set the cookie directly in browser.
+    
+    This is a workaround for cross-origin cookie issues. The browser will be redirected
+    to Frigate's login endpoint, which will set the cookie with proper domain.
+    """
+    config = get_config()
+    
+    frigate_host = config.get("FRIGATE_HOST", "")
+    frigate_user = config.get("FRIGATE_USER", "")
+    frigate_password = config.get("FRIGATE_PASSWORD", "")
+    
+    if not frigate_host or not frigate_user or not frigate_password:
+        raise HTTPException(
+            status_code=500,
+            detail="Frigate configuration not complete"
+        )
+    
+    # Redirect to Frigate login - but we can't POST via redirect
+    # Instead, return a page that auto-submits a form to Frigate
+    from fastapi.responses import HTMLResponse
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Frigate Login</title>
+    </head>
+    <body>
+        <form id="loginForm" method="POST" action="{frigate_host}/api/login">
+            <input type="hidden" name="user" value="{frigate_user}">
+            <input type="hidden" name="password" value="{frigate_password}">
+        </form>
+        <script>
+            // Auto-submit form to Frigate
+            document.getElementById('loginForm').submit();
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html)
+
+
+@app.get("/api/frigate/{camera_name}")
+async def frigate_mjpeg_feed(camera_name: str, request: Request):
+    # Log client info to track if browser disconnects
+    client_host = request.client.host if request.client else "unknown"
+    logger.info(f"Frigate MJPEG request from {client_host} for camera {camera_name}")
+    """Proxy Frigate MJPEG feed with authentication.
+    
+    Uses server-side cookie from FrigateAuth to authenticate with Frigate.
+    This avoids cross-origin cookie issues.
+    """
+    config = get_config()
+    
+    frigate_host = config.get("FRIGATE_HOST", "")
+    frigate_user = config.get("FRIGATE_USER", "")
+    frigate_password = config.get("FRIGATE_PASSWORD", "")
+    
+    if not frigate_host or not frigate_user or not frigate_password:
+        raise HTTPException(
+            status_code=500,
+            detail="Frigate configuration not complete (host, user, password required)"
+        )
+    
+    try:
+        auth = get_frigate_auth(frigate_host, frigate_user, frigate_password)
+        cookie = await auth.get_cookie()
+        
+        if not cookie:
+            # Try to login if no cookie available
+            await auth.login()
+            cookie = await auth.get_cookie()
+        
+        if not cookie:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to obtain Frigate authentication cookie"
+            )
+        
+        # Build Frigate URL
+        target_url = f"{frigate_host}/api/{camera_name}"
+        
+        # Prepare headers with cookie
+        headers = {
+            "Cookie": cookie,
+            "User-Agent": request.headers.get("User-Agent", "Family-Calendar/1.0")
+        }
+        
+        # Forward query parameters
+        query_params = dict(request.query_params)
+        
+        try:
+            # Use longer timeout for MJPEG streams (they're continuous)
+            # Set a very long timeout and disable connection pooling to keep stream alive
+            timeout = httpx.Timeout(None, connect=30.0, read=None, write=None, pool=None)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                # Use stream() context manager but keep it open
+                stream_context = client.stream(
+                    "GET",
+                    target_url,
+                    headers=headers,
+                    params=query_params
+                )
+                stream_response = await stream_context.__aenter__()
+                
+                logger.info(f"Frigate stream response status: {stream_response.status_code}")
+                logger.info(f"Frigate stream response headers: {dict(stream_response.headers)}")
+                
+                # Check for 401/403 errors and retry with refreshed cookie
+                if stream_response.status_code in (401, 403):
+                    logger.info(f"Received {stream_response.status_code} from Frigate, refreshing cookie and retrying")
+                    await stream_context.__aexit__(None, None, None)  # Close first stream
+                    await auth.refresh()
+                    cookie = await auth.get_cookie()
+                    if cookie:
+                        headers["Cookie"] = cookie
+                        # Retry the request
+                        retry_context = client.stream(
+                            "GET",
+                            target_url,
+                            headers=headers,
+                            params=query_params
+                        )
+                        stream_response = await retry_context.__aenter__()
+                        stream_context = retry_context
+                        
+                        if stream_response.status_code != 200:
+                            await stream_context.__aexit__(None, None, None)
+                            raise HTTPException(
+                                status_code=stream_response.status_code,
+                                detail=f"Frigate returned {stream_response.status_code} after cookie refresh"
+                            )
+                    else:
+                        await stream_context.__aexit__(None, None, None)
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Failed to refresh Frigate authentication cookie"
+                        )
+                
+                if stream_response.status_code != 200:
+                    await stream_context.__aexit__(None, None, None)
+                    raise HTTPException(
+                        status_code=stream_response.status_code,
+                        detail=f"Frigate returned {stream_response.status_code}"
+                    )
+                
+                # Get response headers - only include what we need for MJPEG streaming
+                # Exclude headers that shouldn't be forwarded or might cause issues
+                response_headers = {}
+                excluded_headers = {
+                    "content-encoding", "transfer-encoding", "content-length",
+                    "connection", "server", "set-cookie", "date",
+                    "strict-transport-security", "x-cache-status",
+                    "access-control-allow-methods", "access-control-allow-headers",
+                    "access-control-allow-credentials", "cache-control"
+                }
+                
+                # Only copy Content-Type from Frigate - this is critical for MJPEG
+                if "content-type" in stream_response.headers:
+                    response_headers["Content-Type"] = stream_response.headers["content-type"]
+                else:
+                    # Fallback if Content-Type is missing
+                    response_headers["Content-Type"] = "multipart/x-mixed-replace;boundary=frame"
+                
+                # Set headers to prevent buffering - critical for MJPEG streams
+                response_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response_headers["Pragma"] = "no-cache"
+                response_headers["Expires"] = "0"
+                # For Nginx (if used as reverse proxy)
+                response_headers["X-Accel-Buffering"] = "no"
+                # CRITICAL: Disable compression for MJPEG streams
+                # Compression would corrupt the multipart stream
+                response_headers["Content-Encoding"] = "identity"
+                # Keep connection alive - important for continuous streams
+                response_headers["Connection"] = "keep-alive"
+                
+                # Stream the response chunks - keep connection alive
+                # The stream should run continuously until client disconnects
+                async def generate():
+                    chunk_count = 0
+                    total_bytes = 0
+                    first_chunk_data = None
+                    try:
+                        logger.info("Starting Frigate stream generator...")
+                        # Read stream continuously - don't stop until client disconnects
+                        # Use aiter_bytes with smaller chunks to avoid blocking
+                        async for chunk in stream_response.aiter_bytes(chunk_size=4096):
+                            if chunk:  # Only yield non-empty chunks
+                                chunk_count += 1
+                                total_bytes += len(chunk)
+                                
+                                # Validate first chunk - check if it starts with boundary marker
+                                if chunk_count == 1:
+                                    first_chunk_data = chunk[:100] if len(chunk) >= 100 else chunk
+                                    logger.info(f"First chunk: {len(chunk)} bytes")
+                                    # Check if it starts with --frame (boundary marker)
+                                    if chunk.startswith(b'--frame'):
+                                        logger.info("✓ First chunk starts with boundary marker (good)")
+                                    elif chunk.startswith(b'\xff\xd8'):
+                                        logger.info("✓ First chunk starts with JPEG header (might be missing boundary)")
+                                    else:
+                                        logger.warning(f"⚠ First chunk doesn't start with boundary or JPEG: {chunk[:50].hex()}")
+                                
+                                # Validate chunk integrity periodically
+                                if chunk_count % 50 == 0:
+                                    logger.info(f"Streaming: {chunk_count} chunks, {total_bytes} bytes")
+                                    # Check if chunk contains boundary marker
+                                    if b'--frame' in chunk:
+                                        logger.debug("Boundary marker found in chunk")
+                                
+                                # Yield chunk immediately - don't buffer
+                                # This is critical - if we don't yield immediately, the browser might think the stream is done
+                                yield chunk
+                        
+                        logger.warning(f"Stream ended unexpectedly after {chunk_count} chunks, {total_bytes} bytes")
+                    except (httpx.StreamClosed, httpx.ReadError) as e:
+                        # Stream closed - this might be because browser closed connection
+                        # ReadError often means the underlying connection was closed
+                        error_msg = str(e) if hasattr(e, '__str__') else type(e).__name__
+                        logger.warning(f"Frigate stream closed after {chunk_count} chunks, {total_bytes} bytes: {type(e).__name__} - {error_msg}")
+                        logger.warning("This usually means the browser closed the connection. The MJPEG data might be corrupt or the browser doesn't support the stream format.")
+                        # Log first chunk data for debugging
+                        if first_chunk_data:
+                            logger.info(f"First chunk preview (hex): {first_chunk_data[:50].hex()}")
+                        # Don't re-raise - just stop generating
+                    except Exception as e:
+                        # Log unexpected errors but don't crash
+                        logger.error(f"Unexpected error in Frigate stream generator after {chunk_count} chunks: {e}", exc_info=True)
+                    finally:
+                        # Only close stream context when generator truly exits
+                        logger.info(f"Closing stream context after {chunk_count} chunks, {total_bytes} bytes")
+                        try:
+                            await stream_context.__aexit__(None, None, None)
+                        except Exception as e:
+                            logger.debug(f"Error closing stream context: {e}")
+                
+                # Use Starlette's StreamingResponse directly - bypass FastAPI's processing
+                # FastAPI's StreamingResponse might be processing the multipart data incorrectly
+                return StarletteStreamingResponse(
+                    generate(),
+                    status_code=200,
+                    headers=response_headers,
+                    media_type=None  # Don't let Starlette process multipart
+                )
+        except httpx.TimeoutException:
+            logger.error(f"Timeout connecting to Frigate: {target_url}")
+            raise HTTPException(status_code=504, detail="Timeout connecting to Frigate")
+        except Exception as e:
+            logger.error(f"Error proxying Frigate feed: {e}")
+            raise HTTPException(status_code=502, detail=f"Error connecting to Frigate: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Frigate proxy error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Frigate proxy failed: {str(e)}"
+        )
+
+
+@app.post("/api/frigate/refresh")
+async def frigate_refresh():
+    """Refresh Frigate authentication cookie."""
+    config = get_config()
+    
+    frigate_host = config.get("FRIGATE_HOST", "")
+    frigate_user = config.get("FRIGATE_USER", "")
+    frigate_password = config.get("FRIGATE_PASSWORD", "")
+    
+    if not frigate_host or not frigate_user or not frigate_password:
+        raise HTTPException(
+            status_code=500,
+            detail="Frigate configuration not complete (host, user, password required)"
+        )
+    
+    try:
+        auth = get_frigate_auth(frigate_host, frigate_user, frigate_password)
+        cookie_info = await auth.refresh()
+        
+        return JSONResponse(content={
+            "cookie": cookie_info,
+            "frigate_host": frigate_host
+        })
+    except Exception as e:
+        logger.error(f"Frigate refresh error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Frigate refresh failed: {str(e)}"
+        )
 
 
 @app.post("/gti/public/{endpoint:path}")

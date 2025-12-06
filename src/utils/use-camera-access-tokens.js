@@ -335,19 +335,35 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
   return [tokens, loading, error]
 }
 
-// Helper function to build HA camera stream URL
-// Uses the HA camera proxy stream API endpoint with access_token as query parameter
-// Format: <protocol>//<host>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
-// Camera streams must go directly to HA host (bypassing ingress proxy) for better performance
-// Uses the current window location's protocol, hostname, and port
-// Based on advanced-camera-card implementation pattern
-// entityId should be the full entity ID (e.g., "camera.front_door")
-// accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
-// Video elements can't send Authorization headers, so token is passed as query parameter
-export const buildCameraStreamUrl = (entityId, accessToken = null, hassHost = null) => {
-  if (!entityId) {
+// Helper function to build camera stream URL
+// Supports both Home Assistant and Frigate camera feeds
+// 
+// For Frigate:
+//   - cameraName: Frigate camera name (e.g., "front_door")
+//   - frigateHost: Frigate host URL (e.g., "http://frigate.local:5000")
+//   - Returns: {frigateHost}/api/{cameraName}
+//
+// For Home Assistant (legacy):
+//   - entityId: Full entity ID (e.g., "camera.front_door")
+//   - accessToken: Access token from camera entity attributes
+//   - hassHost: Home Assistant host URL
+//   - Returns: {hassHost}/api/camera_proxy_stream/{entityId}?token={accessToken}
+export const buildCameraStreamUrl = (cameraNameOrEntityId, accessTokenOrFrigateHost = null, hassHost = null) => {
+  if (!cameraNameOrEntityId) {
     return null
   }
+
+  // Check if this is a Frigate URL (frigateHost provided as second parameter)
+  if (accessTokenOrFrigateHost && typeof accessTokenOrFrigateHost === 'string' && 
+      (accessTokenOrFrigateHost.startsWith('http://') || accessTokenOrFrigateHost.startsWith('https://'))) {
+    // This is a Frigate host URL - proxy through our backend to avoid cookie issues
+    // The backend handles authentication server-side
+    return `/api/frigate/${cameraNameOrEntityId}`
+  }
+
+  // Legacy Home Assistant path
+  const entityId = cameraNameOrEntityId
+  const accessToken = accessTokenOrFrigateHost
 
   let host = hassHost || ''
   

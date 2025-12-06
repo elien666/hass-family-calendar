@@ -5,7 +5,9 @@ import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import { useConfig } from '../utils/ConfigProvider'
 import { calculateOptimalTiling } from '../utils/video-tiling'
-import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import { buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import { useFrigateAuth } from '../utils/use-frigate-auth'
+import logger from '../utils/logger'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -110,6 +112,143 @@ const Container = styled.div`
     }
 `
 
+// Component to handle Frigate MJPEG streams
+// Modern browsers don't support multipart/x-mixed-replace in video/img tags
+// So we need to manually parse the stream and extract JPEG frames
+const FrigateStream = ({ streamUrl, className }) => {
+    const [imageUrl, setImageUrl] = React.useState(null)
+    const imgRef = React.useRef(null)
+
+    React.useEffect(() => {
+        if (!streamUrl) return
+
+        let abortController = new AbortController()
+        let reader = null
+        let buffer = new Uint8Array(0)
+        const boundary = '--frame'
+        const boundaryBytes = new TextEncoder().encode(boundary)
+
+        const parseStream = async () => {
+            try {
+                const response = await fetch(streamUrl, {
+                    signal: abortController.signal,
+                    headers: {
+                        'Accept': 'multipart/x-mixed-replace, */*'
+                    }
+                })
+
+                if (!response.ok) {
+                    logger.error(`Frigate stream failed: ${response.status}`)
+                    return
+                }
+
+                reader = response.body.getReader()
+                
+                while (true) {
+                    const { done, value } = await reader.read()
+                    
+                    if (done) {
+                        logger.debug('Frigate stream ended')
+                        break
+                    }
+
+                    // Append new data to buffer
+                    const newBuffer = new Uint8Array(buffer.length + value.length)
+                    newBuffer.set(buffer)
+                    newBuffer.set(value, buffer.length)
+                    buffer = newBuffer
+
+                    // Look for boundary markers
+                    let boundaryIndex = -1
+                    for (let i = 0; i <= buffer.length - boundaryBytes.length; i++) {
+                        let match = true
+                        for (let j = 0; j < boundaryBytes.length; j++) {
+                            if (buffer[i + j] !== boundaryBytes[j]) {
+                                match = false
+                                break
+                            }
+                        }
+                        if (match) {
+                            boundaryIndex = i
+                            break
+                        }
+                    }
+
+                    // If we found a boundary, extract the JPEG frame before it
+                    if (boundaryIndex > 0) {
+                        // Find the start of the JPEG (after headers)
+                        const frameData = buffer.slice(0, boundaryIndex)
+                        const textDecoder = new TextDecoder()
+                        const frameText = textDecoder.decode(frameData)
+                        
+                        // Find JPEG start marker
+                        const jpegStart = frameData.indexOf(0xFF, frameData.indexOf(0xD8))
+                        if (jpegStart === -1) {
+                            // Try to find JPEG start after headers
+                            const headerEnd = frameText.indexOf('\r\n\r\n')
+                            if (headerEnd !== -1) {
+                                const jpegData = frameData.slice(headerEnd + 4)
+                                if (jpegData.length > 0 && jpegData[0] === 0xFF && jpegData[1] === 0xD8) {
+                                    // Create blob URL from JPEG data
+                                    const blob = new Blob([jpegData], { type: 'image/jpeg' })
+                                    const url = URL.createObjectURL(blob)
+                                    
+                                    // Clean up old URL
+                                    if (imageUrl) {
+                                        URL.revokeObjectURL(imageUrl)
+                                    }
+                                    
+                                    setImageUrl(url)
+                                }
+                            }
+                        } else {
+                            const jpegData = frameData.slice(jpegStart)
+                            if (jpegData.length > 0) {
+                                const blob = new Blob([jpegData], { type: 'image/jpeg' })
+                                const url = URL.createObjectURL(blob)
+                                
+                                if (imageUrl) {
+                                    URL.revokeObjectURL(imageUrl)
+                                }
+                                
+                                setImageUrl(url)
+                            }
+                        }
+
+                        // Keep data after boundary for next frame
+                        buffer = buffer.slice(boundaryIndex)
+                    }
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    logger.error('Frigate stream error:', error)
+                }
+            }
+        }
+
+        parseStream()
+
+        return () => {
+            abortController.abort()
+            if (reader) {
+                reader.cancel()
+            }
+            if (imageUrl) {
+                URL.revokeObjectURL(imageUrl)
+            }
+        }
+    }, [streamUrl])
+
+    return (
+        <img
+            ref={imgRef}
+            src={imageUrl || ''}
+            className={className}
+            alt="Camera stream"
+        />
+    )
+}
+
 const Doorbell = () => {
     const config = useConfig()
     const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
@@ -126,14 +265,8 @@ const Doorbell = () => {
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
 
-    // Extract camera entity IDs and fetch access tokens
-    const cameraEntityIds = React.useMemo(() => {
-        return DOORBELL_CAMERAS
-            .map(cam => cam.entity_id)
-            .filter(Boolean) // Remove any undefined/null values
-    }, [DOORBELL_CAMERAS])
-
-    const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
+    // Get Frigate authentication
+    const { frigateHost, cookie, loading: frigateLoading, error: frigateError } = useFrigateAuth()
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
@@ -262,9 +395,18 @@ const Doorbell = () => {
 
                                 usedIndices[orientation]++
 
-                                // Get access token for this camera entity
-                                const accessToken = accessTokens[camera.entity_id] || null
-                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config.HASS_HOST)
+                                // Get camera name (support both entity_id for legacy and camera_name for Frigate)
+                                const cameraName = camera.camera_name || camera.entity_id?.replace('camera.', '') || camera.entity_id
+                                
+                                // Build Frigate URL if host is available, otherwise fall back to HA
+                                let streamUrl = null
+                                const isFrigateStream = frigateHost && cameraName
+                                if (isFrigateStream) {
+                                    streamUrl = buildCameraStreamUrl(cameraName, frigateHost)
+                                } else if (camera.entity_id) {
+                                    // Fallback to HA camera stream (legacy)
+                                    streamUrl = buildCameraStreamUrl(camera.entity_id, null, config.HASS_HOST)
+                                }
 
                                 if (!streamUrl) {
                                     return null
@@ -281,13 +423,22 @@ const Doorbell = () => {
                                             height: `${videoLayout.height}px`
                                         }}
                                     >
-                                        <img
-                                            src={streamUrl}
-                                            className={orientation}
-                                            alt="Camera stream"
-                                            crossOrigin="anonymous"
-                                            key={`${camera.entity_id}-${index}`}
-                                        />   
+                                        {isFrigateStream ? (
+                                            <FrigateStream
+                                                streamUrl={streamUrl}
+                                                className={orientation}
+                                                key={`${cameraName || camera.entity_id}-${index}`}
+                                            />
+                                        ) : (
+                                            <img
+                                                src={streamUrl}
+                                                className={orientation}
+                                                alt="Camera stream"
+                                                crossOrigin="anonymous"
+                                                key={`${cameraName || camera.entity_id}-${index}-${Date.now()}`}
+                                                referrerPolicy="no-referrer"
+                                            />
+                                        )}   
                                         <div 
                                             className="video-overlay"
                                             onClick={() => openDoor()}
