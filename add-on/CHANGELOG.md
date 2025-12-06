@@ -1,5 +1,4 @@
-**1.21 - 2025-12-06**
+**1.22 - 2025-12-06**
 
-- Fix config loading and duplicate logging issues
-- Improve config loading with better logging and error handling
+- Fix config API request to use ingress path
 
