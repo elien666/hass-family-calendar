@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import Any, Dict
 from contextlib import suppress
 
+# Configure logging FIRST before importing other modules that use logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 import asyncio
 import httpx
 import websockets
@@ -19,13 +26,6 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .config import get_config, clear_cache
 from .proxy import create_geofox_signature
-
-# Configure logging with consistent format across all loggers
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
 # Configure all loggers to use the same format
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -55,10 +55,30 @@ httpx_handler = logging.StreamHandler()
 httpx_handler.setFormatter(formatter)
 httpx_logger.addHandler(httpx_handler)
 
+# Configure backend.config logger to use consistent format
+# Only configure if it doesn't already have handlers to avoid duplicates
+config_logger = logging.getLogger("backend.config")
+if not config_logger.handlers:
+    config_handler = logging.StreamHandler()
+    config_handler.setFormatter(formatter)
+    config_logger.addHandler(config_handler)
+
 # Our application logger
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Family Calendar Backend")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Load and log configuration at startup."""
+    logger.info("Application starting up, loading configuration...")
+    try:
+        config = get_config()
+        logger.info("Configuration loaded successfully at startup")
+    except Exception as e:
+        logger.error(f"Failed to load configuration at startup: {e}", exc_info=True)
+
 
 # CORS middleware (if needed for development)
 app.add_middleware(
