@@ -55,10 +55,30 @@ httpx_handler = logging.StreamHandler()
 httpx_handler.setFormatter(formatter)
 httpx_logger.addHandler(httpx_handler)
 
+# Configure backend.config logger to use consistent format
+# Only configure if it doesn't already have handlers to avoid duplicates
+config_logger = logging.getLogger("backend.config")
+if not config_logger.handlers:
+    config_handler = logging.StreamHandler()
+    config_handler.setFormatter(formatter)
+    config_logger.addHandler(config_handler)
+
 # Our application logger
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Family Calendar Backend")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Load and log configuration at startup."""
+    logger.info("Application starting up, loading configuration...")
+    try:
+        config = get_config()
+        logger.info("Configuration loaded successfully at startup")
+    except Exception as e:
+        logger.error(f"Failed to load configuration at startup: {e}", exc_info=True)
+
 
 # CORS middleware (if needed for development)
 app.add_middleware(

@@ -5,6 +5,7 @@ import os
 import json
 import subprocess
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,20 @@ def _get_env_config(key: str, default: Any = None) -> Any:
         return value
 
 
+def _load_options_json() -> Optional[Dict[str, Any]]:
+    """Load configuration from /data/options.json file (fallback when bashio is not available)."""
+    options_file = Path("/data/options.json")
+    if options_file.exists():
+        try:
+            with open(options_file, 'r') as f:
+                options = json.load(f)
+                logger.info(f"Loaded configuration from {options_file}")
+                return options
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load {options_file}: {e}")
+    return None
+
+
 def _get_bashio_config(key: str, default: Any = None) -> Any:
     """Get a configuration value from bashio."""
     output = _run_bashio_command(f"config {key}")
@@ -84,26 +99,52 @@ def _get_bashio_config(key: str, default: Any = None) -> Any:
         return output
 
 
-def _get_config_value(key: str, bashio_key: str = None, default: Any = None, in_ha: bool = False) -> Any:
-    """Get a configuration value, trying bashio first, then environment variables.
+def _get_options_json_config(key: str, options: Dict[str, Any], default: Any = None) -> Any:
+    """Get a configuration value from options.json using dot notation (e.g., 'weather.enabled')."""
+    keys = key.split('.')
+    value = options
+    for k in keys:
+        if isinstance(value, dict) and k in value:
+            value = value[k]
+        else:
+            return default
+    logger.info(f"options.json config {key}: {value}")
+    return value
+
+
+def _get_config_value(key: str, bashio_key: str = None, default: Any = None, in_ha: bool = False, has_bashio: bool = False, options_json: Optional[Dict[str, Any]] = None) -> Any:
+    """Get a configuration value, trying bashio first, then options.json, then environment variables.
     
     Args:
         key: Environment variable key (without VITE_ prefix)
         bashio_key: Bashio config key (defaults to key if not provided)
         default: Default value if not found
         in_ha: Whether running in Home Assistant
+        has_bashio: Whether bashio is actually available (not just in_ha)
+        options_json: Parsed options.json content (if available)
     """
     if bashio_key is None:
         bashio_key = key.replace("_", ".")
     
-    # In HA mode, prefer bashio
-    if in_ha:
+    # In HA mode, prefer bashio (but only if it's actually available)
+    if in_ha and has_bashio:
         value = _get_bashio_config(bashio_key, None)
         if value is not None:
             logger.debug(f"Config {key}: loaded from bashio ({bashio_key})")
             return value
         else:
-            logger.debug(f"Config {key}: not found in bashio, trying environment variables")
+            logger.debug(f"Config {key}: not found in bashio, trying options.json")
+    
+    # Try options.json if available (fallback when bashio is not available)
+    if in_ha and options_json is not None:
+        value = _get_options_json_config(bashio_key, options_json, None)
+        if value is not None:
+            logger.debug(f"Config {key}: loaded from options.json ({bashio_key})")
+            return value
+        else:
+            logger.debug(f"Config {key}: not found in options.json, trying environment variables")
+    elif in_ha and not has_bashio:
+        logger.debug(f"Config {key}: bashio not available, trying environment variables")
     
     # Fall back to environment variables (works in both HA and local dev)
     env_value = _get_env_config(key, default)
@@ -112,9 +153,9 @@ def _get_config_value(key: str, bashio_key: str = None, default: Any = None, in_
     return env_value
 
 
-def _get_bool_config(key: str, bashio_key: str = None, default: bool = False, in_ha: bool = False) -> bool:
-    """Get a boolean configuration value, trying bashio first, then environment variables."""
-    value = _get_config_value(key, bashio_key, default, in_ha)
+def _get_bool_config(key: str, bashio_key: str = None, default: bool = False, in_ha: bool = False, has_bashio: bool = False, options_json: Optional[Dict[str, Any]] = None) -> bool:
+    """Get a boolean configuration value, trying bashio first, then options.json, then environment variables."""
+    value = _get_config_value(key, bashio_key, default, in_ha, has_bashio, options_json)
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -136,8 +177,13 @@ def load_config() -> Dict[str, Any]:
     has_bashio = _run_bashio_command("version") is not None
     in_ha = bool(supervisor_token) or has_bashio
     
+    # Try to load options.json as fallback when bashio is not available
+    options_json = None
+    if in_ha and not has_bashio:
+        options_json = _load_options_json()
+    
     # Log configuration loading status
-    logger.info(f"Loading configuration (in_ha={in_ha}, has_bashio={has_bashio}, supervisor_token={'set' if supervisor_token else 'not set'})")
+    logger.info(f"Loading configuration (in_ha={in_ha}, has_bashio={has_bashio}, supervisor_token={'set' if supervisor_token else 'not set'}, options_json={'loaded' if options_json else 'not available'})")
     
     # Home Assistant backend URL for local development
     # In HA, this is "http://supervisor/core/api"
@@ -182,23 +228,23 @@ def load_config() -> Dict[str, Any]:
         config["INGRESS_URL"] = ""
     
     # Weather configuration
-    weather_enabled = _get_bool_config("WEATHER_ENABLED", "weather.enabled", False, in_ha)
+    weather_enabled = _get_bool_config("WEATHER_ENABLED", "weather.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if API key is set (for local dev convenience)
     if not weather_enabled and not in_ha:
         weather_api_key = _get_env_config("WEATHER_API_KEY", "")
         weather_enabled = bool(weather_api_key)
     config["ENABLE_WEATHER"] = weather_enabled
     if weather_enabled:
-        config["WEATHER_API_KEY"] = _get_config_value("WEATHER_API_KEY", "weather.weather_api_key", "", in_ha)
-        config["WEATHER_LATITUDE"] = _get_config_value("WEATHER_LATITUDE", "weather.weather_latitude", None, in_ha)
-        config["WEATHER_LONGITUDE"] = _get_config_value("WEATHER_LONGITUDE", "weather.weather_longitude", None, in_ha)
+        config["WEATHER_API_KEY"] = _get_config_value("WEATHER_API_KEY", "weather.weather_api_key", "", in_ha, has_bashio, options_json)
+        config["WEATHER_LATITUDE"] = _get_config_value("WEATHER_LATITUDE", "weather.weather_latitude", None, in_ha, has_bashio, options_json)
+        config["WEATHER_LONGITUDE"] = _get_config_value("WEATHER_LONGITUDE", "weather.weather_longitude", None, in_ha, has_bashio, options_json)
     else:
         config["WEATHER_API_KEY"] = ""
         config["WEATHER_LATITUDE"] = None
         config["WEATHER_LONGITUDE"] = None
     
     # HVV/Geofox configuration
-    hvv_enabled = _get_bool_config("HVV_ENABLED", "hvv.enabled", False, in_ha)
+    hvv_enabled = _get_bool_config("HVV_ENABLED", "hvv.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if credentials are set (for local dev convenience)
     if not hvv_enabled and not in_ha:
         geofox_user = _get_env_config("GEOFOX_USER", "")
@@ -206,26 +252,26 @@ def load_config() -> Dict[str, Any]:
         hvv_enabled = bool(geofox_user and geofox_secret)
     config["ENABLE_HVV"] = hvv_enabled
     if hvv_enabled:
-        config["GEOFOX_USER"] = _get_config_value("GEOFOX_USER", "hvv.geofox_user", "", in_ha)
-        config["GEOFOX_SECRET"] = _get_config_value("GEOFOX_SECRET", "hvv.geofox_secret", "", in_ha)
+        config["GEOFOX_USER"] = _get_config_value("GEOFOX_USER", "hvv.geofox_user", "", in_ha, has_bashio, options_json)
+        config["GEOFOX_SECRET"] = _get_config_value("GEOFOX_SECRET", "hvv.geofox_secret", "", in_ha, has_bashio, options_json)
     else:
         config["GEOFOX_USER"] = ""
         config["GEOFOX_SECRET"] = ""
     
     # Garage configuration
-    garage_enabled = _get_bool_config("GARAGE_ENABLED", "garage.enabled", False, in_ha)
+    garage_enabled = _get_bool_config("GARAGE_ENABLED", "garage.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if entity is set (for local dev convenience)
     if not garage_enabled and not in_ha:
         entity = _get_env_config("ENTITY_GARAGE_DOOR", "")
         garage_enabled = bool(entity)
     config["ENABLE_GARAGE"] = garage_enabled
     if garage_enabled:
-        config["ENTITY_GARAGE_DOOR"] = _get_config_value("ENTITY_GARAGE_DOOR", "garage.entity_garage_door", "", in_ha)
+        config["ENTITY_GARAGE_DOOR"] = _get_config_value("ENTITY_GARAGE_DOOR", "garage.entity_garage_door", "", in_ha, has_bashio, options_json)
     else:
         config["ENTITY_GARAGE_DOOR"] = ""
     
     # Laundry configuration
-    laundry_enabled = _get_bool_config("LAUNDRY_ENABLED", "laundry.enabled", False, in_ha)
+    laundry_enabled = _get_bool_config("LAUNDRY_ENABLED", "laundry.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if machines are set (for local dev convenience)
     if not laundry_enabled and not in_ha:
         machines = _get_env_config("LAUNDRY_MACHINES", "[]")
@@ -237,13 +283,13 @@ def load_config() -> Dict[str, Any]:
         laundry_enabled = bool(machines and len(machines) > 0)
     config["ENABLE_LAUNDRY"] = laundry_enabled
     if laundry_enabled:
-        machines = _get_config_value("LAUNDRY_MACHINES", "laundry.machines", [], in_ha)
+        machines = _get_config_value("LAUNDRY_MACHINES", "laundry.machines", [], in_ha, has_bashio, options_json)
         config["LAUNDRY_MACHINES"] = machines if isinstance(machines, list) else []
     else:
         config["LAUNDRY_MACHINES"] = []
     
     # Doorbell configuration
-    doorbell_enabled = _get_bool_config("DOORBELL_ENABLED", "doorbell.enabled", False, in_ha)
+    doorbell_enabled = _get_bool_config("DOORBELL_ENABLED", "doorbell.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if entity is set (for local dev convenience)
     if not doorbell_enabled and not in_ha:
         entity = _get_env_config("ENTITY_DOORBELL", "")
@@ -251,9 +297,9 @@ def load_config() -> Dict[str, Any]:
         doorbell_enabled = bool(entity or button)
     config["ENABLE_DOORBELL"] = doorbell_enabled
     if doorbell_enabled:
-        config["ENTITY_DOORBELL"] = _get_config_value("ENTITY_DOORBELL", "doorbell.entity_doorbell", "", in_ha)
-        config["ENTITY_DOORBELL_BUTTON"] = _get_config_value("ENTITY_DOORBELL_BUTTON", "doorbell.entity_doorbell_button", "", in_ha)
-        cameras = _get_config_value("DOORBELL_CAMERAS", "doorbell.cameras", [], in_ha)
+        config["ENTITY_DOORBELL"] = _get_config_value("ENTITY_DOORBELL", "doorbell.entity_doorbell", "", in_ha, has_bashio, options_json)
+        config["ENTITY_DOORBELL_BUTTON"] = _get_config_value("ENTITY_DOORBELL_BUTTON", "doorbell.entity_doorbell_button", "", in_ha, has_bashio, options_json)
+        cameras = _get_config_value("DOORBELL_CAMERAS", "doorbell.cameras", [], in_ha, has_bashio, options_json)
         config["DOORBELL_CAMERAS"] = cameras if isinstance(cameras, list) else []
     else:
         config["ENTITY_DOORBELL"] = ""
@@ -261,19 +307,19 @@ def load_config() -> Dict[str, Any]:
         config["DOORBELL_CAMERAS"] = []
     
     # Everyday calendar configuration
-    everyday_calendar_enabled = _get_bool_config("EVERYDAY_CALENDAR_ENABLED", "everyday_calendar.enabled", False, in_ha)
+    everyday_calendar_enabled = _get_bool_config("EVERYDAY_CALENDAR_ENABLED", "everyday_calendar.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if entity is set (for local dev convenience)
     if not everyday_calendar_enabled and not in_ha:
         entity = _get_env_config("ENTITY_EVERYDAY_CALENDAR", "")
         everyday_calendar_enabled = bool(entity)
     config["ENABLE_EVERYDAY_CALENDAR"] = everyday_calendar_enabled
     if everyday_calendar_enabled:
-        config["ENTITY_EVERYDAY_CALENDAR"] = _get_config_value("ENTITY_EVERYDAY_CALENDAR", "everyday_calendar.entity_everyday_calendar", "", in_ha)
+        config["ENTITY_EVERYDAY_CALENDAR"] = _get_config_value("ENTITY_EVERYDAY_CALENDAR", "everyday_calendar.entity_everyday_calendar", "", in_ha, has_bashio, options_json)
     else:
         config["ENTITY_EVERYDAY_CALENDAR"] = ""
     
     # EV configuration
-    ev_enabled = _get_bool_config("EV_ENABLED", "ev.enabled", False, in_ha)
+    ev_enabled = _get_bool_config("EV_ENABLED", "ev.enabled", False, in_ha, has_bashio, options_json)
     # Auto-enable if any entity is set (for local dev convenience)
     if not ev_enabled and not in_ha:
         ev_entities = [
@@ -284,11 +330,11 @@ def load_config() -> Dict[str, Any]:
         ev_enabled = any(ev_entities)
     config["ENABLE_EV"] = ev_enabled
     if ev_enabled:
-        config["ENTITY_PRECLIMATE_STATUS"] = _get_config_value("ENTITY_PRECLIMATE_STATUS", "ev.entity_preclimate_status", "", in_ha)
-        config["ENTITY_PRECLIMATE_START"] = _get_config_value("ENTITY_PRECLIMATE_START", "ev.entity_preclimate_start", "", in_ha)
-        config["ENTITY_PRECLIMATE_STOP"] = _get_config_value("ENTITY_PRECLIMATE_STOP", "ev.entity_preclimate_stop", "", in_ha)
-        config["ENTITY_CHARGING_STATE"] = _get_config_value("ENTITY_CHARGING_STATE", "ev.entity_charging_state", "", in_ha)
-        config["ENTITY_STATE_OF_CHARGE"] = _get_config_value("ENTITY_STATE_OF_CHARGE", "ev.entity_state_of_charge", "", in_ha)
+        config["ENTITY_PRECLIMATE_STATUS"] = _get_config_value("ENTITY_PRECLIMATE_STATUS", "ev.entity_preclimate_status", "", in_ha, has_bashio, options_json)
+        config["ENTITY_PRECLIMATE_START"] = _get_config_value("ENTITY_PRECLIMATE_START", "ev.entity_preclimate_start", "", in_ha, has_bashio, options_json)
+        config["ENTITY_PRECLIMATE_STOP"] = _get_config_value("ENTITY_PRECLIMATE_STOP", "ev.entity_preclimate_stop", "", in_ha, has_bashio, options_json)
+        config["ENTITY_CHARGING_STATE"] = _get_config_value("ENTITY_CHARGING_STATE", "ev.entity_charging_state", "", in_ha, has_bashio, options_json)
+        config["ENTITY_STATE_OF_CHARGE"] = _get_config_value("ENTITY_STATE_OF_CHARGE", "ev.entity_state_of_charge", "", in_ha, has_bashio, options_json)
     else:
         config["ENTITY_PRECLIMATE_STATUS"] = ""
         config["ENTITY_PRECLIMATE_START"] = ""
@@ -297,7 +343,7 @@ def load_config() -> Dict[str, Any]:
         config["ENTITY_STATE_OF_CHARGE"] = ""
     
     # Calendars configuration
-    calendars = _get_config_value("CALENDARS", "calendars", [], in_ha)
+    calendars = _get_config_value("CALENDARS", "calendars", [], in_ha, has_bashio, options_json)
     config["CALENDARS"] = calendars if isinstance(calendars, list) else []
     
     _config_cache = config
