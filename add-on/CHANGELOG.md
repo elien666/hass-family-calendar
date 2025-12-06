@@ -1,4 +1,4 @@
-**1.22 - 2025-12-06**
+**1.23 - 2025-12-06**
 
-- Fix config API request to use ingress path
+- Fix ASCII encoding error when proxying API requests
 
