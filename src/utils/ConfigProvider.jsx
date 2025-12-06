@@ -83,8 +83,14 @@ export const ConfigProvider = ({ children }) => {
       }
 
       // In production, fetch from API endpoint
+      // Use relative URL to work correctly with ingress paths
       try {
-        const response = await axios.get('/api/config', { timeout: 5000 })
+        // Get the base path from current location (handles ingress paths)
+        const basePath = typeof window !== 'undefined' && window.location 
+          ? window.location.pathname.replace(/\/$/, '') 
+          : ''
+        const configUrl = `${basePath}/api/config`
+        const response = await axios.get(configUrl, { timeout: 5000 })
         if (response.data && typeof response.data === 'object') {
           setConfig(response.data)
           logger.info('Configuration loaded from API endpoint', {
