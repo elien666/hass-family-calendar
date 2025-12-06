@@ -1,6 +1,4 @@
-**1.18 - 2025-12-04**
+**1.19 - 2025-12-06**
 
-- Fix WebSocket URL construction using ingress URL from bashio API
-- Remove margin-top from bottom sidebar
-- Add comprehensive axios request/response logging for debugging connection issues
+- Refactor: Replace Apache proxy with FastAPI backend
 
