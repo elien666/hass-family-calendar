@@ -17,8 +17,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
-from config import get_config, clear_cache
-from proxy import create_geofox_signature
+from .config import get_config, clear_cache
+from .proxy import create_geofox_signature
 
 # Configure logging with consistent format across all loggers
 logging.basicConfig(
