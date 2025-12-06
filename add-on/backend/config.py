@@ -29,12 +29,17 @@ def _run_bashio_command(command: str) -> Optional[str]:
                     timeout=5
                 )
                 if result.returncode == 0:
+                    logger.debug(f"bashio command succeeded: {command}")
                     return result.stdout.strip()
+                else:
+                    logger.debug(f"bashio command failed: {command}, returncode={result.returncode}, stderr={result.stderr[:100]}")
             except FileNotFoundError:
+                logger.debug(f"bashio not found at {bashio_path}")
                 continue
+        logger.debug(f"bashio command not available: {command}")
         return None
     except (subprocess.TimeoutExpired, Exception) as e:
-        logger.debug(f"bashio command failed: {command}, error: {e}")
+        logger.warning(f"bashio command error: {command}, error: {e}")
         return None
 
 
@@ -65,13 +70,17 @@ def _get_bashio_config(key: str, default: Any = None) -> Any:
     """Get a configuration value from bashio."""
     output = _run_bashio_command(f"config {key}")
     if output is None or output == "":
+        logger.debug(f"bashio config {key}: not set (using default: {default})")
         return default
     
     # Try to parse as JSON first (for arrays/objects)
     try:
-        return json.loads(output)
+        value = json.loads(output)
+        logger.info(f"bashio config {key}: {value}")
+        return value
     except json.JSONDecodeError:
         # If not JSON, return as string
+        logger.info(f"bashio config {key}: {output}")
         return output
 
 
@@ -91,10 +100,16 @@ def _get_config_value(key: str, bashio_key: str = None, default: Any = None, in_
     if in_ha:
         value = _get_bashio_config(bashio_key, None)
         if value is not None:
+            logger.debug(f"Config {key}: loaded from bashio ({bashio_key})")
             return value
+        else:
+            logger.debug(f"Config {key}: not found in bashio, trying environment variables")
     
     # Fall back to environment variables (works in both HA and local dev)
-    return _get_env_config(key, default)
+    env_value = _get_env_config(key, default)
+    if env_value != default:
+        logger.debug(f"Config {key}: loaded from environment variable")
+    return env_value
 
 
 def _get_bool_config(key: str, bashio_key: str = None, default: bool = False, in_ha: bool = False) -> bool:
@@ -120,6 +135,9 @@ def load_config() -> Dict[str, Any]:
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     has_bashio = _run_bashio_command("version") is not None
     in_ha = bool(supervisor_token) or has_bashio
+    
+    # Log configuration loading status
+    logger.info(f"Loading configuration (in_ha={in_ha}, has_bashio={has_bashio}, supervisor_token={'set' if supervisor_token else 'not set'})")
     
     # Home Assistant backend URL for local development
     # In HA, this is "http://supervisor/core/api"
@@ -283,6 +301,28 @@ def load_config() -> Dict[str, Any]:
     config["CALENDARS"] = calendars if isinstance(calendars, list) else []
     
     _config_cache = config
+    
+    # Log summary of loaded configuration
+    logger.info(f"Configuration loaded successfully (in_ha={in_ha})")
+    logger.info(f"Features enabled: weather={config.get('ENABLE_WEATHER')}, hvv={config.get('ENABLE_HVV')}, garage={config.get('ENABLE_GARAGE')}, laundry={config.get('ENABLE_LAUNDRY')}, doorbell={config.get('ENABLE_DOORBELL')}, everyday_calendar={config.get('ENABLE_EVERYDAY_CALENDAR')}, ev={config.get('ENABLE_EV')}")
+    
+    # Log key configuration values (without sensitive data)
+    if config.get('ENABLE_WEATHER'):
+        logger.info(f"Weather config: latitude={config.get('WEATHER_LATITUDE')}, longitude={config.get('WEATHER_LONGITUDE')}, api_key={'set' if config.get('WEATHER_API_KEY') else 'not set'}")
+    if config.get('ENABLE_HVV'):
+        logger.info(f"HVV config: geofox_user={'set' if config.get('GEOFOX_USER') else 'not set'}, geofox_secret={'set' if config.get('GEOFOX_SECRET') else 'not set'}")
+    if config.get('ENABLE_GARAGE'):
+        logger.info(f"Garage config: entity={config.get('ENTITY_GARAGE_DOOR')}")
+    if config.get('ENABLE_LAUNDRY'):
+        logger.info(f"Laundry config: machines={len(config.get('LAUNDRY_MACHINES', []))} machine(s)")
+    if config.get('ENABLE_DOORBELL'):
+        logger.info(f"Doorbell config: entity={config.get('ENTITY_DOORBELL')}, button={config.get('ENTITY_DOORBELL_BUTTON')}, cameras={len(config.get('DOORBELL_CAMERAS', []))}")
+    if config.get('ENABLE_EVERYDAY_CALENDAR'):
+        logger.info(f"Everyday calendar config: entity={config.get('ENTITY_EVERYDAY_CALENDAR')}")
+    if config.get('ENABLE_EV'):
+        logger.info(f"EV config: preclimate_status={config.get('ENTITY_PRECLIMATE_STATUS')}, charging_state={config.get('ENTITY_CHARGING_STATE')}, state_of_charge={config.get('ENTITY_STATE_OF_CHARGE')}")
+    logger.info(f"Calendars: {len(config.get('CALENDARS', []))} calendar(s) configured")
+    
     return config
 
 

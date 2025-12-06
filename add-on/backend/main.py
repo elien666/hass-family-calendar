@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import Any, Dict
 from contextlib import suppress
 
+# Configure logging FIRST before importing other modules that use logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 import asyncio
 import httpx
 import websockets
@@ -19,13 +26,6 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .config import get_config, clear_cache
 from .proxy import create_geofox_signature
-
-# Configure logging with consistent format across all loggers
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
 # Configure all loggers to use the same format
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
