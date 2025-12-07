@@ -1,4 +1,4 @@
-**1.23 - 2025-12-06**
+**1.24 - 2025-12-07**
 
-- Fix ASCII encoding error when proxying API requests
+- Fix ASCII encoding errors when handling non-ASCII characters
 
