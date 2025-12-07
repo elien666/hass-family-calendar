@@ -1,6 +1,6 @@
 # HASS Family Calendar Add-on
 
-A full-screen dashboard for Home Assistant displaying calendar events, weather forecasts, public transport departures, and smart home device status.
+A full-screen dashboard for Home Assistant displaying calendar events, weather forecasts, public transport departures, cctv, and smart home device status.
 
 ## Features
 
