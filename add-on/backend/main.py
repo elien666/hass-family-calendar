@@ -310,6 +310,9 @@ async def proxy_api(path: str, request: Request):
             pass
     
     # Prepare headers (exclude Authorization, add auth token)
+    # Ensure all header values are properly UTF-8 encoded strings
+    # httpx requires headers to be valid UTF-8 strings, but some HTTP implementations
+    # may have issues with non-ASCII characters, so we normalize them carefully
     headers = {}
     for key, value in request.headers.items():
         if key.lower() not in ("host", "authorization", "content-length"):
@@ -317,18 +320,48 @@ async def proxy_api(path: str, request: Request):
             try:
                 # Convert to string if needed, handling any encoding issues
                 if isinstance(value, bytes):
-                    headers[key] = value.decode('utf-8', errors='replace')
+                    # Try UTF-8 first, then fallback to latin-1 (which can decode any byte)
+                    try:
+                        decoded_value = value.decode('utf-8', errors='strict')
+                    except UnicodeDecodeError:
+                        # If UTF-8 fails, it might be incorrectly encoded
+                        # Try to fix by treating as latin-1 and re-encoding as UTF-8
+                        decoded_value = value.decode('latin-1', errors='replace')
+                        # Re-encode as UTF-8 to normalize
+                        decoded_value = decoded_value.encode('utf-8', errors='replace').decode('utf-8')
                 else:
-                    headers[key] = str(value)
-            except (UnicodeDecodeError, UnicodeEncodeError):
+                    decoded_value = str(value)
+                
+                # Normalize the string to ensure it's valid UTF-8
+                # This handles cases where strings might be double-encoded or incorrectly decoded
+                try:
+                    # Try to encode/decode to ensure it's valid UTF-8
+                    normalized = decoded_value.encode('utf-8', errors='strict').decode('utf-8')
+                    headers[key] = normalized
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    # If normalization fails, use replace mode to ensure ASCII-safe fallback
+                    normalized = decoded_value.encode('utf-8', errors='replace').decode('utf-8')
+                    headers[key] = normalized
+            except (UnicodeDecodeError, UnicodeEncodeError) as header_err:
                 # Skip headers that can't be properly encoded
-                logger.debug(f"Skipping header {key} due to encoding issue")
+                logger.debug(f"Skipping header {key} due to encoding issue: {header_err}")
+                continue
+            except Exception as header_err:
+                logger.debug(f"Skipping header {key} due to unexpected error: {header_err}")
                 continue
     
     # Camera streams use token as query parameter, not Authorization header
     # Other API requests use Authorization header
+    # Ensure Authorization header is UTF-8 safe
     if not is_camera_stream:
-        headers["Authorization"] = f"Bearer {auth_token}"
+        try:
+            auth_header_value = f"Bearer {auth_token}"
+            # Ensure UTF-8 encoding
+            headers["Authorization"] = auth_header_value.encode('utf-8', errors='replace').decode('utf-8')
+        except Exception as auth_err:
+            logger.error(f"Error encoding Authorization header: {auth_err}")
+            # Fallback: use token directly (should be ASCII anyway)
+            headers["Authorization"] = f"Bearer {auth_token}"
     
     # Only set Host header if using supervisor (HA mode) and NOT a camera stream
     # Camera streams go directly to HA host, not through supervisor
@@ -457,13 +490,48 @@ async def proxy_api(path: str, request: Request):
                 except Exception as param_err:
                     logger.debug(f"Error logging query params: {param_err}")
                 
+                # Ensure query params are UTF-8 safe
+                safe_query_params = {}
                 try:
+                    for k, v in request.query_params.items():
+                        try:
+                            # Ensure both key and value are UTF-8 safe
+                            safe_key = str(k).encode('utf-8', errors='replace').decode('utf-8')
+                            safe_value = str(v).encode('utf-8', errors='replace').decode('utf-8')
+                            safe_query_params[safe_key] = safe_value
+                        except Exception as param_encode_err:
+                            logger.debug(f"Skipping query param {k} due to encoding error: {param_encode_err}")
+                            continue
+                except Exception as param_err:
+                    logger.debug(f"Error encoding query params: {param_err}")
+                    # Fallback to original params
+                    safe_query_params = dict(request.query_params)
+                
+                # Log headers before request to debug encoding issues
+                try:
+                    header_preview = {}
+                    for k, v in headers.items():
+                        try:
+                            # Show first 50 chars of each header value
+                            str_v = str(v)
+                            header_preview[k] = str_v[:50] + ('...' if len(str_v) > 50 else '')
+                        except Exception:
+                            header_preview[k] = "<encoding_error>"
+                    logger.debug(f"Final headers being sent: {header_preview}")
+                except Exception as header_log_err:
+                    logger.debug(f"Error logging final headers: {header_log_err}")
+                
+                try:
+                    # Create httpx client with explicit encoding settings
+                    # httpx should handle UTF-8 by default, but we ensure headers are clean
+                    # Use follow_redirects=True to handle redirects properly
                     response = await client.request(
                         method=request.method,
                         url=target_url,
                         headers=headers,
                         content=body,
-                        params=dict(request.query_params)
+                        params=safe_query_params,
+                        follow_redirects=True
                     )
                 except Exception as request_err:
                     logger.error(f"Error making HTTP request to {target_url}: {type(request_err).__name__}: {request_err}")
