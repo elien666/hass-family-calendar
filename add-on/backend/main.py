@@ -286,6 +286,25 @@ async def proxy_api(path: str, request: Request):
     logger.info(f"Proxying {request.method} request to: {target_url}")
     logger.debug(f"Request path: {path}, Query params: {dict(request.query_params)}")
     
+    # Log ALL incoming request headers to find where "Björn" might be coming from
+    try:
+        logger.debug("=== INCOMING REQUEST HEADERS ===")
+        for key, value in request.headers.items():
+            try:
+                # Show raw value and its representation
+                value_str = str(value)
+                value_repr = repr(value)
+                value_bytes = value.encode('utf-8', errors='replace') if isinstance(value, str) else bytes(value)
+                logger.debug(f"Header '{key}': str='{value_str[:100]}', repr={value_repr[:200]}, bytes={value_bytes[:100]}")
+                # Check if "Björn" or similar characters are present
+                if 'Bj' in value_str or 'örn' in value_str or 'ö' in value_str or '\xc3' in value_repr:
+                    logger.warning(f"FOUND POTENTIAL ISSUE in header '{key}': {value_repr}")
+            except Exception as header_log_err:
+                logger.debug(f"Error logging header {key}: {header_log_err}")
+        logger.debug("=== END INCOMING REQUEST HEADERS ===")
+    except Exception as header_log_err:
+        logger.debug(f"Error logging incoming headers: {header_log_err}")
+    
     # Get authentication token
     # In HA: use SUPERVISOR_TOKEN
     # In local dev: use HASS_ACCESS_TOKEN from environment
@@ -310,9 +329,9 @@ async def proxy_api(path: str, request: Request):
             pass
     
     # Prepare headers (exclude Authorization, add auth token)
-    # Ensure all header values are properly UTF-8 encoded strings
-    # httpx requires headers to be valid UTF-8 strings, but some HTTP implementations
-    # may have issues with non-ASCII characters, so we normalize them carefully
+    # CRITICAL: HTTP headers should be ASCII-safe according to RFC 7230
+    # Non-ASCII characters must be encoded (RFC 2047) or we must skip/clean them
+    # httpx may try to encode headers internally, and if the system default is ASCII, it will fail
     headers = {}
     for key, value in request.headers.items():
         if key.lower() not in ("host", "authorization", "content-length"):
@@ -332,16 +351,43 @@ async def proxy_api(path: str, request: Request):
                 else:
                     decoded_value = str(value)
                 
+                # Fix mojibake: "BjÃ¶rn" -> "Björn"
+                # This happens when UTF-8 bytes are decoded as latin-1
+                if 'Ã¶' in decoded_value:
+                    try:
+                        # Try to fix mojibake by re-encoding as latin-1 and decoding as UTF-8
+                        fixed = decoded_value.encode('latin-1', errors='replace').decode('utf-8', errors='replace')
+                        decoded_value = fixed
+                    except Exception:
+                        pass
+                
                 # Normalize the string to ensure it's valid UTF-8
-                # This handles cases where strings might be double-encoded or incorrectly decoded
                 try:
                     # Try to encode/decode to ensure it's valid UTF-8
                     normalized = decoded_value.encode('utf-8', errors='strict').decode('utf-8')
-                    headers[key] = normalized
+                    
+                    # Check if the normalized string contains non-ASCII characters
+                    # If it does, we need to make it ASCII-safe
+                    try:
+                        # Try to encode as ASCII to see if it's safe
+                        normalized.encode('ascii', errors='strict')
+                        # If this succeeds, the string is ASCII-safe
+                        headers[key] = normalized
+                    except UnicodeEncodeError:
+                        # Contains non-ASCII characters - make ASCII-safe by replacing non-ASCII
+                        # This is safer than failing, but we log it
+                        ascii_safe = normalized.encode('ascii', errors='replace').decode('ascii')
+                        logger.warning(f"Header '{key}' contains non-ASCII characters, making ASCII-safe: '{normalized}' -> '{ascii_safe}'")
+                        headers[key] = ascii_safe
                 except (UnicodeDecodeError, UnicodeEncodeError):
                     # If normalization fails, use replace mode to ensure ASCII-safe fallback
-                    normalized = decoded_value.encode('utf-8', errors='replace').decode('utf-8')
-                    headers[key] = normalized
+                    try:
+                        ascii_safe = decoded_value.encode('ascii', errors='replace').decode('ascii')
+                        headers[key] = ascii_safe
+                    except Exception:
+                        # Ultimate fallback: skip the header
+                        logger.warning(f"Skipping header '{key}' due to encoding issues")
+                        continue
             except (UnicodeDecodeError, UnicodeEncodeError) as header_err:
                 # Skip headers that can't be properly encoded
                 logger.debug(f"Skipping header {key} due to encoding issue: {header_err}")
@@ -509,17 +555,31 @@ async def proxy_api(path: str, request: Request):
                 
                 # Log headers before request to debug encoding issues
                 try:
-                    header_preview = {}
+                    logger.debug("=== HEADERS BEING SENT TO HTTPX ===")
                     for k, v in headers.items():
                         try:
-                            # Show first 50 chars of each header value
                             str_v = str(v)
-                            header_preview[k] = str_v[:50] + ('...' if len(str_v) > 50 else '')
-                        except Exception:
-                            header_preview[k] = "<encoding_error>"
-                    logger.debug(f"Final headers being sent: {header_preview}")
+                            repr_v = repr(v)
+                            # Check for problematic characters
+                            if 'Bj' in str_v or 'örn' in str_v or 'ö' in str_v or '\xc3' in repr_v:
+                                logger.warning(f"PROBLEMATIC HEADER '{k}': str='{str_v}', repr={repr_v}")
+                            else:
+                                logger.debug(f"Header '{k}': '{str_v[:100]}'")
+                        except Exception as header_err:
+                            logger.warning(f"Error processing header {k}: {header_err}")
+                    logger.debug("=== END HEADERS BEING SENT ===")
                 except Exception as header_log_err:
                     logger.debug(f"Error logging final headers: {header_log_err}")
+                
+                # Log URL and query params
+                try:
+                    logger.debug(f"URL being sent: {target_url}")
+                    logger.debug(f"Query params being sent: {safe_query_params}")
+                    if body:
+                        body_preview = body[:200] if isinstance(body, bytes) else str(body)[:200]
+                        logger.debug(f"Body preview: {body_preview}")
+                except Exception as url_log_err:
+                    logger.debug(f"Error logging URL/params: {url_log_err}")
                 
                 try:
                     # Create httpx client with explicit encoding settings
@@ -533,6 +593,20 @@ async def proxy_api(path: str, request: Request):
                         params=safe_query_params,
                         follow_redirects=True
                     )
+                except UnicodeEncodeError as encode_err:
+                    # Special handling for encoding errors to get more details
+                    logger.error(f"UnicodeEncodeError details: {encode_err}")
+                    logger.error(f"Encoding error object: {encode_err.object}")
+                    logger.error(f"Encoding error start: {encode_err.start}, end: {encode_err.end}")
+                    logger.error(f"Encoding error reason: {encode_err.reason}")
+                    # Try to identify which header/value caused the issue
+                    for k, v in headers.items():
+                        try:
+                            if encode_err.object in str(v) or encode_err.object in repr(v):
+                                logger.error(f"PROBLEMATIC HEADER FOUND: '{k}' = '{v}' (repr: {repr(v)})")
+                        except Exception:
+                            pass
+                    raise
                 except Exception as request_err:
                     logger.error(f"Error making HTTP request to {target_url}: {type(request_err).__name__}: {request_err}")
                     raise
