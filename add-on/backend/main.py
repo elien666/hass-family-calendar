@@ -470,10 +470,20 @@ async def proxy_api(path: str, request: Request):
             error_msg = str(e)
         except (UnicodeEncodeError, UnicodeDecodeError):
             error_msg = repr(e)
-        logger.error(f"Error proxying to Home Assistant API: {error_msg}")
+        
+        # Log error - ensure message is UTF-8 safe
+        try:
+            # Encode/decode to ensure UTF-8 compatibility
+            safe_msg = error_msg.encode('utf-8', errors='replace').decode('utf-8')
+            logger.error(f"Error proxying to Home Assistant API: {safe_msg}")
+        except Exception:
+            # Ultimate fallback if encoding still fails
+            logger.error("Error proxying to Home Assistant API: encoding error")
+            safe_msg = "Unknown error"
+        
         # Use a safe error detail that won't cause encoding issues
         try:
-            detail_msg = f"Error connecting to Home Assistant API: {error_msg}"
+            detail_msg = f"Error connecting to Home Assistant API: {safe_msg}"
         except (UnicodeEncodeError, UnicodeDecodeError):
             detail_msg = "Error connecting to Home Assistant API"
         raise HTTPException(status_code=502, detail=detail_msg)
@@ -615,11 +625,22 @@ async def proxy_websocket(websocket: WebSocket):
                 logger.error(f"WebSocket proxy error: {e}")
     
     except Exception as e:
-        logger.error(f"Error connecting to Home Assistant WebSocket: {e}")
+        # Safely encode error message to avoid encoding issues
         try:
-            await websocket.close(code=1011, reason=f"Connection error: {str(e)}")
+            error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
+            logger.error(f"Error connecting to Home Assistant WebSocket: {error_msg}")
         except Exception:
-            pass
+            logger.error("Error connecting to Home Assistant WebSocket: encoding error")
+            error_msg = "Connection error"
+        
+        try:
+            reason = f"Connection error: {error_msg}".encode('utf-8', errors='replace').decode('utf-8')
+            await websocket.close(code=1011, reason=reason)
+        except Exception:
+            try:
+                await websocket.close(code=1011, reason="Connection error")
+            except Exception:
+                pass
 
 
 @app.get("/{full_path:path}")
