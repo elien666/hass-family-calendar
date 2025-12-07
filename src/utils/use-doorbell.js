@@ -4,21 +4,25 @@ import {
 } from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
-import { HASS_HOST, HASS_ACCESS_TOKEN, SUPERVISOR_TOKEN, ENTITY_DOORBELL, ENTITY_DOORBELL_BUTTON, ENABLE_DOORBELL, buildHaUrl, isDevelopment } from "./config"
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl, buildWebSocketHost, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
-// Authorization header is configured centrally in config.js
-
-const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
-
 const useDoorbell = () => {
+  const config = useConfig()
+  const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
+  const ENTITY_DOORBELL = config.ENTITY_DOORBELL || ''
+  const ENTITY_DOORBELL_BUTTON = config.ENTITY_DOORBELL_BUTTON || ''
+  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
 
   const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
   // Check if doorbell is configured
   const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
+  const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -36,7 +40,7 @@ const useDoorbell = () => {
         setError(formatErrorForUI(err))
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url])
+  }, [isConfigured, url, ENABLE_DOORBELL, ENTITY_DOORBELL])
 
   React.useEffect(() => {
     let connection = null
@@ -73,21 +77,10 @@ const useDoorbell = () => {
 
       isConnecting = true
 
-      // In production mode (add-on/ingress), construct host URL including ingress path
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      // In development mode, use HASS_HOST and HASS_ACCESS_TOKEN for WebSocket
-      let host
-      if (isDevelopment && HASS_HOST) {
-        host = HASS_HOST
-      } else if (typeof window !== 'undefined' && window.location) {
-        // Include the ingress path in the host URL so the library constructs the correct WebSocket URL
-        // This matches how buildHaUrl constructs URLs for REST API calls
-        const basePath = window.location.pathname.replace(/\/$/, '')
-        host = `${window.location.origin}${basePath}`
-      } else {
-        host = ''
-      }
+      const host = buildWebSocketHost()
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN

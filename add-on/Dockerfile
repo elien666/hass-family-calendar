@@ -1,35 +1,31 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM:-homeassistant/amd64-base:latest}
 
-# Install Apache and required tools
-# Install Apache base packages and module packages for proxy, SSL, and proxy_html
+# Install Python 3 and pip
+# Note: bashio is already available in the Home Assistant base image
 RUN apk add --no-cache \
-    apache2 \
-    apache2-utils \
-    apache2-proxy \
-    apache2-proxy-html \
-    apache2-ssl \
-    sed \
-    gawk
+    python3 \
+    py3-pip
 
-# Create Apache directories matching httpd:2.4 structure
-RUN mkdir -p /usr/local/apache2/htdocs /usr/local/apache2/conf /usr/local/apache2/logs /run/apache2
+# Create directories for static files and backend
+RUN mkdir -p /usr/local/apache2/htdocs
 
-# Copy files
+# Copy static files (frontend dist)
 COPY dist /usr/local/apache2/htdocs/
-COPY ./my-httpd.conf /usr/local/apache2/conf/httpd.conf
-COPY ./run.sh /run.sh
 
-# Verify Apache modules are installed (for debugging)
-RUN ls -la /usr/lib/apache2/mod_*.so 2>/dev/null | head -30 || echo "Note: Some modules may be in /usr/libexec/apache2"
+# Copy backend code and install Python dependencies
+COPY ./backend /app/backend
+WORKDIR /app
+# Use --break-system-packages flag for Python 3.12+ (PEP 668)
+# This is safe in Docker containers as they are isolated
+RUN pip3 install --no-cache-dir --break-system-packages -r backend/requirements.txt
 
 # Set permissions
-RUN chmod a+x /run.sh && \
-    chown -R apache:apache /usr/local/apache2/htdocs /usr/local/apache2/logs
+RUN chmod -R a+r /usr/local/apache2/htdocs
 
-# Create s6 service to run our script
-# This allows s6 to initialize properly before running the script
+# Create s6 service to run FastAPI
 RUN mkdir -p /etc/services.d/app && \
     echo '#!/command/with-contenv bash' > /etc/services.d/app/run && \
-    echo 'exec /run.sh' >> /etc/services.d/app/run && \
+    echo 'cd /app' >> /etc/services.d/app/run && \
+    echo 'exec python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 80' >> /etc/services.d/app/run && \
     chmod +x /etc/services.d/app/run

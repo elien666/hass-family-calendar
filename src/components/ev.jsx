@@ -12,7 +12,7 @@ import {
 import Icon from '@mdi/react'
 import styled from 'styled-components'
 import useEv, { startPreclimate, stopPreclimate } from '../utils/use-ev'
-import { ENABLE_EV } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import clsx from 'clsx'
 
 const Div = styled.div`
@@ -185,6 +185,9 @@ const getBatteryColor = (stateOfCharge) => {
 }
 
 const Ev = () => {
+  const config = useConfig()
+  const ENABLE_EV = config.ENABLE_EV || false
+  
   // Don't render if EV feature is disabled
   if (!ENABLE_EV) {
     return null
@@ -312,9 +315,9 @@ const Ev = () => {
 
     // Send command
     if (isStarting) {
-      startPreclimate()
+      startPreclimate(config)
     } else {
-      stopPreclimate()
+      stopPreclimate(config)
     }
 
     // Set 15s timeout

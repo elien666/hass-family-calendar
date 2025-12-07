@@ -2,7 +2,7 @@ import React from 'react'
 import clsx from "clsx"
 import styled from "styled-components"
 import useEverydayCalendar, { storeData } from '../utils/use-everyday-calendar-state'
-import { ENABLE_EVERYDAY_CALENDAR } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import { ThreeDots } from 'react-loader-spinner'
 
 const Div = styled.div` 
@@ -61,6 +61,9 @@ const Dot = ({ on, month, day }) => {
 }
 
 const EverydayCalendar = () => {
+    const config = useConfig()
+    const ENABLE_EVERYDAY_CALENDAR = config.ENABLE_EVERYDAY_CALENDAR || false
+    
     // Don't render if everyday calendar feature is disabled
     if (!ENABLE_EVERYDAY_CALENDAR) {
         return null
@@ -95,10 +98,10 @@ const EverydayCalendar = () => {
 
     React.useEffect(() => {
         if (on[0] !== undefined) {
-            storeData(on[0])
+            storeData(on[0], config)
         }        
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ on[0] ])
+    }, [ on[0], config ])
 
     return on[0] !== undefined ? (
         <Div>

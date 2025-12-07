@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import useWeatherData, { weatherIconToPresentation } from '../utils/use-weather-data'
-import { ENABLE_WEATHER } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import { DateTime } from 'luxon'
 import useKeyPress from '../utils/use-key-press'
 import React, { memo, useMemo, useCallback } from 'react'
@@ -148,6 +148,10 @@ const Icon = ({ icon }) => {
 }
 
 const Weather = () => {
+  // Use reactive config hook to get current config values
+  const config = useConfig()
+  const ENABLE_WEATHER = config.ENABLE_WEATHER || false
+  
   // Don't render if weather feature is disabled
   if (!ENABLE_WEATHER) {
     return null

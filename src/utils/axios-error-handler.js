@@ -1,5 +1,11 @@
 import logger from './logger'
 
+// Track request statistics for debugging
+let requestCounter = 0
+let successCount = 0
+let errorCount = 0
+const recentErrors = []
+
 /**
  * Extracts error details from an Axios error object
  * @param {Error} error - The Axios error object
@@ -14,6 +20,8 @@ export const extractErrorDetails = (error) => {
     url: null,
     isNetworkError: false,
     isTimeoutError: false,
+    code: error.code || null,
+    config: null,
   }
 
   // Check if it's an Axios error
@@ -31,6 +39,14 @@ export const extractErrorDetails = (error) => {
     errorDetails.isNetworkError = true
     errorDetails.url = error.config?.url || 'Unknown URL'
     errorDetails.message = 'Network error: No response received from server'
+    
+    // Additional network error details
+    if (error.request.readyState !== undefined) {
+      errorDetails.readyState = error.request.readyState
+    }
+    if (error.request.status !== undefined) {
+      errorDetails.requestStatus = error.request.status
+    }
   } else {
     // Something happened in setting up the request that triggered an Error
     errorDetails.message = error.message || 'Request setup error'
@@ -43,16 +59,50 @@ export const extractErrorDetails = (error) => {
     errorDetails.message = 'Request timeout: The request took too long to complete'
   }
 
+  // Capture request config (sanitized)
+  if (error.config) {
+    errorDetails.config = {
+      method: error.config.method,
+      url: error.config.url,
+      baseURL: error.config.baseURL,
+      timeout: error.config.timeout,
+      headers: {
+        ...error.config.headers,
+        // Sanitize sensitive headers
+        Authorization: error.config.headers?.Authorization ? '[REDACTED]' : undefined,
+      },
+      hasAuthHeader: !!error.config.headers?.Authorization,
+    }
+  }
+
   return errorDetails
 }
 
 /**
- * Logs an Axios error with moderate detail
+ * Logs an Axios error with comprehensive detail for debugging
  * @param {Error} error - The Axios error object
  * @param {string} context - Additional context about where the error occurred
  */
 export const logAxiosError = (error, context = '') => {
   const details = extractErrorDetails(error)
+  
+  // Update statistics
+  errorCount++
+  requestCounter++
+  
+  // Keep last 10 errors for pattern analysis
+  recentErrors.push({
+    timestamp: new Date().toISOString(),
+    url: details.url,
+    status: details.status,
+    code: details.code,
+    message: details.message,
+    isNetworkError: details.isNetworkError,
+    isTimeoutError: details.isTimeoutError,
+  })
+  if (recentErrors.length > 10) {
+    recentErrors.shift()
+  }
   
   const logParts = []
   
@@ -60,24 +110,84 @@ export const logAxiosError = (error, context = '') => {
     logParts.push(`[${context}]`)
   }
   
-  logParts.push('Axios API Error:')
-  logParts.push(details.message)
+  logParts.push('🔴 Axios API Error:')
+  logParts.push(`Message: ${details.message}`)
   
   if (details.url) {
     logParts.push(`URL: ${details.url}`)
   }
   
   if (details.status) {
-    logParts.push(`Status: ${details.status}`)
+    logParts.push(`HTTP Status: ${details.status}`)
+  }
+  
+  if (details.code) {
+    logParts.push(`Error Code: ${details.code}`)
+  }
+  
+  if (details.isNetworkError) {
+    logParts.push('Type: Network Error (no response received)')
+    if (details.readyState !== undefined) {
+      logParts.push(`ReadyState: ${details.readyState}`)
+    }
+  }
+  
+  if (details.isTimeoutError) {
+    logParts.push('Type: Timeout Error')
+  }
+  
+  if (details.config) {
+    logParts.push(`Method: ${details.config.method?.toUpperCase() || 'UNKNOWN'}`)
+    logParts.push(`Has Auth Header: ${details.config.hasAuthHeader}`)
+    if (details.config.timeout) {
+      logParts.push(`Timeout: ${details.config.timeout}ms`)
+    }
   }
   
   if (details.responseData) {
-    logParts.push(`Response:`, details.responseData)
+    logParts.push(`Response Data:`, details.responseData)
+  }
+  
+  // Log statistics
+  logParts.push(`Request Stats: ${successCount} success, ${errorCount} errors (${requestCounter} total)`)
+  
+  // If we're seeing a pattern of failures, log recent errors
+  if (errorCount > 3 && recentErrors.length > 0) {
+    logParts.push('Recent errors pattern:', recentErrors.slice(-5))
   }
   
   logger.error(...logParts)
   
   return details
+}
+
+/**
+ * Logs a successful axios request for debugging
+ * @param {Object} config - The axios request config
+ */
+export const logAxiosSuccess = (config) => {
+  successCount++
+  requestCounter++
+  
+  // Only log every 10th successful request to avoid spam, but always log if we had recent errors
+  const shouldLog = requestCounter % 10 === 0 || errorCount > 0
+  
+  if (shouldLog) {
+    logger.debug('✅ Axios Request Success:', {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      hasAuthHeader: !!config.headers?.Authorization,
+      requestNumber: requestCounter,
+      stats: `${successCount} success, ${errorCount} errors`,
+    })
+  }
+  
+  // Reset error count after 10 successful requests in a row
+  if (errorCount > 0 && requestCounter % 10 === 0 && successCount > errorCount) {
+    logger.debug('Request pattern: Errors cleared, connection appears healthy')
+    errorCount = 0
+    recentErrors.length = 0
+  }
 }
 
 /**

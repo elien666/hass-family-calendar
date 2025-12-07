@@ -2,7 +2,7 @@ import styled from 'styled-components'
 import Icon from '@mdi/react'
 import React, { memo, useCallback } from 'react'
 import useWashingMachine from '../utils/use-washing-machine'
-import { ENABLE_LAUNDRY } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import clsx from 'clsx'
 import Overlay from './overlay'
 import { mapToPresentation } from '../utils/use-washing-machine'
@@ -93,6 +93,9 @@ const Div = styled.div`
 `
 
 const Laundry = () => {
+  const config = useConfig()
+  const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
+  
   // Don't render if laundry feature is disabled
   if (!ENABLE_LAUNDRY) {
     return null

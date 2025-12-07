@@ -2,7 +2,7 @@ import React from 'react'
 import useTimeout from './use-timeout'
 import axios from 'axios'
 import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCloud, WiDayCloudy, WiNightPartlyCloudy } from 'weather-icons-react'
-import { WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE, ENABLE_WEATHER } from './config'
+import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
@@ -19,15 +19,22 @@ export const weatherIconToPresentation = {
   'partly-cloudy-night': { icon: WiNightPartlyCloudy, label: 'Teils bewölkt', color: '#d5dae2' }
 }
 
-const url = () => `./forecast/${WEATHER_API_KEY}/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?&units=si&exclude=minutely`
-
 const useWeatherData = (toggleLoading) => {
   const [ data, setData ] = React.useState([])
   const [ error, setError ] = React.useState(false)
   const timer = useTimeout(60000 * 10, 'Weather') // 1 hour in ms
+  
+  // Use reactive config hook to get current config values
+  const config = useConfig()
+  const ENABLE_WEATHER = config.ENABLE_WEATHER || false
+  const WEATHER_API_KEY = config.WEATHER_API_KEY || ''
+  const WEATHER_LATITUDE = config.WEATHER_LATITUDE
+  const WEATHER_LONGITUDE = config.WEATHER_LONGITUDE
 
   // Check if weather is configured
   const isConfigured = ENABLE_WEATHER && WEATHER_API_KEY && WEATHER_LATITUDE && WEATHER_LONGITUDE
+  
+  const url = () => `./forecast/${WEATHER_API_KEY}/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?&units=si&exclude=minutely`
 
   React.useEffect(() => {
     // Skip if not configured
@@ -50,7 +57,7 @@ const useWeatherData = (toggleLoading) => {
       .finally(() => { if(toggleLoading) toggleLoading(false) })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ timer, toggleLoading, isConfigured ])
+  }, [ timer, toggleLoading, isConfigured, ENABLE_WEATHER, WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE ])
 
   return [ data, error ]
 }

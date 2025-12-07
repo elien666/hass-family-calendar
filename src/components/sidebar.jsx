@@ -29,12 +29,8 @@ const Div = styled.div`
   
   .two-cols {
     display: flex;
-    margin-top: auto;
     flex-shrink: 0;
-
-    @media only screen and (max-width: 1200px) {
-      margin-top: 3rem;
-    }
+    margin-top: 0;
     
     > * {
       width: 50%;

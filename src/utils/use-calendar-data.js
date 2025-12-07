@@ -10,14 +10,10 @@ import {
   // Add other commonly used calendar icons here as needed
 } from '@mdi/js'
 import useTimeout from './use-timeout'
-import { HASS_HOST, HASS_ACCESS_TOKEN, buildHaUrl, CALENDARS } from "./config"
+import { useConfig } from './ConfigProvider'
+import { buildHaUrl } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
-
-// Authorization header is configured centrally in config.js
-
-const host = (name) => buildHaUrl(`/api/calendars/${name}`)
-const url = (name, params) => `${host(name)}?${qs.stringify(params)}`
 
 // Map icon string names to actual icon objects from @mdi/js
 // Only includes icons that are explicitly imported above to keep bundle size small
@@ -36,14 +32,8 @@ const getIconFromString = (iconString) => {
   return iconMap[iconKey] || undefined
 }
 
-// Process calendars from config: map icon strings to icon objects
-const calendars = CALENDARS.map((calendar) => ({
-  name: calendar.name,
-  icon: getIconFromString(calendar.icon)
-}))
-
-const loadCalendarInto = (calendar, start, end, data) => (
-  axios(url(calendar.name, { start: start.toISO(), end: end.toISO() }), {
+const loadCalendarInto = (calendar, start, end, data, buildUrl) => (
+  axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
     timeout: 10000 // 10 second timeout
   })
     .then((response) => {
@@ -103,7 +93,7 @@ const getCacheKey = (startDate) => {
   return startDate.toISODate()
 }
 
-const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) => {
+const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, calendars, buildUrl) => {
   // Set up day buckets
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
@@ -121,6 +111,13 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) =>
 
   const newData = dateRange.map((date) => ({ date, allDay: [], events: []}))
 
+  // Skip if no calendars configured
+  if (!calendars || calendars.length === 0) {
+    setData(newData)
+    toggleLoading(false)
+    return
+  }
+
   // Fetch data
   const abortController = new AbortController()
   if (cacheRef.current) {
@@ -132,7 +129,7 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) =>
     toggleLoading(true)
     // Batch all calendar requests in parallel
     const loading = calendars.map((calendar) => (
-      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData)
+      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData, buildUrl)
     ))
 
     Promise.all(loading)
@@ -170,6 +167,20 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError) =>
 const emptyData = []
 
 const useCalendarData = (startDate) => {
+  const config = useConfig()
+  const CALENDARS = config.CALENDARS || []
+  
+  // Process calendars from config: map icon strings to icon objects
+  const calendars = React.useMemo(() => {
+    return CALENDARS.map((calendar) => ({
+      name: calendar.name,
+      icon: getIconFromString(calendar.icon)
+    }))
+  }, [CALENDARS])
+
+  const host = React.useCallback((name) => buildHaUrl(`/api/calendars/${name}`), [])
+  const url = React.useCallback((name, params) => `${host(name)}?${qs.stringify(params)}`, [host])
+
   const [ data, setData ] = React.useState(emptyData)
   const [ isLoading, setIsLoading ] = React.useState(false)
   const [ error, setError ] = React.useState(false)
@@ -187,7 +198,7 @@ const useCalendarData = (startDate) => {
         setCurrentStartDate(startDate)
       }
       
-      loadAll(startDate, data, setData, setIsLoading, abortRef, setError)
+      loadAll(startDate, data, setData, setIsLoading, abortRef, setError, calendars, url)
     }
 
     return () => {
@@ -196,7 +207,7 @@ const useCalendarData = (startDate) => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, timeout])
+  }, [startDate, timeout, calendars])
 
   return [ data, error ]
 }

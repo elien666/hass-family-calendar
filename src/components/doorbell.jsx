@@ -3,7 +3,7 @@ import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
-import { ENABLE_DOORBELL, DOORBELL_CAMERAS } from '../utils/config'
+import { useConfig } from '../utils/ConfigProvider'
 import { calculateOptimalTiling } from '../utils/video-tiling'
 import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
 
@@ -111,6 +111,10 @@ const Container = styled.div`
 `
 
 const Doorbell = () => {
+    const config = useConfig()
+    const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
+    const DOORBELL_CAMERAS = config.DOORBELL_CAMERAS || []
+    
     // Don't render if doorbell feature is disabled
     if (!ENABLE_DOORBELL) {
         return null
@@ -260,7 +264,7 @@ const Doorbell = () => {
 
                                 // Get access token for this camera entity
                                 const accessToken = accessTokens[camera.entity_id] || null
-                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken)
+                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config.HASS_HOST)
 
                                 if (!streamUrl) {
                                     return null
@@ -281,6 +285,8 @@ const Doorbell = () => {
                                             src={streamUrl}
                                             className={orientation}
                                             alt="Camera stream"
+                                            crossOrigin="anonymous"
+                                            key={`${camera.entity_id}-${index}`}
                                         />   
                                         <div 
                                             className="video-overlay"
