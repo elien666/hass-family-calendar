@@ -1,4 +1,4 @@
-**1.27 - 2025-12-07**
+**1.28 - 2025-12-07**
 
-- Add mojibake detection and ASCII-safe header encoding
+- Fix ENABLE_LAUNDRY ReferenceError in frontend
 

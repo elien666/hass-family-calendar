@@ -209,28 +209,34 @@ export const DOORBELL_CAMERAS = (() => {
 // In production (add-on), these are set by run.sh based on dedicated enabled flags in config.yaml
 // In development mode, auto-enable features if their entities/config are present (for local dev convenience)
 const getFeatureFlag = (key, autoEnableCondition) => {
-  // First check if explicitly set in config (from run.sh in production, or build-time env vars)
-  const rawValue = getConfigValue(key, undefined)
-  // If value is explicitly set (not undefined), use it
-  if (rawValue !== undefined) {
-    // Value exists, convert to boolean
-    const value = rawValue
-    if (typeof value === 'boolean') return value
-    if (typeof value === 'string') {
-      return value === 'true' || value === '1' || value === 'yes'
+  try {
+    // First check if explicitly set in config (from run.sh in production, or build-time env vars)
+    const rawValue = getConfigValue(key, undefined)
+    // If value is explicitly set (not undefined), use it
+    if (rawValue !== undefined) {
+      // Value exists, convert to boolean
+      const value = rawValue
+      if (typeof value === 'boolean') return value
+      if (typeof value === 'string') {
+        return value === 'true' || value === '1' || value === 'yes'
+      }
+      return Boolean(value)
     }
-    return Boolean(value)
-  }
-  // Value not explicitly set - in development mode, auto-enable if condition is met
-  // This is useful for local development when run.sh hasn't run
-  if (isDevelopment) {
-    // Check if auto-enable condition is truthy (entity/config exists)
-    if (autoEnableCondition) {
-      return true
+    // Value not explicitly set - in development mode, auto-enable if condition is met
+    // This is useful for local development when run.sh hasn't run
+    if (isDevelopment) {
+      // Check if auto-enable condition is truthy (entity/config exists)
+      if (autoEnableCondition) {
+        return true
+      }
     }
+    // Default to false - always return a boolean
+    return false
+  } catch (error) {
+    // If anything goes wrong, default to false
+    logger.debug(`Error getting feature flag ${key}:`, error)
+    return false
   }
-  // Default to false
-  return false
 }
 
 // Helper to check if a value is truthy (not empty/null/undefined)
@@ -240,20 +246,21 @@ const isTruthy = (value) => {
 
 // Feature flags - run.sh sets these based on dedicated enabled flags in config.yaml
 // In development mode, fallback to auto-enable if config values are present
+// Ensure all exports are always defined (never undefined) to prevent ReferenceErrors
 export const ENABLE_WEATHER = getFeatureFlag('ENABLE_WEATHER', 
-  isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE)))
+  isTruthy(WEATHER_API_KEY) || (isTruthy(WEATHER_LATITUDE) && isTruthy(WEATHER_LONGITUDE))) || false
 export const ENABLE_HVV = getFeatureFlag('ENABLE_HVV', 
-  isTruthy(GEOFOX_USER) && isTruthy(GEOFOX_SECRET))
+  isTruthy(GEOFOX_USER) && isTruthy(GEOFOX_SECRET)) || false
 export const ENABLE_GARAGE = getFeatureFlag('ENABLE_GARAGE', 
-  isTruthy(ENTITY_GARAGE_DOOR))
+  isTruthy(ENTITY_GARAGE_DOOR)) || false
 export const ENABLE_LAUNDRY = getFeatureFlag('ENABLE_LAUNDRY', 
-  Array.isArray(LAUNDRY_MACHINES) && LAUNDRY_MACHINES.length > 0)
+  Array.isArray(LAUNDRY_MACHINES) && LAUNDRY_MACHINES.length > 0) || false
 export const ENABLE_DOORBELL = getFeatureFlag('ENABLE_DOORBELL', 
-  isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON))
+  isTruthy(ENTITY_DOORBELL) || isTruthy(ENTITY_DOORBELL_BUTTON)) || false
 export const ENABLE_EVERYDAY_CALENDAR = getFeatureFlag('ENABLE_EVERYDAY_CALENDAR', 
-  isTruthy(ENTITY_EVERYDAY_CALENDAR))
+  isTruthy(ENTITY_EVERYDAY_CALENDAR)) || false
 export const ENABLE_EV = getFeatureFlag('ENABLE_EV', 
-  isTruthy(ENTITY_PRECLIMATE_STATUS) || isTruthy(ENTITY_CHARGING_STATE) || isTruthy(ENTITY_STATE_OF_CHARGE))
+  isTruthy(ENTITY_PRECLIMATE_STATUS) || isTruthy(ENTITY_CHARGING_STATE) || isTruthy(ENTITY_STATE_OF_CHARGE)) || false
 
 // Helper function to build HA API URLs
 // In production mode (add-on/ingress), use INGRESS_URL from bashio API when available
