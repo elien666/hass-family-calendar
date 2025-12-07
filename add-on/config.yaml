@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.23"
+version: "1.26"
 slug: "family-calendar"
 init: false
 arch:
