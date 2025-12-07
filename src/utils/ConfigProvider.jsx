@@ -93,11 +93,19 @@ export const ConfigProvider = ({ children }) => {
         const response = await axios.get(configUrl, { timeout: 5000 })
         if (response.data && typeof response.data === 'object') {
           setConfig(response.data)
-          logger.info('Configuration loaded from API endpoint', {
-            enabledFeatures: Object.keys(response.data)
-              .filter(k => k.startsWith('ENABLE_') && response.data[k])
-              .map(k => k.replace('ENABLE_', ''))
-          })
+          // Get enabled features for summary
+          const enabledFeatures = Object.keys(response.data)
+            .filter(k => k.startsWith('ENABLE_') && response.data[k])
+            .map(k => k.replace('ENABLE_', ''))
+          
+          // Log summary to backend
+          logger.info(
+            `Configuration loaded from API endpoint. Enabled features: ${enabledFeatures.length > 0 ? enabledFeatures.join(', ') : 'none'}`,
+            {
+              enabledFeatures,
+              totalConfigKeys: Object.keys(response.data).length
+            }
+          )
         }
       } catch (error) {
         logger.debug('Failed to load config from API, using defaults:', error.message)

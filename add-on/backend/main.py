@@ -120,6 +120,42 @@ async def get_config_endpoint():
     return JSONResponse(content=config)
 
 
+@app.post("/api/log")
+async def log_endpoint(request: Request):
+    """Accept log events from frontend and log them using Python logging."""
+    try:
+        body = await request.json()
+        level = body.get("level", "INFO").upper()
+        message = body.get("message", "")
+        metadata = body.get("metadata", {})
+        
+        # Validate level
+        if level not in ["INFO", "WARNING", "ERROR", "DEBUG"]:
+            level = "INFO"
+        
+        # Build log message with metadata if present
+        if metadata:
+            log_message = f"[Frontend] {message} | Metadata: {metadata}"
+        else:
+            log_message = f"[Frontend] {message}"
+        
+        # Log at appropriate level
+        if level == "ERROR":
+            logger.error(log_message)
+        elif level == "WARNING":
+            logger.warning(log_message)
+        elif level == "DEBUG":
+            logger.debug(log_message)
+        else:  # INFO or default
+            logger.info(log_message)
+        
+        return JSONResponse(content={"status": "ok"})
+    except Exception as e:
+        # Log the error but don't fail the request
+        logger.error(f"Error processing frontend log: {e}", exc_info=True)
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=400)
+
+
 @app.post("/gti/public/{endpoint:path}")
 async def proxy_gti(endpoint: str, request: Request):
     """

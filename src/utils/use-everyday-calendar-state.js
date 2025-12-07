@@ -16,7 +16,7 @@ const useEverydayCalendar = () => {
 
   // Check if configured
   const isConfigured = ENABLE_EVERYDAY_CALENDAR && ENTITY_EVERYDAY_CALENDAR
-  const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`) : null
+  const url = ENTITY_EVERYDAY_CALENDAR ? buildHaUrl(`/api/states/${ENTITY_EVERYDAY_CALENDAR}`, config) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -48,7 +48,7 @@ const useEverydayCalendar = () => {
 export const storeData = (data, config) => {
   const entityId = config?.ENTITY_EVERYDAY_CALENDAR
   if (!entityId) return
-  const url = buildHaUrl(`/api/states/${entityId}`)
+  const url = buildHaUrl(`/api/states/${entityId}`, config)
   axios.post(url, {
     state: new Date(),
     attributes: { store: data }

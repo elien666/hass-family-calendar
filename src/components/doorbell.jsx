@@ -176,7 +176,7 @@ const Doorbell = () => {
         } else if (confirmationState === 'confirm') {
             // Second click: open door
             setConfirmationState('opening')
-            unlatchFrontDoor()
+            unlatchFrontDoor(config)
             // Reset after showing the message
             setTimeout(() => setConfirmationState(null), 2000)
         }

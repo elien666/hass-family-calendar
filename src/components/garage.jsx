@@ -192,25 +192,25 @@ const Garage = () => {
   React.useEffect(() => {
     if (keyGarage && error === false) {
       // Send toggle action to Home Assistant
-      toggleGarageDoor(setAnimate)
+      toggleGarageDoor(setAnimate, config)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyGarage, error]) // Only fire when key is pressed
+  }, [keyGarage, error, config]) // Only fire when key is pressed
 
   const controlGarage = useCallback((action) => {
     if (error !== false) return
     toggle(false)
     switch (action) {
       case 'open':
-        openGarageDoor(setAnimate)
+        openGarageDoor(setAnimate, config)
         break
       case 'close':
-        closeGarageDoor(setAnimate)
+        closeGarageDoor(setAnimate, config)
         break;
       default:
         // 
     }
-  }, [setAnimate, error])
+  }, [setAnimate, error, config])
 
   const handleStatusClick = useCallback(() => {
     if (error === false) {

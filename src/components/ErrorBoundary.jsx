@@ -46,8 +46,20 @@ class ErrorBoundary extends React.Component {
       error,
       errorInfo
     })
-    // Log error
-    logger.error('ErrorBoundary caught an error:', error, errorInfo)
+    // Log error to console and backend
+    const errorMessage = error?.toString() || 'Unknown error'
+    const errorStack = error?.stack || ''
+    const componentStack = errorInfo?.componentStack || ''
+    
+    logger.error(
+      `ErrorBoundary caught an error: ${errorMessage}`,
+      {
+        errorName: error?.name,
+        errorMessage: errorMessage,
+        errorStack: errorStack,
+        componentStack: componentStack
+      }
+    )
   }
 
   handleReset = () => {

@@ -178,7 +178,7 @@ const useCalendarData = (startDate) => {
     }))
   }, [CALENDARS])
 
-  const host = React.useCallback((name) => buildHaUrl(`/api/calendars/${name}`), [])
+  const host = React.useCallback((name) => buildHaUrl(`/api/calendars/${name}`, config), [config])
   const url = React.useCallback((name, params) => `${host(name)}?${qs.stringify(params)}`, [host])
 
   const [ data, setData ] = React.useState(emptyData)
