@@ -21,7 +21,7 @@ const useGarageDoor = () => {
 
   // Check if garage door is configured
   const isConfigured = ENABLE_GARAGE && ENTITY_GARAGE_DOOR
-  const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`) : null
+  const url = ENTITY_GARAGE_DOOR ? buildHaUrl(`/api/states/${ENTITY_GARAGE_DOOR}`, config) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -76,10 +76,10 @@ const useGarageDoor = () => {
 
       isConnecting = true
 
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost()
+      const host = buildWebSocketHost(config)
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN
@@ -201,11 +201,12 @@ const useGarageDoor = () => {
 
 }
 
-export const toggleGarageDoor = (isLoading) => {
+export const toggleGarageDoor = (isLoading, config = {}) => {
+  const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
   const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/toggle'), {
+  axios.post(buildHaUrl('/api/services/cover/toggle', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })
     .catch((err) => {
@@ -218,11 +219,12 @@ export const toggleGarageDoor = (isLoading) => {
     })
 }
 
-export const openGarageDoor = (isLoading) => {
+export const openGarageDoor = (isLoading, config = {}) => {
+  const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
   const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/open_cover'), {
+  axios.post(buildHaUrl('/api/services/cover/open_cover', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })
     .catch((err) => {
@@ -235,11 +237,12 @@ export const openGarageDoor = (isLoading) => {
     })
 }
 
-export const closeGarageDoor = (isLoading) => {
+export const closeGarageDoor = (isLoading, config = {}) => {
+  const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
   const timeoutId = setTimeout(() => isLoading(false), 3000)
-  axios.post(buildHaUrl('/api/services/cover/close_cover'), {
+  axios.post(buildHaUrl('/api/services/cover/close_cover', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })
     .catch((err) => {

@@ -42,7 +42,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         // Fetch all camera entity states in parallel
         const fetchPromises = cameraEntityIds.map(async (entityId) => {
           try {
-            const url = buildHaUrl(`/api/states/${entityId}`)
+            const url = buildHaUrl(`/api/states/${entityId}`, config)
             const response = await axios(url)
             
             // Extract access_token from entity attributes
@@ -103,7 +103,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         // Fetch all camera entity states in parallel
         const fetchPromises = cameraEntityIds.map(async (entityId) => {
           try {
-            const url = buildHaUrl(`/api/states/${entityId}`)
+            const url = buildHaUrl(`/api/states/${entityId}`, config)
             const response = await axios(url)
             
             // Extract access_token from entity attributes
@@ -190,10 +190,10 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
       }
 
       isConnecting = true
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost()
+      const host = buildWebSocketHost(config)
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN

@@ -51,7 +51,7 @@ const useEv = () => {
       
       if (ENTITY_PRECLIMATE_STATUS) {
         promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_PRECLIMATE_STATUS}`))
+          axios(buildHaUrl(`/api/states/${ENTITY_PRECLIMATE_STATUS}`, config))
             .then(response => ({ type: 'preclimateStatus', value: response.data.state === 'on' }))
             .catch(err => ({ type: 'preclimateStatus', error: formatErrorForUI(err) }))
         )
@@ -59,7 +59,7 @@ const useEv = () => {
       
       if (ENTITY_CHARGING_STATE) {
         promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_CHARGING_STATE}`))
+          axios(buildHaUrl(`/api/states/${ENTITY_CHARGING_STATE}`, config))
             .then(response => ({ type: 'chargingState', value: response.data.state === 'on' }))
             .catch(err => ({ type: 'chargingState', error: formatErrorForUI(err) }))
         )
@@ -67,7 +67,7 @@ const useEv = () => {
       
       if (ENTITY_STATE_OF_CHARGE) {
         promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_STATE_OF_CHARGE}`))
+          axios(buildHaUrl(`/api/states/${ENTITY_STATE_OF_CHARGE}`, config))
             .then(response => ({ type: 'stateOfCharge', value: parseFloat(response.data.state) || 0 }))
             .catch(err => ({ type: 'stateOfCharge', error: formatErrorForUI(err) }))
         )
@@ -132,10 +132,10 @@ const useEv = () => {
 
       isConnecting = true
 
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost()
+      const host = buildWebSocketHost(config)
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN
@@ -285,7 +285,7 @@ const useEv = () => {
 export const startPreclimate = (config) => {
   const ENTITY_PRECLIMATE_START = config?.ENTITY_PRECLIMATE_START || ''
   if (!ENTITY_PRECLIMATE_START) return
-  axios.post(buildHaUrl('/api/services/button/press'), {
+  axios.post(buildHaUrl('/api/services/button/press', config), {
     entity_id: ENTITY_PRECLIMATE_START
   })
     .catch((err) => {
@@ -297,7 +297,7 @@ export const startPreclimate = (config) => {
 export const stopPreclimate = (config) => {
   const ENTITY_PRECLIMATE_STOP = config?.ENTITY_PRECLIMATE_STOP || ''
   if (!ENTITY_PRECLIMATE_STOP) return
-  axios.post(buildHaUrl('/api/services/button/press'), {
+  axios.post(buildHaUrl('/api/services/button/press', config), {
     entity_id: ENTITY_PRECLIMATE_STOP
   })
     .catch((err) => {

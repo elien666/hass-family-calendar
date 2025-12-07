@@ -10,9 +10,9 @@ import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from 
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 
-// Authorization header is configured centrally in config.js
+// Authorization header is configured centrally in ConfigProvider
 
-const urlPattern = ( entity ) => entity ? buildHaUrl(`/api/states/${entity}`) : null
+const urlPattern = ( entity, config ) => entity ? buildHaUrl(`/api/states/${entity}`, config) : null
 
 export const mapToPresentation = {
   done: { label: 'Fertig', animate: false, icon: mdiWashingMachineAlert },
@@ -46,7 +46,7 @@ const useWashingMachine = () => {
   // 3. We need dynamic number of subscriptions based on config
   const subscriptions = machines.map((machine, index) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [state, error] = useSubscription(machine.entity_id)
+    const [state, error] = useSubscription(machine.entity_id, config)
     return { state, error, name: machine.name }
   })
 
@@ -114,14 +114,15 @@ const useWashingMachine = () => {
   return [ state, states, error ]
 }
 
-const useSubscription = ( entity ) => {
+const useSubscription = ( entity, config ) => {
 
   const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
 
   // Check if entity is configured
+  const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
   const isConfigured = ENABLE_LAUNDRY && entity
-  const url = urlPattern(entity)
+  const url = urlPattern(entity, config)
 
   React.useEffect(() => {
     // Skip if not configured
@@ -176,13 +177,15 @@ const useSubscription = ( entity ) => {
 
       isConnecting = true
 
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost()
+      const host = buildWebSocketHost(config)
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN
+      const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
+      const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
       const token = isDevelopment 
         ? (HASS_ACCESS_TOKEN || '')
         : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')

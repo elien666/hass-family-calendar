@@ -22,7 +22,7 @@ const useDoorbell = () => {
 
   // Check if doorbell is configured
   const isConfigured = ENABLE_DOORBELL && ENTITY_DOORBELL
-  const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`) : null
+  const url = ENTITY_DOORBELL ? buildHaUrl(`/api/states/${ENTITY_DOORBELL}`, config) : null
 
   React.useEffect(() => {
     // Skip if not configured
@@ -77,10 +77,10 @@ const useDoorbell = () => {
 
       isConnecting = true
 
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from bashio API
+      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
       // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
       // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost()
+      const host = buildWebSocketHost(config)
       
       // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
       // In development, use HASS_ACCESS_TOKEN
@@ -214,9 +214,10 @@ const useDoorbell = () => {
 
 }
 
-export const unlatchFrontDoor = () => {
+export const unlatchFrontDoor = (config = {}) => {
+  const ENTITY_DOORBELL_BUTTON = config.ENTITY_DOORBELL_BUTTON || ''
   if (!ENTITY_DOORBELL_BUTTON) return
-  axios.post(buildHaUrl('/api/services/button/press'), {
+  axios.post(buildHaUrl('/api/services/button/press', config), {
     "entity_id": ENTITY_DOORBELL_BUTTON
   })
     .catch((err) => {
