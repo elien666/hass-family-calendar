@@ -26,6 +26,8 @@ def _run_bashio_command(command: str) -> Optional[str]:
                     [bashio_path, command],
                     capture_output=True,
                     text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     check=False,
                     timeout=5
                 )
