@@ -65,13 +65,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-react':
         specifier: ^5.1.1
-        version: 5.1.1(vite@7.2.6(@types/node@22.15.21))
+        version: 5.1.1(vite@7.2.7(@types/node@22.15.21))
       chokidar-cli:
         specifier: ^3.0.0
         version: 3.0.0
       vite:
         specifier: ^7.2.4
-        version: 7.2.6(@types/node@22.15.21)
+        version: 7.2.7(@types/node@22.15.21)
 
 packages:
 
@@ -1003,8 +1003,8 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
-  vite@7.2.6:
-    resolution: {integrity: sha512-tI2l/nFHC5rLh7+5+o7QjKjSR04ivXDF4jcgV0f/bTQ+OJiITy5S6gaynVsEM+7RqzufMnVbIon6Sr5x1SDYaQ==}
+  vite@7.2.7:
+    resolution: {integrity: sha512-ITcnkFeR3+fI8P1wMgItjGrR10170d8auB4EpMLPqmx6uxElH3a/hHGQabSHKdqd4FXWO1nFIp9rRn7JQ34ACQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -1393,7 +1393,7 @@ snapshots:
 
   '@types/stylis@4.2.5': {}
 
-  '@vitejs/plugin-react@5.1.1(vite@7.2.6(@types/node@22.15.21))':
+  '@vitejs/plugin-react@5.1.1(vite@7.2.7(@types/node@22.15.21))':
     dependencies:
       '@babel/core': 7.28.5
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.28.5)
@@ -1401,7 +1401,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.47
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.2.6(@types/node@22.15.21)
+      vite: 7.2.7(@types/node@22.15.21)
     transitivePeerDependencies:
       - supports-color
 
@@ -1913,7 +1913,7 @@ snapshots:
       escalade: 3.2.0
       picocolors: 1.1.1
 
-  vite@7.2.6(@types/node@22.15.21):
+  vite@7.2.7(@types/node@22.15.21):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.3)
