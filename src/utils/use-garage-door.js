@@ -48,10 +48,12 @@ const useGarageDoor = () => {
     let reconnectTimeout = null
     let reconnectAttempts = 0
     let isConnecting = false
+    let readyHandler = null
+    let disconnectedHandler = null
 
     async function connect() {
       // Skip if not configured
-      if (!isConfigured || !ENTITY_GARAGE_DOOR) {
+      if (!isConfigured || !ENTITY_GARAGE_DOOR || !isMounted) {
         return
       }
 
@@ -63,6 +65,15 @@ const useGarageDoor = () => {
       // Close existing connection if any
       if (connection) {
         try {
+          // Remove event listeners before closing
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+            readyHandler = null
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+            disconnectedHandler = null
+          }
           if (unsubscribe) {
             unsubscribe()
             unsubscribe = null
@@ -111,25 +122,29 @@ const useGarageDoor = () => {
         connection = await createConnection({ auth })
 
         // Handle connection ready event
-        connection.addEventListener('ready', () => {
+        readyHandler = () => {
           if (isMounted) {
             logger.debug('WebSocket connection ready for garage door')
             reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
-        })
+        }
+        connection.addEventListener('ready', readyHandler)
 
         // Handle disconnection events - attempt to reconnect
-        connection.addEventListener('disconnected', () => {
+        disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for garage door, will attempt to reconnect')
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
             }
             // Clear connection reference
             connection = null
             unsubscribe = null
+            readyHandler = null
+            disconnectedHandler = null
             // Calculate exponential backoff delay
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
             reconnectAttempts++
@@ -141,7 +156,8 @@ const useGarageDoor = () => {
               }
             }, delay)
           }
-        })
+        }
+        connection.addEventListener('disconnected', disconnectedHandler)
 
         const trigger = (result) => {
           if (isMounted) {
@@ -181,17 +197,42 @@ const useGarageDoor = () => {
 
     return () => {
       isMounted = false
+      isConnecting = false
       // Clear reconnect timeout
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
+        reconnectTimeout = null
+      }
+      // Remove event listeners
+      if (connection) {
+        try {
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+          }
+        } catch (err) {
+          logger.debug('Error removing WebSocket event listeners:', err)
+        }
       }
       // Unsubscribe from state changes
       if (unsubscribe) {
-        unsubscribe()
+        try {
+          unsubscribe()
+        } catch (err) {
+          logger.debug('Error unsubscribing from WebSocket:', err)
+        }
+        unsubscribe = null
       }
       // Close connection
       if (connection) {
-        connection.close()
+        try {
+          connection.close()
+        } catch (err) {
+          logger.debug('Error closing WebSocket connection:', err)
+        }
+        connection = null
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

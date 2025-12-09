@@ -1,7 +1,7 @@
-**1.29 - 2025-12-07**
+**1.30 - 2025-12-09**
 
-- chore(deps): update dependency python-multipart to v0.0.20
-- Add backend log endpoint and frontend logging integration
-- Remove obsolete config.js and migrate to Config API endpoint
-- chore(deps): update dependency websockets to v15
+- Fix memory leaks and unmounting issues causing Android app crashes
+- chore(deps): update dependency @vitejs/plugin-react to v5.1.2
+- Add package rules for automerging updates
+- chore(deps): update dependency vite to v7.2.7
 
