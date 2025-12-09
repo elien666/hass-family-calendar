@@ -166,16 +166,27 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     let reconnectTimeout = null
     let reconnectAttempts = 0
     let isConnecting = false
+    let readyHandler = null
+    let disconnectedHandler = null
 
     async function setupWebSocket() {
       // Prevent multiple simultaneous connection attempts
-      if (isConnecting) {
+      if (isConnecting || !isMounted) {
         return
       }
 
       // Close existing connection if any
       if (connection) {
         try {
+          // Remove event listeners before closing
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+            readyHandler = null
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+            disconnectedHandler = null
+          }
           unsubscribes.forEach(unsubscribe => {
             if (unsubscribe) {
               unsubscribe()
@@ -227,25 +238,29 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         connection = await createConnection({ auth })
 
         // Handle connection ready event
-        connection.addEventListener('ready', () => {
+        readyHandler = () => {
           if (isMounted) {
             logger.debug('WebSocket connection ready for camera tokens')
             reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
-        })
+        }
+        connection.addEventListener('ready', readyHandler)
 
         // Handle disconnection events - attempt to reconnect
-        connection.addEventListener('disconnected', () => {
+        disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for camera tokens, will attempt to reconnect')
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
             }
             // Clear connection reference
             connection = null
             unsubscribes = []
+            readyHandler = null
+            disconnectedHandler = null
             // Calculate exponential backoff delay
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
             reconnectAttempts++
@@ -257,7 +272,8 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
               }
             }, delay)
           }
-        })
+        }
+        connection.addEventListener('disconnected', disconnectedHandler)
 
         // Subscribe to state changes for each camera entity
         for (const entityId of cameraEntityIds) {
@@ -315,18 +331,44 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
 
     return () => {
       isMounted = false
+      isConnecting = false
       // Clear reconnect timeout
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
+        reconnectTimeout = null
+      }
+      // Remove event listeners
+      if (connection) {
+        try {
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+          }
+        } catch (err) {
+          logger.debug('Error removing WebSocket event listeners for camera tokens:', err)
+        }
       }
       // Unsubscribe from all state change subscriptions
       unsubscribes.forEach(unsubscribe => {
         if (unsubscribe) {
-          unsubscribe()
+          try {
+            unsubscribe()
+          } catch (err) {
+            logger.debug('Error unsubscribing from WebSocket for camera tokens:', err)
+          }
         }
       })
+      unsubscribes = []
+      // Close connection
       if (connection) {
-        connection.close()
+        try {
+          connection.close()
+        } catch (err) {
+          logger.debug('Error closing WebSocket connection for camera tokens:', err)
+        }
+        connection = null
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

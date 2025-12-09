@@ -103,9 +103,11 @@ const useEv = () => {
     let reconnectTimeout = null
     let reconnectAttempts = 0
     let isConnecting = false
+    let readyHandler = null
+    let disconnectedHandler = null
 
     async function connect() {
-      if (!isConfigured) {
+      if (!isConfigured || !isMounted) {
         return
       }
 
@@ -117,6 +119,15 @@ const useEv = () => {
       // Close existing connection if any
       if (connection) {
         try {
+          // Remove event listeners before closing
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+            readyHandler = null
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+            disconnectedHandler = null
+          }
           unsubscribes.forEach(unsubscribe => {
             if (unsubscribe) {
               unsubscribe()
@@ -167,25 +178,29 @@ const useEv = () => {
         connection = await createConnection({ auth })
 
         // Handle connection ready event
-        connection.addEventListener('ready', () => {
+        readyHandler = () => {
           if (isMounted) {
             logger.debug('WebSocket connection ready for EV entities')
             reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
-        })
+        }
+        connection.addEventListener('ready', readyHandler)
 
         // Handle disconnection events - attempt to reconnect
-        connection.addEventListener('disconnected', () => {
+        disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for EV entities, will attempt to reconnect')
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
             }
             // Clear connection reference
             connection = null
             unsubscribes = []
+            readyHandler = null
+            disconnectedHandler = null
             // Calculate exponential backoff delay
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
             reconnectAttempts++
@@ -197,7 +212,8 @@ const useEv = () => {
               }
             }, delay)
           }
-        })
+        }
+        connection.addEventListener('disconnected', disconnectedHandler)
 
         const trigger = (result) => {
           if (isMounted) {
@@ -261,19 +277,44 @@ const useEv = () => {
 
     return () => {
       isMounted = false
+      isConnecting = false
       // Clear reconnect timeout
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
+        reconnectTimeout = null
+      }
+      // Remove event listeners
+      if (connection) {
+        try {
+          if (readyHandler) {
+            connection.removeEventListener('ready', readyHandler)
+          }
+          if (disconnectedHandler) {
+            connection.removeEventListener('disconnected', disconnectedHandler)
+          }
+        } catch (err) {
+          logger.debug('Error removing WebSocket event listeners:', err)
+        }
       }
       // Unsubscribe from all state changes
       unsubscribes.forEach(unsubscribe => {
         if (unsubscribe) {
-          unsubscribe()
+          try {
+            unsubscribe()
+          } catch (err) {
+            logger.debug('Error unsubscribing from WebSocket:', err)
+          }
         }
       })
+      unsubscribes = []
       // Close connection
       if (connection) {
-        connection.close()
+        try {
+          connection.close()
+        } catch (err) {
+          logger.debug('Error closing WebSocket connection:', err)
+        }
+        connection = null
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -24,20 +24,35 @@ const useEverydayCalendar = () => {
       return
     }
 
-    axios(url)
+    let isMounted = true
+    const abortController = new AbortController()
+
+    axios(url, {
+      signal: abortController.signal
+    })
       .then((response) => {
-        if(response.data.attributes.store !== undefined) {
-          setStore(response.data.attributes.store)
-        } else {
-          setStore([])
+        if (isMounted) {
+          if(response.data.attributes.store !== undefined) {
+            setStore(response.data.attributes.store)
+          } else {
+            setStore([])
+          }
+          setError(false)
         }
-        setError(false)
       })
       .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
-        setStore([])
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
+          setStore([])
+        }
       })
+
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfigured, url, ENABLE_EVERYDAY_CALENDAR, ENTITY_EVERYDAY_CALENDAR])
 
