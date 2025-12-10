@@ -130,15 +130,30 @@ const useSubscription = ( entity, config ) => {
       return
     }
 
-    axios(url)
+    let isMounted = true
+    const abortController = new AbortController()
+
+    axios(url, {
+      signal: abortController.signal
+    })
       .then((response) => {
-        setState(response.data.state)
-        setError(false)
+        if (isMounted) {
+          setState(response.data.state)
+          setError(false)
+        }
       })
       .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
+        }
       })
+
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured, url])
 
@@ -148,6 +163,7 @@ const useSubscription = ( entity, config ) => {
     let isMounted = true
     let reconnectTimeout = null
     let reconnectAttempts = 0
+    const MAX_RECONNECT_ATTEMPTS = 5 // Limit reconnection attempts to prevent infinite loops
     let isConnecting = false
     let readyHandler = null
     let disconnectedHandler = null
@@ -231,6 +247,14 @@ const useSubscription = ( entity, config ) => {
               clearTimeout(reconnectTimeout)
               reconnectTimeout = null
             }
+            // Stop reconnecting if we've exceeded max attempts
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+              logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${entity}, stopping reconnection`)
+              if (isMounted) {
+                setError('Verbindung verloren. Bitte Seite neu laden.')
+              }
+              return
+            }
             // Clear connection reference
             connection = null
             unsubscribe = null
@@ -241,8 +265,8 @@ const useSubscription = ( entity, config ) => {
             reconnectAttempts++
             // Attempt to reconnect after delay
             reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting) {
-                logger.debug(`Attempting to reconnect WebSocket for ${entity} (attempt ${reconnectAttempts})`)
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for ${entity} (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
                 setupConnection()
               }
             }, delay)
@@ -271,15 +295,22 @@ const useSubscription = ( entity, config ) => {
         if (isMounted) {
           logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
           setError(err instanceof Error ? err.message : String(err))
-          // Attempt to reconnect after a delay
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-          reconnectAttempts++
-          reconnectTimeout = setTimeout(() => {
+          // Only attempt to reconnect if we haven't exceeded max attempts
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for ${entity} after error (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
+                setupConnection()
+              }
+            }, delay)
+          } else {
+            logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${entity}, stopping reconnection`)
             if (isMounted) {
-              logger.debug(`Attempting to reconnect WebSocket for ${entity} after error (attempt ${reconnectAttempts})`)
-              setupConnection()
+              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
             }
-          }, delay)
+          }
         }
       }
     }

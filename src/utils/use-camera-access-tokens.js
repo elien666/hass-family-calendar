@@ -165,6 +165,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     let isMounted = true
     let reconnectTimeout = null
     let reconnectAttempts = 0
+    const MAX_RECONNECT_ATTEMPTS = 5 // Limit reconnection attempts to prevent infinite loops
     let isConnecting = false
     let readyHandler = null
     let disconnectedHandler = null
@@ -256,6 +257,14 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
               clearTimeout(reconnectTimeout)
               reconnectTimeout = null
             }
+            // Stop reconnecting if we've exceeded max attempts
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+              logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for camera tokens, stopping reconnection`)
+              if (isMounted) {
+                setError('Verbindung verloren. Bitte Seite neu laden.')
+              }
+              return
+            }
             // Clear connection reference
             connection = null
             unsubscribes = []
@@ -266,8 +275,8 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
             reconnectAttempts++
             // Attempt to reconnect after delay
             reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting) {
-                logger.debug(`Attempting to reconnect WebSocket for camera tokens (attempt ${reconnectAttempts})`)
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for camera tokens (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
                 setupWebSocket()
               }
             }, delay)
@@ -314,15 +323,22 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection for camera tokens:', err)
           setError(err instanceof Error ? err.message : String(err))
-          // Attempt to reconnect after a delay with exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-          reconnectAttempts++
-          reconnectTimeout = setTimeout(() => {
+          // Only attempt to reconnect if we haven't exceeded max attempts
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for camera tokens after error (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
+                setupWebSocket()
+              }
+            }, delay)
+          } else {
+            logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for camera tokens, stopping reconnection`)
             if (isMounted) {
-              logger.debug(`Attempting to reconnect WebSocket for camera tokens after error (attempt ${reconnectAttempts})`)
-              setupWebSocket()
+              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
             }
-          }, delay)
+          }
         }
       }
     }

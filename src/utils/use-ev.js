@@ -102,6 +102,7 @@ const useEv = () => {
     let isMounted = true
     let reconnectTimeout = null
     let reconnectAttempts = 0
+    const MAX_RECONNECT_ATTEMPTS = 5 // Limit reconnection attempts to prevent infinite loops
     let isConnecting = false
     let readyHandler = null
     let disconnectedHandler = null
@@ -196,6 +197,14 @@ const useEv = () => {
               clearTimeout(reconnectTimeout)
               reconnectTimeout = null
             }
+            // Stop reconnecting if we've exceeded max attempts
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+              logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for EV entities, stopping reconnection`)
+              if (isMounted) {
+                setError('Verbindung verloren. Bitte Seite neu laden.')
+              }
+              return
+            }
             // Clear connection reference
             connection = null
             unsubscribes = []
@@ -206,8 +215,8 @@ const useEv = () => {
             reconnectAttempts++
             // Attempt to reconnect after delay
             reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting) {
-                logger.debug(`Attempting to reconnect WebSocket for EV entities (attempt ${reconnectAttempts})`)
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for EV entities (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
                 connect()
               }
             }, delay)
@@ -260,15 +269,22 @@ const useEv = () => {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)
           setError(err instanceof Error ? err.message : String(err))
-          // Attempt to reconnect after a delay
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-          reconnectAttempts++
-          reconnectTimeout = setTimeout(() => {
+          // Only attempt to reconnect if we haven't exceeded max attempts
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            reconnectAttempts++
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                logger.debug(`Attempting to reconnect WebSocket for EV entities after error (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
+                connect()
+              }
+            }, delay)
+          } else {
+            logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for EV entities, stopping reconnection`)
             if (isMounted) {
-              logger.debug(`Attempting to reconnect WebSocket for EV entities after error (attempt ${reconnectAttempts})`)
-              connect()
+              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
             }
-          }, delay)
+          }
         }
       }
     }
