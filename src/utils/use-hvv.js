@@ -11,11 +11,12 @@ export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'che
 
 // Backend now handles Geofox authentication (signature generation)
 // Frontend just sends the request body
-const callApi = async (endPoint, data) => (
+const callApi = async (endPoint, data, signal) => (
   axios({
     method: 'post',
     url: `./gti/public/${endPoint}`,
     data: data,
+    signal: signal, // Add abort signal to cancel request if component unmounts
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json;charset=UTF-8',
@@ -66,6 +67,9 @@ const useHvv = (endPoint) => {
       return
     }
 
+    let isMounted = true
+    const abortController = new AbortController()
+
     let data = { version: 51 }
 
     switch(endPoint) {
@@ -96,20 +100,29 @@ const useHvv = (endPoint) => {
 
     }
 
-    callApi(endPoint, data)
+    callApi(endPoint, data, abortController.signal)
       .then((response) => {
-        if (endPoint === SUPPORTED_CALLS.departureList) {
-          set(transformData(response.data))
-        } else {
-          set(response.data)
+        if (isMounted) {
+          if (endPoint === SUPPORTED_CALLS.departureList) {
+            set(transformData(response.data))
+          } else {
+            set(response.data)
+          }
+          setError(false)
         }
-        setError(false)
     })
       .catch((error) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(error))
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(error))
+        }
       })
 
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   }, [endPoint, timeout, isConfigured, ENABLE_HVV])
 
   return [ responseData, error ]

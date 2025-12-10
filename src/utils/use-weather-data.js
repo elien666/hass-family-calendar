@@ -43,19 +43,35 @@ const useWeatherData = (toggleLoading) => {
       return
     }
 
+    let isMounted = true
+    const abortController = new AbortController()
+
     if(toggleLoading) toggleLoading(true)
 
-    axios(url())
+    axios(url(), {
+      signal: abortController.signal
+    })
       .then((response) => {
-        setData(response.data)
-        setError(false)
+        if (isMounted) {
+          setData(response.data)
+          setError(false)
+        }
       })
       .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
+        }
       })
-      .finally(() => { if(toggleLoading) toggleLoading(false) })
+      .finally(() => { 
+        if (isMounted && toggleLoading) toggleLoading(false) 
+      })
 
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ timer, toggleLoading, isConfigured, ENABLE_WEATHER, WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE ])
 
