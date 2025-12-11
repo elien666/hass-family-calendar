@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import axios from 'axios'
-import logger from './logger'
+import logger, { setLoggingEnabled } from './logger'
 
 // Use Vite's built-in DEV mode to detect development vs production
 const isDevelopment = import.meta.env.DEV
@@ -65,6 +65,7 @@ const getDefaultConfig = () => {
         return []
       }
     })(),
+    ENABLE_LOGGING: getEnv('ENABLE_LOGGING', false),
   }
 }
 
@@ -138,6 +139,15 @@ export const ConfigProvider = ({ children }) => {
       logger.debug('Axios Authorization header removed (add-on mode or no token)')
     }
   }, [config.HASS_ACCESS_TOKEN])
+
+  // Update logger backend flag when config changes
+  useEffect(() => {
+    const loggingEnabled = config.ENABLE_LOGGING === true // Default to false if not set
+    setLoggingEnabled(loggingEnabled)
+    if (isDevelopment) {
+      console.debug(`Frontend logging to backend API: ${loggingEnabled ? 'enabled' : 'disabled'}`)
+    }
+  }, [config.ENABLE_LOGGING])
 
   return (
     <ConfigContext.Provider value={{ config, loading }}>

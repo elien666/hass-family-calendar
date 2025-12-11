@@ -36,8 +36,12 @@ axios.interceptors.request.use(
     return config
   },
   (error) => {
-    // Request setup error
-    logger.error('Axios Request Setup Error:', error)
+    // Request setup error - but skip if it's from the log endpoint to prevent infinite loops
+    const isLogEndpointError = error.config?.url?.includes('/api/log') || 
+                                error.config?.url?.endsWith('/api/log')
+    if (!isLogEndpointError) {
+      logger.error('Axios Request Setup Error:', error)
+    }
     return Promise.reject(error)
   }
 )
@@ -52,27 +56,33 @@ axios.interceptors.response.use(
     return response
   },
   (error) => {
-    // Log all Axios errors with comprehensive detail
-    // Extract context from error config if available
-    const context = error.config?.url 
-      ? `API Call: ${error.config.method?.toUpperCase()} ${error.config.url}` 
-      : 'Axios Request'
+    // CRITICAL: Skip logging errors from /api/log endpoint to prevent infinite loops
+    const isLogEndpointError = error.config?.url?.includes('/api/log') || 
+                                error.config?.url?.endsWith('/api/log')
     
-    logAxiosError(error, context)
-    
-    // Log additional diagnostic info when errors occur
-    if (error.config?.metadata) {
-      const duration = Date.now() - error.config.metadata.startTime
-      logger.error('Request Duration:', `${duration}ms`, 'Request ID:', error.config.metadata.requestId)
-    }
-    
-    // Log window.location state if in production (for ingress debugging)
-    if (!isDevelopment && typeof window !== 'undefined' && window.location) {
-      logger.error('Window Location State:', {
-        origin: window.location.origin,
-        pathname: window.location.pathname,
-        href: window.location.href,
-      })
+    if (!isLogEndpointError) {
+      // Log all Axios errors with comprehensive detail
+      // Extract context from error config if available
+      const context = error.config?.url 
+        ? `API Call: ${error.config.method?.toUpperCase()} ${error.config.url}` 
+        : 'Axios Request'
+      
+      logAxiosError(error, context)
+      
+      // Log additional diagnostic info when errors occur
+      if (error.config?.metadata) {
+        const duration = Date.now() - error.config.metadata.startTime
+        logger.error('Request Duration:', `${duration}ms`, 'Request ID:', error.config.metadata.requestId)
+      }
+      
+      // Log window.location state if in production (for ingress debugging)
+      if (!isDevelopment && typeof window !== 'undefined' && window.location) {
+        logger.error('Window Location State:', {
+          origin: window.location.origin,
+          pathname: window.location.pathname,
+          href: window.location.href,
+        })
+      }
     }
     
     // Reject the promise to allow individual error handlers to process the error

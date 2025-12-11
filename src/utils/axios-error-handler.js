@@ -86,6 +86,24 @@ export const extractErrorDetails = (error) => {
 export const logAxiosError = (error, context = '') => {
   const details = extractErrorDetails(error)
   
+  // CRITICAL: Prevent infinite loop - don't log errors from the log endpoint itself
+  // Check if this error is from a request to /api/log
+  const isLogEndpointError = details.url && (
+    details.url.includes('/api/log') || 
+    details.url.endsWith('/api/log') ||
+    error.config?.url?.includes('/api/log') ||
+    error.config?.url?.endsWith('/api/log')
+  )
+  
+  if (isLogEndpointError) {
+    // Silently skip logging errors from the log endpoint to prevent infinite loops
+    // Only log to console in development mode
+    if (import.meta.env.DEV) {
+      console.warn('Skipping log endpoint error to prevent infinite loop:', details.message)
+    }
+    return details
+  }
+  
   // Update statistics
   errorCount++
   requestCounter++
