@@ -7,7 +7,8 @@ import axios from 'axios'
 import { useConfig } from './ConfigProvider'
 import { 
   buildHaUrl,
-  buildWebSocketHost, 
+  buildWebSocketHost,
+  buildWebSocketUrl,
   isDevelopment 
 } from "./config"
 import logger from './logger'
@@ -175,8 +176,29 @@ const useEv = () => {
         return
       }
 
+      // Build WebSocket URL using ingress route
+      const wsUrl = buildWebSocketUrl(config)
+      
+      if (!wsUrl) {
+        logger.error('Failed to build WebSocket URL - cannot connect')
+        if (isMounted) {
+          setError('WebSocket URL konnte nicht erstellt werden.')
+        }
+        isConnecting = false
+        return
+      }
+      
+      // Create custom socket factory that uses the ingress URL
+      const createSocket = () => {
+        return new Promise((resolve, reject) => {
+          const socket = new WebSocket(wsUrl)
+          socket.onopen = () => resolve(socket)
+          socket.onerror = (err) => reject(err)
+        })
+      }
+
       try {
-        connection = await createConnection({ auth })
+        connection = await createConnection({ auth, createSocket })
 
         // Handle connection ready event
         readyHandler = () => {

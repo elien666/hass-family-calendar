@@ -151,3 +151,20 @@ export const buildWebSocketHost = (config = {}) => {
 
   return ''
 }
+
+// Helper function to build WebSocket URL (including /api/websocket endpoint)
+// Accepts config object from useConfig() hook
+// Uses INGRESS_URL from config API for reliable URL construction
+// This is used to override the WebSocket URL in createConnection
+export const buildWebSocketUrl = (config = {}) => {
+  const host = buildWebSocketHost(config)
+  if (!host) {
+    return ''
+  }
+  
+  // Ensure the URL ends with /api/websocket
+  // Convert http:// to ws:// and https:// to wss://
+  const protocol = host.startsWith('https://') ? 'wss://' : 'ws://'
+  const hostWithoutProtocol = host.replace(/^https?:\/\//, '')
+  return `${protocol}${hostWithoutProtocol}/api/websocket`
+}
