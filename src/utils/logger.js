@@ -9,7 +9,7 @@ const isProduction = import.meta.env.PROD
 let enableLoggingToBackend = true
 
 // Function to update the logging flag from config
-export const setLoggingEnabled = (enabled) => {
+const setLoggingEnabled = (enabled) => {
   enableLoggingToBackend = Boolean(enabled)
 }
 
