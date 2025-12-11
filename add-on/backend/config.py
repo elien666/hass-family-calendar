@@ -348,6 +348,10 @@ def load_config() -> Dict[str, Any]:
     calendars = _get_config_value("CALENDARS", "calendars", [], in_ha, has_bashio, options_json)
     config["CALENDARS"] = calendars if isinstance(calendars, list) else []
     
+    # Frontend logging configuration
+    logging_enabled = _get_bool_config("ENABLE_LOGGING", "logging.enabled", False, in_ha, has_bashio, options_json)
+    config["ENABLE_LOGGING"] = logging_enabled
+    
     _config_cache = config
     
     # Log summary of loaded configuration
