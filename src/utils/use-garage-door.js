@@ -8,9 +8,11 @@ import { useConfig } from './ConfigProvider'
 import { buildHaUrl, buildWebSocketHost, buildWebSocketUrl, isDevelopment } from "./config"
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import { useConnectionStateContext } from './ConnectionStateProvider'
 
 const useGarageDoor = () => {
   const config = useConfig()
+  const { isConnected } = useConnectionStateContext()
   const ENABLE_GARAGE = config.ENABLE_GARAGE || false
   const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
@@ -61,8 +63,7 @@ const useGarageDoor = () => {
     let unsubscribe = null
     let isMounted = true
     let reconnectTimeout = null
-    let reconnectAttempts = 0
-    const MAX_RECONNECT_ATTEMPTS = 5 // Limit reconnection attempts to prevent infinite loops
+    let reconnectDebounceTimeout = null
     let isConnecting = false
     let readyHandler = null
     let disconnectedHandler = null
@@ -70,6 +71,12 @@ const useGarageDoor = () => {
     async function connect() {
       // Skip if not configured
       if (!isConfigured || !ENTITY_GARAGE_DOOR || !isMounted) {
+        return
+      }
+
+      // Check connection state before attempting to connect
+      if (!isConnected) {
+        logger.debug('Skipping WebSocket connection for garage door - backend not connected')
         return
       }
 
@@ -162,44 +169,40 @@ const useGarageDoor = () => {
         readyHandler = () => {
           if (isMounted) {
             logger.debug('WebSocket connection ready for garage door')
-            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
         }
         connection.addEventListener('ready', readyHandler)
 
-        // Handle disconnection events - attempt to reconnect
+        // Handle disconnection events - attempt to reconnect when connection state is available
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
-            logger.debug('WebSocket disconnected for garage door, will attempt to reconnect')
-            // Clear any existing reconnect timeout
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-            // Stop reconnecting if we've exceeded max attempts
-            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-              logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for garage door, stopping reconnection`)
-              if (isMounted) {
-                setError('Verbindung verloren. Bitte Seite neu laden.')
-              }
-              return
-            }
+            logger.debug('WebSocket disconnected for garage door')
             // Clear connection reference
             connection = null
             unsubscribe = null
             readyHandler = null
             disconnectedHandler = null
-            // Calculate exponential backoff delay
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            reconnectAttempts++
-            // Attempt to reconnect after delay
-            reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                logger.debug(`Attempting to reconnect WebSocket for garage door (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
-                connect()
-              }
-            }, delay)
+            
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
+            }
+            
+            // Attempt to reconnect only if backend is connected
+            // The connection state will trigger reconnection when it becomes available
+            if (isConnected) {
+              // Debounce reconnection attempt
+              reconnectTimeout = setTimeout(() => {
+                if (isMounted && !isConnecting && isConnected) {
+                  logger.debug('Attempting to reconnect WebSocket for garage door')
+                  connect()
+                }
+              }, 2000) // 2 second debounce
+            } else {
+              logger.debug('Skipping reconnection for garage door - waiting for backend connection')
+            }
           }
         }
         connection.addEventListener('disconnected', disconnectedHandler)
@@ -225,35 +228,53 @@ const useGarageDoor = () => {
         if (isMounted) {
           logger.error('Failed to setup WebSocket connection:', err)
           setError(err instanceof Error ? err.message : String(err))
-          // Only attempt to reconnect if we haven't exceeded max attempts
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            reconnectAttempts++
+          // Only attempt to reconnect if backend is connected
+          if (isConnected) {
             reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                logger.debug(`Attempting to reconnect WebSocket for garage door after error (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
+              if (isMounted && !isConnecting && isConnected) {
+                logger.debug('Attempting to reconnect WebSocket for garage door after error')
                 connect()
               }
-            }, delay)
+            }, 2000) // 2 second debounce
           } else {
-            logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for garage door, stopping reconnection`)
-            if (isMounted) {
-              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
-            }
+            logger.debug('Skipping reconnection for garage door after error - waiting for backend connection')
           }
         }
       }
     }
 
-    connect()
+    // Initial connection attempt
+    if (isConnected) {
+      connect()
+    }
+
+    // Reconnect when connection state becomes available
+    if (isConnected && !connection && !isConnecting) {
+      // Clear any existing debounce timeout
+      if (reconnectDebounceTimeout) {
+        clearTimeout(reconnectDebounceTimeout)
+        reconnectDebounceTimeout = null
+      }
+      // Debounce reconnection when connection state changes
+      reconnectDebounceTimeout = setTimeout(() => {
+        if (isMounted && isConnected && !connection && !isConnecting) {
+          logger.debug('Backend connection restored - reconnecting WebSocket for garage door')
+          connect()
+        }
+      }, 1000) // 1 second debounce when connection state changes
+    }
 
     return () => {
       isMounted = false
       isConnecting = false
-      // Clear reconnect timeout
+      // Clear reconnect timeouts
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
         reconnectTimeout = null
+      }
+      if (reconnectDebounceTimeout) {
+        clearTimeout(reconnectDebounceTimeout)
+        reconnectDebounceTimeout = null
       }
       // Remove event listeners
       if (connection) {
@@ -288,7 +309,7 @@ const useGarageDoor = () => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured])
+  }, [isConfigured, isConnected])
 
   return [ state, error ]
 
