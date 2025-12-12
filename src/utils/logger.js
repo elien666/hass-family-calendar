@@ -42,6 +42,11 @@ const processNextQueuedLog = () => {
 // Helper function to send logs to backend
 // This runs asynchronously and doesn't block
 const sendToBackend = (level, message, metadata = null) => {
+  // Skip backend logging in development mode (backend endpoint doesn't exist)
+  if (isDevelopment) {
+    return
+  }
+  
   // Check if logging to backend is enabled
   if (!enableLoggingToBackend) {
     return

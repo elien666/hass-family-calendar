@@ -9,6 +9,7 @@ import { buildHaUrl, buildWebSocketHost, buildWebSocketUrl, isDevelopment } from
 import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import { useConnectionStateContext } from './ConnectionStateProvider'
 
 // Authorization header is configured centrally in ConfigProvider
 
@@ -115,6 +116,7 @@ const useWashingMachine = () => {
 }
 
 const useSubscription = ( entity, config ) => {
+  const { isConnected } = useConnectionStateContext()
 
   const [ state, setState ] = React.useState('off')
   const [ error, setError ] = React.useState(false)
@@ -162,8 +164,7 @@ const useSubscription = ( entity, config ) => {
     let unsubscribe = null
     let isMounted = true
     let reconnectTimeout = null
-    let reconnectAttempts = 0
-    const MAX_RECONNECT_ATTEMPTS = 5 // Limit reconnection attempts to prevent infinite loops
+    let reconnectDebounceTimeout = null
     let isConnecting = false
     let readyHandler = null
     let disconnectedHandler = null
@@ -171,6 +172,12 @@ const useSubscription = ( entity, config ) => {
     async function setupConnection() {
       // Skip if not configured
       if (!isConfigured || !entity || !isMounted) {
+        return
+      }
+
+      // Check connection state before attempting to connect
+      if (!isConnected) {
+        logger.debug(`Skipping WebSocket connection for ${entity} - backend not connected`)
         return
       }
 
@@ -253,44 +260,40 @@ const useSubscription = ( entity, config ) => {
         readyHandler = () => {
           if (isMounted) {
             logger.debug(`WebSocket connection ready for ${entity}`)
-            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
             setError(false) // Clear error state on successful connection
           }
         }
         connection.addEventListener('ready', readyHandler)
 
-        // Handle disconnection events - attempt to reconnect
+        // Handle disconnection events - attempt to reconnect when connection state is available
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
-            logger.debug(`WebSocket disconnected for ${entity}, will attempt to reconnect`)
-            // Clear any existing reconnect timeout
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-            // Stop reconnecting if we've exceeded max attempts
-            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-              logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${entity}, stopping reconnection`)
-              if (isMounted) {
-                setError('Verbindung verloren. Bitte Seite neu laden.')
-              }
-              return
-            }
+            logger.debug(`WebSocket disconnected for ${entity}`)
             // Clear connection reference
             connection = null
             unsubscribe = null
             readyHandler = null
             disconnectedHandler = null
-            // Calculate exponential backoff delay
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            reconnectAttempts++
-            // Attempt to reconnect after delay
-            reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                logger.debug(`Attempting to reconnect WebSocket for ${entity} (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
-                setupConnection()
-              }
-            }, delay)
+            
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
+            }
+            
+            // Attempt to reconnect only if backend is connected
+            // The connection state will trigger reconnection when it becomes available
+            if (isConnected) {
+              // Debounce reconnection attempt
+              reconnectTimeout = setTimeout(() => {
+                if (isMounted && !isConnecting && isConnected) {
+                  logger.debug(`Attempting to reconnect WebSocket for ${entity}`)
+                  setupConnection()
+                }
+              }, 2000) // 2 second debounce
+            } else {
+              logger.debug(`Skipping reconnection for ${entity} - waiting for backend connection`)
+            }
           }
         }
         connection.addEventListener('disconnected', disconnectedHandler)
@@ -316,35 +319,53 @@ const useSubscription = ( entity, config ) => {
         if (isMounted) {
           logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
           setError(err instanceof Error ? err.message : String(err))
-          // Only attempt to reconnect if we haven't exceeded max attempts
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            reconnectAttempts++
+          // Only attempt to reconnect if backend is connected
+          if (isConnected) {
             reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                logger.debug(`Attempting to reconnect WebSocket for ${entity} after error (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
+              if (isMounted && !isConnecting && isConnected) {
+                logger.debug(`Attempting to reconnect WebSocket for ${entity} after error`)
                 setupConnection()
               }
-            }, delay)
+            }, 2000) // 2 second debounce
           } else {
-            logger.warn(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${entity}, stopping reconnection`)
-            if (isMounted) {
-              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
-            }
+            logger.debug(`Skipping reconnection for ${entity} after error - waiting for backend connection`)
           }
         }
       }
     }
 
-    setupConnection()
+    // Initial connection attempt
+    if (isConnected) {
+      setupConnection()
+    }
+
+    // Reconnect when connection state becomes available
+    if (isConnected && !connection && !isConnecting) {
+      // Clear any existing debounce timeout
+      if (reconnectDebounceTimeout) {
+        clearTimeout(reconnectDebounceTimeout)
+        reconnectDebounceTimeout = null
+      }
+      // Debounce reconnection when connection state changes
+      reconnectDebounceTimeout = setTimeout(() => {
+        if (isMounted && isConnected && !connection && !isConnecting) {
+          logger.debug(`Backend connection restored - reconnecting WebSocket for ${entity}`)
+          setupConnection()
+        }
+      }, 1000) // 1 second debounce when connection state changes
+    }
 
     return () => {
       isMounted = false
       isConnecting = false
-      // Clear reconnect timeout
+      // Clear reconnect timeouts
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout)
         reconnectTimeout = null
+      }
+      if (reconnectDebounceTimeout) {
+        clearTimeout(reconnectDebounceTimeout)
+        reconnectDebounceTimeout = null
       }
       // Remove event listeners
       if (connection) {
@@ -379,7 +400,7 @@ const useSubscription = ( entity, config ) => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity, isConfigured])
+  }, [entity, isConfigured, isConnected])
 
   return [ state, error ]
 

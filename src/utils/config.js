@@ -5,6 +5,14 @@ import logger from './logger'
 // Re-export from ConfigProvider for convenience
 export { useConfig, useConfigLoading } from './ConfigProvider'
 
+// Global connection check trigger (set by ConnectionStateProvider)
+// This allows axios interceptors (which run outside React) to trigger connection checks
+let globalConnectionCheckTrigger = null
+
+export const setGlobalConnectionCheckTrigger = (trigger) => {
+  globalConnectionCheckTrigger = trigger
+}
+
 // Use Vite's built-in DEV mode to detect development vs production
 // import.meta.env.DEV is true when running `pnpm start` (dev server)
 // import.meta.env.DEV is false when running `pnpm run build` (production build)
@@ -60,6 +68,9 @@ axios.interceptors.response.use(
     const isLogEndpointError = error.config?.url?.includes('/api/log') || 
                                 error.config?.url?.endsWith('/api/log')
     
+    // Skip connection check for health check requests to avoid loops
+    const isHealthCheck = error.config?.metadata?.skipConnectionCheck === true
+    
     if (!isLogEndpointError) {
       // Log all Axios errors with comprehensive detail
       // Extract context from error config if available
@@ -82,6 +93,20 @@ axios.interceptors.response.use(
           pathname: window.location.pathname,
           href: window.location.href,
         })
+      }
+
+      // Trigger connection check on network errors
+      if (!isHealthCheck && globalConnectionCheckTrigger) {
+        const isNetworkError = !error.response && (
+          error.code === 'ERR_NETWORK' || 
+          error.code === 'ECONNABORTED' ||
+          error.code === 'ERR_CANCELED'
+        )
+        
+        if (isNetworkError) {
+          logger.debug('Network error detected - triggering connection check')
+          globalConnectionCheckTrigger()
+        }
       }
     }
     
