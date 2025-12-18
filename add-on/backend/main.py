@@ -789,8 +789,6 @@ async def proxy_websocket(websocket: WebSocket):
         logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
         async with websockets.connect(ha_ws_url) as ha_websocket:
             logger.info("Connected to Home Assistant WebSocket")
-            # Track if we've sent initial auth_required
-            initial_auth_sent = initial_auth_sent
             
             # Helper function to check if client is still connected
             def is_client_connected():
