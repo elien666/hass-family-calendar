@@ -787,17 +787,28 @@ async def proxy_websocket(websocket: WebSocket):
     
     # Send initial auth_required immediately so client library knows to authenticate
     # This prevents the client from timing out while we connect to HA
+    # The home-assistant-js-websocket library expects auth_required immediately after connection
+    initial_auth_sent = False
     try:
         initial_auth_required = json.dumps({"type": "auth_required", "ha_version": "2024.1.0"})
         await websocket.send_text(initial_auth_required)
+        initial_auth_sent = True
         logger.info("Sent initial auth_required to client")
+    except RuntimeError as e:
+        # Client already disconnected
+        logger.warning(f"Client disconnected before we could send initial auth_required: {e}")
+        return
     except Exception as e:
-        logger.warning(f"Failed to send initial auth_required to client: {e}")
+        logger.error(f"Failed to send initial auth_required to client: {e}", exc_info=True)
+        # Continue anyway - we'll forward the real auth_required from HA
     
     try:
         logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
         async with websockets.connect(ha_ws_url) as ha_websocket:
             logger.info("Connected to Home Assistant WebSocket")
+            # Track if we've sent initial auth_required
+            initial_auth_sent = initial_auth_sent
+            
             # Helper function to check if client is still connected
             def is_client_connected():
                 try:
