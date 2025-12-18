@@ -785,11 +785,23 @@ async def proxy_websocket(websocket: WebSocket):
     await websocket.accept()
     logger.info("Client WebSocket accepted")
     
+    # Check client state immediately after accept
+    try:
+        client_state = websocket.client_state.name
+        logger.info(f"Client WebSocket state after accept: {client_state}")
+    except Exception as e:
+        logger.warning(f"Could not check client state: {e}")
+    
     # Send initial auth_required immediately so client library knows to authenticate
     # This prevents the client from timing out while we connect to HA
     # The home-assistant-js-websocket library expects auth_required immediately after connection
     initial_auth_sent = False
     try:
+        # Check if client is still connected before sending
+        if websocket.client_state.name != "CONNECTED":
+            logger.warning(f"Client not connected, state: {websocket.client_state.name}")
+            return
+        
         initial_auth_required = json.dumps({"type": "auth_required", "ha_version": "2024.1.0"})
         await websocket.send_text(initial_auth_required)
         initial_auth_sent = True
