@@ -165,12 +165,46 @@ const useDoorbell = () => {
       try {
         connection = await createConnection({ auth, createSocket })
 
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug('WebSocket connection ready for doorbell')
-            setError(false) // Clear error state on successful connection
+        // Handle connection ready event - only subscribe after authentication is complete
+        readyHandler = async () => {
+          if (!isMounted || !connection) {
+            logger.debug('Skipping ready handler - component unmounted or connection is null')
+            return
           }
+          
+          logger.debug('WebSocket connection ready for doorbell')
+          setError(false) // Clear error state on successful connection
+          
+          // Double-check connection is still valid
+          if (!connection) {
+            logger.warn('Connection became null before subscription')
+            return
+          }
+          
+          // Subscribe to state changes only after connection is ready
+          try {
+            const trigger = (result) => {
+              if (isMounted) {
+                const newState = result.variables.trigger.to_state.state
+                setState(newState)
+              }
+            }
+
+            unsubscribe = await connection.subscribeMessage(trigger, {
+              "type": "subscribe_trigger",
+              "trigger":
+            {
+              "platform": "state",
+              "entity_id": ENTITY_DOORBELL,
+            }
+        })
+              logger.debug('Subscribed to doorbell state changes')
+            } catch (subscribeErr) {
+              logger.error('Failed to subscribe to doorbell state changes:', subscribeErr)
+              if (isMounted) {
+                setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+              }
+            }
         }
         connection.addEventListener('ready', readyHandler)
 
@@ -178,6 +212,19 @@ const useDoorbell = () => {
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for doorbell')
+            // Remove event listeners before clearing connection
+            if (connection) {
+              try {
+                if (readyHandler) {
+                  connection.removeEventListener('ready', readyHandler)
+                }
+                if (disconnectedHandler) {
+                  connection.removeEventListener('disconnected', disconnectedHandler)
+                }
+              } catch (err) {
+                logger.debug('Error removing event listeners on disconnect:', err)
+              }
+            }
             // Clear connection reference
             connection = null
             unsubscribe = null
@@ -207,21 +254,10 @@ const useDoorbell = () => {
         }
         connection.addEventListener('disconnected', disconnectedHandler)
 
-        const trigger = (result) => {
-          if (isMounted) {
-            const newState = result.variables.trigger.to_state.state
-            setState(newState)
-          }
+        // If connection is already ready, trigger the ready handler immediately
+        if (connection && connection.ready) {
+          readyHandler()
         }
-
-        unsubscribe = await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
-              "platform": "state",
-              "entity_id": ENTITY_DOORBELL,
-            }
-        })
 
         isConnecting = false
       } catch (err) {

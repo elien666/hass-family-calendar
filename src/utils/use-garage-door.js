@@ -165,11 +165,44 @@ const useGarageDoor = () => {
       try {
         connection = await createConnection({ auth, createSocket })
 
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug('WebSocket connection ready for garage door')
-            setError(false) // Clear error state on successful connection
+        // Handle connection ready event - only subscribe after authentication is complete
+        readyHandler = async () => {
+          if (!isMounted || !connection) {
+            logger.debug('Skipping ready handler - component unmounted or connection is null')
+            return
+          }
+          
+          logger.debug('WebSocket connection ready for garage door')
+          setError(false) // Clear error state on successful connection
+          
+          // Subscribe to state changes only after connection is ready
+          // Double-check connection is still valid
+          if (!connection) {
+            logger.warn('Connection became null before subscription')
+            return
+          }
+          
+          try {
+            const trigger = (result) => {
+              if (isMounted) {
+                setState(result.variables.trigger.to_state.state)
+              }
+            }
+
+            unsubscribe = await connection.subscribeMessage(trigger, {
+              "type": "subscribe_trigger",
+              "trigger":
+                {
+                  "platform": "state",
+                  "entity_id": ENTITY_GARAGE_DOOR,
+                }
+            })
+            logger.debug('Subscribed to garage door state changes')
+          } catch (subscribeErr) {
+            logger.error('Failed to subscribe to garage door state changes:', subscribeErr)
+            if (isMounted) {
+              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+            }
           }
         }
         connection.addEventListener('ready', readyHandler)
@@ -178,6 +211,19 @@ const useGarageDoor = () => {
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for garage door')
+            // Remove event listeners before clearing connection
+            if (connection) {
+              try {
+                if (readyHandler) {
+                  connection.removeEventListener('ready', readyHandler)
+                }
+                if (disconnectedHandler) {
+                  connection.removeEventListener('disconnected', disconnectedHandler)
+                }
+              } catch (err) {
+                logger.debug('Error removing event listeners on disconnect:', err)
+              }
+            }
             // Clear connection reference
             connection = null
             unsubscribe = null
@@ -207,20 +253,11 @@ const useGarageDoor = () => {
         }
         connection.addEventListener('disconnected', disconnectedHandler)
 
-        const trigger = (result) => {
-          if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
-          }
+        // If connection is already ready, trigger the ready handler immediately
+        // But only if connection is still valid
+        if (connection && connection.ready) {
+          readyHandler()
         }
-
-        unsubscribe = await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
-              "platform": "state",
-              "entity_id": ENTITY_GARAGE_DOOR,
-            }
-        })
 
         isConnecting = false
       } catch (err) {

@@ -200,12 +200,69 @@ const useEv = () => {
       try {
         connection = await createConnection({ auth, createSocket })
 
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug('WebSocket connection ready for EV entities')
-            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
-            setError(false) // Clear error state on successful connection
+        // Handle connection ready event - only subscribe after authentication is complete
+        readyHandler = async () => {
+          if (!isMounted || !connection) {
+            logger.debug('Skipping ready handler for EV entities - component unmounted or connection is null')
+            return
+          }
+          
+          logger.debug('WebSocket connection ready for EV entities')
+          reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+          setError(false) // Clear error state on successful connection
+          
+          // Double-check connection is still valid
+          if (!connection) {
+            logger.warn('Connection became null before subscription for EV entities')
+            return
+          }
+          
+          // Subscribe to state changes only after connection is ready
+          try {
+            const trigger = (result) => {
+              if (isMounted) {
+                const entityId = result.variables.trigger.to_state.entity_id
+                const newState = result.variables.trigger.to_state.state
+
+                setState(prev => {
+                  const updated = { ...prev }
+                  
+                  if (entityId === ENTITY_PRECLIMATE_STATUS) {
+                    updated.preclimateStatus = newState === 'on'
+                  } else if (entityId === ENTITY_CHARGING_STATE) {
+                    updated.chargingState = newState === 'on'
+                  } else if (entityId === ENTITY_STATE_OF_CHARGE) {
+                    updated.stateOfCharge = parseFloat(newState) || 0
+                  }
+                  
+                  return updated
+                })
+              }
+            }
+
+            // Subscribe to all configured entities
+            const entityIds = []
+            if (ENTITY_PRECLIMATE_STATUS) entityIds.push(ENTITY_PRECLIMATE_STATUS)
+            if (ENTITY_CHARGING_STATE) entityIds.push(ENTITY_CHARGING_STATE)
+            if (ENTITY_STATE_OF_CHARGE) entityIds.push(ENTITY_STATE_OF_CHARGE)
+
+            // Subscribe to each entity
+            for (const entityId of entityIds) {
+              const unsubscribe = await connection.subscribeMessage(trigger, {
+                "type": "subscribe_trigger",
+                "trigger": {
+                  "platform": "state",
+                  "entity_id": entityId,
+                }
+              })
+              unsubscribes.push(unsubscribe)
+            }
+            logger.debug(`Subscribed to EV entity state changes: ${entityIds.join(', ')}`)
+          } catch (subscribeErr) {
+            logger.error('Failed to subscribe to EV entity state changes:', subscribeErr)
+            if (isMounted) {
+              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+            }
           }
         }
         connection.addEventListener('ready', readyHandler)
@@ -214,6 +271,19 @@ const useEv = () => {
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for EV entities, will attempt to reconnect')
+            // Remove event listeners before clearing connection
+            if (connection) {
+              try {
+                if (readyHandler) {
+                  connection.removeEventListener('ready', readyHandler)
+                }
+                if (disconnectedHandler) {
+                  connection.removeEventListener('disconnected', disconnectedHandler)
+                }
+              } catch (err) {
+                logger.debug('Error removing event listeners on disconnect for EV entities:', err)
+              }
+            }
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
@@ -246,43 +316,9 @@ const useEv = () => {
         }
         connection.addEventListener('disconnected', disconnectedHandler)
 
-        const trigger = (result) => {
-          if (isMounted) {
-            const entityId = result.variables.trigger.to_state.entity_id
-            const newState = result.variables.trigger.to_state.state
-
-            setState(prev => {
-              const updated = { ...prev }
-              
-              if (entityId === ENTITY_PRECLIMATE_STATUS) {
-                updated.preclimateStatus = newState === 'on'
-              } else if (entityId === ENTITY_CHARGING_STATE) {
-                updated.chargingState = newState === 'on'
-              } else if (entityId === ENTITY_STATE_OF_CHARGE) {
-                updated.stateOfCharge = parseFloat(newState) || 0
-              }
-              
-              return updated
-            })
-          }
-        }
-
-        // Subscribe to all configured entities
-        const entityIds = []
-        if (ENTITY_PRECLIMATE_STATUS) entityIds.push(ENTITY_PRECLIMATE_STATUS)
-        if (ENTITY_CHARGING_STATE) entityIds.push(ENTITY_CHARGING_STATE)
-        if (ENTITY_STATE_OF_CHARGE) entityIds.push(ENTITY_STATE_OF_CHARGE)
-
-        // Subscribe to each entity
-        for (const entityId of entityIds) {
-          const unsubscribe = await connection.subscribeMessage(trigger, {
-            "type": "subscribe_trigger",
-            "trigger": {
-              "platform": "state",
-              "entity_id": entityId,
-            }
-          })
-          unsubscribes.push(unsubscribe)
+        // If connection is already ready, trigger the ready handler immediately
+        if (connection && connection.ready) {
+          readyHandler()
         }
 
         isConnecting = false

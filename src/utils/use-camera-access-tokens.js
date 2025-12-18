@@ -259,12 +259,63 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
       try {
         connection = await createConnection({ auth, createSocket })
 
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug('WebSocket connection ready for camera tokens')
-            reconnectAttempts = 0 // Reset reconnection attempts on successful connection
-            setError(false) // Clear error state on successful connection
+        // Handle connection ready event - only subscribe after authentication is complete
+        readyHandler = async () => {
+          if (!isMounted || !connection) {
+            logger.debug('Skipping ready handler for camera tokens - component unmounted or connection is null')
+            return
+          }
+          
+          logger.debug('WebSocket connection ready for camera tokens')
+          reconnectAttempts = 0 // Reset reconnection attempts on successful connection
+          setError(false) // Clear error state on successful connection
+          
+          // Double-check connection is still valid
+          if (!connection) {
+            logger.warn('Connection became null before subscription for camera tokens')
+            return
+          }
+          
+          // Subscribe to state changes only after connection is ready
+          try {
+            // Subscribe to state changes for each camera entity
+            for (const entityId of cameraEntityIds) {
+              const trigger = (result) => {
+                if (isMounted) {
+                  const newState = result.variables.trigger.to_state
+                  const accessToken = newState?.attributes?.access_token || null
+                  
+                  // Update tokens map with new token for this entity
+                  // Only update if a valid token is provided - don't remove existing tokens
+                  // if access_token is missing from state update (it may still be valid)
+                  setTokens(prevTokens => {
+                    if (accessToken) {
+                      // Only update if we have a new valid token
+                      return { ...prevTokens, [entityId]: accessToken }
+                    }
+                    // Don't remove token if it's missing from state update - keep existing token
+                    // State updates may not always include access_token, but the token may still be valid
+                    return prevTokens
+                  })
+                }
+              }
+
+              const unsubscribe = await connection.subscribeMessage(trigger, {
+                "type": "subscribe_trigger",
+                "trigger": {
+                  "platform": "state",
+                  "entity_id": entityId,
+                }
+              })
+              
+              unsubscribes.push(unsubscribe)
+            }
+            logger.debug(`Subscribed to camera entity state changes: ${cameraEntityIds.join(', ')}`)
+          } catch (subscribeErr) {
+            logger.error('Failed to subscribe to camera entity state changes:', subscribeErr)
+            if (isMounted) {
+              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+            }
           }
         }
         connection.addEventListener('ready', readyHandler)
@@ -273,6 +324,19 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug('WebSocket disconnected for camera tokens, will attempt to reconnect')
+            // Remove event listeners before clearing connection
+            if (connection) {
+              try {
+                if (readyHandler) {
+                  connection.removeEventListener('ready', readyHandler)
+                }
+                if (disconnectedHandler) {
+                  connection.removeEventListener('disconnected', disconnectedHandler)
+                }
+              } catch (err) {
+                logger.debug('Error removing event listeners on disconnect for camera tokens:', err)
+              }
+            }
             // Clear any existing reconnect timeout
             if (reconnectTimeout) {
               clearTimeout(reconnectTimeout)
@@ -305,37 +369,9 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
         }
         connection.addEventListener('disconnected', disconnectedHandler)
 
-        // Subscribe to state changes for each camera entity
-        for (const entityId of cameraEntityIds) {
-          const trigger = (result) => {
-            if (isMounted) {
-              const newState = result.variables.trigger.to_state
-              const accessToken = newState?.attributes?.access_token || null
-              
-              // Update tokens map with new token for this entity
-              // Only update if a valid token is provided - don't remove existing tokens
-              // if access_token is missing from state update (it may still be valid)
-              setTokens(prevTokens => {
-                if (accessToken) {
-                  // Only update if we have a new valid token
-                  return { ...prevTokens, [entityId]: accessToken }
-                }
-                // Don't remove token if it's missing from state update - keep existing token
-                // State updates may not always include access_token, but the token may still be valid
-                return prevTokens
-              })
-            }
-          }
-
-          const unsubscribe = await connection.subscribeMessage(trigger, {
-            "type": "subscribe_trigger",
-            "trigger": {
-              "platform": "state",
-              "entity_id": entityId,
-            }
-          })
-          
-          unsubscribes.push(unsubscribe)
+        // If connection is already ready, trigger the ready handler immediately
+        if (connection && connection.ready) {
+          readyHandler()
         }
         
         isConnecting = false

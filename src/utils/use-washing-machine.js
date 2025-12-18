@@ -256,11 +256,44 @@ const useSubscription = ( entity, config ) => {
         const auth = createLongLivedTokenAuth(host, token)
         connection = await createConnection({ auth, createSocket })
 
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug(`WebSocket connection ready for ${entity}`)
-            setError(false) // Clear error state on successful connection
+        // Handle connection ready event - only subscribe after authentication is complete
+        readyHandler = async () => {
+          if (!isMounted || !connection) {
+            logger.debug(`Skipping ready handler for ${entity} - component unmounted or connection is null`)
+            return
+          }
+          
+          logger.debug(`WebSocket connection ready for ${entity}`)
+          setError(false) // Clear error state on successful connection
+          
+          // Double-check connection is still valid
+          if (!connection) {
+            logger.warn(`Connection became null before subscription for ${entity}`)
+            return
+          }
+          
+          // Subscribe to state changes only after connection is ready
+          try {
+            const trigger = (result) => {
+              if (isMounted) {
+                setState(result.variables.trigger.to_state.state)
+              }
+            }
+
+            unsubscribe = await connection.subscribeMessage(trigger, {
+              "type": "subscribe_trigger",
+              "trigger":
+                {
+                  "platform": "state",
+                  "entity_id": entity,
+                }
+            })
+            logger.debug(`Subscribed to ${entity} state changes`)
+          } catch (subscribeErr) {
+            logger.error(`Failed to subscribe to ${entity} state changes:`, subscribeErr)
+            if (isMounted) {
+              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+            }
           }
         }
         connection.addEventListener('ready', readyHandler)
@@ -269,6 +302,19 @@ const useSubscription = ( entity, config ) => {
         disconnectedHandler = () => {
           if (isMounted && !isConnecting) {
             logger.debug(`WebSocket disconnected for ${entity}`)
+            // Remove event listeners before clearing connection
+            if (connection) {
+              try {
+                if (readyHandler) {
+                  connection.removeEventListener('ready', readyHandler)
+                }
+                if (disconnectedHandler) {
+                  connection.removeEventListener('disconnected', disconnectedHandler)
+                }
+              } catch (err) {
+                logger.debug(`Error removing event listeners on disconnect for ${entity}:`, err)
+              }
+            }
             // Clear connection reference
             connection = null
             unsubscribe = null
@@ -298,20 +344,10 @@ const useSubscription = ( entity, config ) => {
         }
         connection.addEventListener('disconnected', disconnectedHandler)
 
-        const trigger = (result) => {
-          if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
-          }
+        // If connection is already ready, trigger the ready handler immediately
+        if (connection && connection.ready) {
+          readyHandler()
         }
-
-        unsubscribe = await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
-              "platform": "state",
-              "entity_id": entity,
-            }
-        })
 
         isConnecting = false
       } catch (err) {
