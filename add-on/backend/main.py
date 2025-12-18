@@ -780,15 +780,24 @@ async def proxy_websocket(websocket: WebSocket):
         await websocket.close(code=1008, reason="SUPERVISOR_TOKEN or HASS_ACCESS_TOKEN not configured")
         return
     
-    # Accept client connection
+    # Connect to HA FIRST, then accept client connection
+    # This ensures we can forward auth_required immediately when client connects
+    logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
+    try:
+        ha_websocket = await websockets.connect(ha_ws_url)
+        logger.info("Connected to Home Assistant WebSocket")
+    except Exception as e:
+        logger.error(f"Failed to connect to HA WebSocket: {e}", exc_info=True)
+        await websocket.close(code=1011, reason="Failed to connect to Home Assistant")
+        return
+    
+    # Now accept client connection - we're ready to forward messages immediately
     logger.info(f"Accepting WebSocket connection, will connect to HA at: {ha_ws_url}")
     await websocket.accept()
     logger.info("Client WebSocket accepted")
     
     try:
-        logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
-        async with websockets.connect(ha_ws_url) as ha_websocket:
-            logger.info("Connected to Home Assistant WebSocket")
+        async with ha_websocket:
             
             # Helper function to check if client is still connected
             def is_client_connected():
