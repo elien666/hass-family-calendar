@@ -1,25 +1,18 @@
-import {
-  createLongLivedTokenAuth,
-  createConnection,
-} from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
 import { useConfig } from './ConfigProvider'
-import { buildHaUrl, buildWebSocketHost, buildWebSocketUrl, isDevelopment } from "./config"
+import { buildHaUrl } from './config'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
-import { useConnectionStateContext } from './ConnectionStateProvider'
+import { useHomeAssistantWebSocket } from './use-home-assistant-websocket'
 
 const useGarageDoor = () => {
   const config = useConfig()
-  const { isConnected } = useConnectionStateContext()
   const ENABLE_GARAGE = config.ENABLE_GARAGE || false
   const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
-  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
-  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
 
   const [ state, setState ] = React.useState('closed')
-  const [ error, setError ] = React.useState(false)
+  const [ restError, setRestError ] = React.useState(false)
 
   // Check if garage door is configured
   const isConfigured = ENABLE_GARAGE && ENTITY_GARAGE_DOOR
@@ -40,14 +33,14 @@ const useGarageDoor = () => {
       .then((response) => {
         if (isMounted) {
           setState(response.data.state)
-          setError(false)
+          setRestError(false)
         }
       })
       .catch((err) => {
         // Don't set error if request was aborted or component unmounted
         if (isMounted && !abortController.signal.aborted) {
           // Error is already logged by interceptor, format for UI
-          setError(formatErrorForUI(err))
+          setRestError(formatErrorForUI(err))
         }
       })
 
@@ -58,298 +51,32 @@ const useGarageDoor = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfigured, url, ENABLE_GARAGE, ENTITY_GARAGE_DOOR])
 
-  React.useEffect(() => {
-    let connection = null
-    let unsubscribe = null
-    let isMounted = true
-    let reconnectTimeout = null
-    let reconnectDebounceTimeout = null
-    let isConnecting = false
-    let readyHandler = null
-    let disconnectedHandler = null
-
-    async function connect() {
-      // Skip if not configured
-      if (!isConfigured || !ENTITY_GARAGE_DOOR || !isMounted) {
-        return
+  // WebSocket subscription
+  const { error: wsError } = useHomeAssistantWebSocket({
+    enabled: isConfigured && !!ENTITY_GARAGE_DOOR,
+    logPrefix: 'garage door',
+    onReady: async (connection) => {
+      const trigger = (result) => {
+        setState(result.variables.trigger.to_state.state)
       }
 
-      // Check connection state before attempting to connect
-      if (!isConnected) {
-        logger.debug('Skipping WebSocket connection for garage door - backend not connected')
-        return
-      }
+      const unsubscribe = await connection.subscribeMessage(trigger, {
+        type: 'subscribe_trigger',
+        trigger: {
+          platform: 'state',
+          entity_id: ENTITY_GARAGE_DOOR,
+        },
+      })
+      logger.debug('Subscribed to garage door state changes')
+      return unsubscribe
+    },
+    dependencies: [isConfigured, ENTITY_GARAGE_DOOR],
+  })
 
-      // Prevent multiple simultaneous connection attempts
-      if (isConnecting) {
-        return
-      }
+  // Combine REST and WebSocket errors
+  const error = restError || wsError || false
 
-      // Close existing connection if any
-      if (connection) {
-        try {
-          // Remove event listeners before closing
-          if (readyHandler) {
-            connection.removeEventListener('ready', readyHandler)
-            readyHandler = null
-          }
-          if (disconnectedHandler) {
-            connection.removeEventListener('disconnected', disconnectedHandler)
-            disconnectedHandler = null
-          }
-          if (unsubscribe) {
-            unsubscribe()
-            unsubscribe = null
-          }
-          connection.close()
-        } catch (err) {
-          logger.debug('Error closing existing WebSocket connection:', err)
-        }
-        connection = null
-      }
-
-      isConnecting = true
-
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
-      // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
-      // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost(config)
-      
-      // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
-      // In development, use HASS_ACCESS_TOKEN
-      const token = isDevelopment 
-        ? (HASS_ACCESS_TOKEN || '')
-        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
-
-      // Skip WebSocket connection if no token
-      if (!token) {
-        logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
-        isConnecting = false
-        return
-      }
-
-      let auth
-      try {
-        auth = createLongLivedTokenAuth(host, token)
-        if (isMounted) setError(false)
-      } catch (err) {
-        if (isMounted) {
-          logger.error('Failed to create WebSocket auth:', err)
-          setError(err instanceof Error ? err.message : String(err))
-        }
-        isConnecting = false
-        return
-      }
-
-      // Build WebSocket URL using ingress route
-      const wsUrl = buildWebSocketUrl(config)
-      
-      if (!wsUrl) {
-        logger.error('Failed to build WebSocket URL - cannot connect')
-        if (isMounted) {
-          setError('WebSocket URL konnte nicht erstellt werden.')
-        }
-        isConnecting = false
-        return
-      }
-      
-      // Create custom socket factory that uses the ingress URL
-      const createSocket = () => {
-        return new Promise((resolve, reject) => {
-          const socket = new WebSocket(wsUrl)
-          socket.onopen = () => resolve(socket)
-          socket.onerror = (err) => reject(err)
-        })
-      }
-
-      try {
-        connection = await createConnection({ auth, createSocket })
-
-        // Handle connection ready event - only subscribe after authentication is complete
-        readyHandler = async () => {
-          if (!isMounted || !connection) {
-            logger.debug('Skipping ready handler - component unmounted or connection is null')
-            return
-          }
-          
-          logger.debug('WebSocket connection ready for garage door')
-          setError(false) // Clear error state on successful connection
-          
-          // Subscribe to state changes only after connection is ready
-          // Double-check connection is still valid
-          if (!connection) {
-            logger.warn('Connection became null before subscription')
-            return
-          }
-          
-          try {
-            const trigger = (result) => {
-              if (isMounted) {
-                setState(result.variables.trigger.to_state.state)
-              }
-            }
-
-            unsubscribe = await connection.subscribeMessage(trigger, {
-              "type": "subscribe_trigger",
-              "trigger":
-                {
-                  "platform": "state",
-                  "entity_id": ENTITY_GARAGE_DOOR,
-                }
-            })
-            logger.debug('Subscribed to garage door state changes')
-          } catch (subscribeErr) {
-            logger.error('Failed to subscribe to garage door state changes:', subscribeErr)
-            if (isMounted) {
-              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
-            }
-          }
-        }
-        connection.addEventListener('ready', readyHandler)
-
-        // Handle disconnection events - attempt to reconnect when connection state is available
-        disconnectedHandler = () => {
-          if (isMounted && !isConnecting) {
-            logger.debug('WebSocket disconnected for garage door')
-            // Remove event listeners before clearing connection
-            if (connection) {
-              try {
-                if (readyHandler) {
-                  connection.removeEventListener('ready', readyHandler)
-                }
-                if (disconnectedHandler) {
-                  connection.removeEventListener('disconnected', disconnectedHandler)
-                }
-              } catch (err) {
-                logger.debug('Error removing event listeners on disconnect:', err)
-              }
-            }
-            // Clear connection reference
-            connection = null
-            unsubscribe = null
-            readyHandler = null
-            disconnectedHandler = null
-            
-            // Clear any existing reconnect timeout
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-            
-            // Attempt to reconnect only if backend is connected
-            // The connection state will trigger reconnection when it becomes available
-            if (isConnected) {
-              // Debounce reconnection attempt
-              reconnectTimeout = setTimeout(() => {
-                if (isMounted && !isConnecting && isConnected) {
-                  logger.debug('Attempting to reconnect WebSocket for garage door')
-                  connect()
-                }
-              }, 2000) // 2 second debounce
-            } else {
-              logger.debug('Skipping reconnection for garage door - waiting for backend connection')
-            }
-          }
-        }
-        connection.addEventListener('disconnected', disconnectedHandler)
-
-        // If connection is already ready, trigger the ready handler immediately
-        // But only if connection is still valid
-        if (connection && connection.ready) {
-          readyHandler()
-        }
-
-        isConnecting = false
-      } catch (err) {
-        isConnecting = false
-        if (isMounted) {
-          logger.error('Failed to setup WebSocket connection:', err)
-          setError(err instanceof Error ? err.message : String(err))
-          // Only attempt to reconnect if backend is connected
-          if (isConnected) {
-            reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && isConnected) {
-                logger.debug('Attempting to reconnect WebSocket for garage door after error')
-                connect()
-              }
-            }, 2000) // 2 second debounce
-          } else {
-            logger.debug('Skipping reconnection for garage door after error - waiting for backend connection')
-          }
-        }
-      }
-    }
-
-    // Initial connection attempt
-    if (isConnected) {
-      connect()
-    }
-
-    // Reconnect when connection state becomes available
-    if (isConnected && !connection && !isConnecting) {
-      // Clear any existing debounce timeout
-      if (reconnectDebounceTimeout) {
-        clearTimeout(reconnectDebounceTimeout)
-        reconnectDebounceTimeout = null
-      }
-      // Debounce reconnection when connection state changes
-      reconnectDebounceTimeout = setTimeout(() => {
-        if (isMounted && isConnected && !connection && !isConnecting) {
-          logger.debug('Backend connection restored - reconnecting WebSocket for garage door')
-          connect()
-        }
-      }, 1000) // 1 second debounce when connection state changes
-    }
-
-    return () => {
-      isMounted = false
-      isConnecting = false
-      // Clear reconnect timeouts
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-        reconnectTimeout = null
-      }
-      if (reconnectDebounceTimeout) {
-        clearTimeout(reconnectDebounceTimeout)
-        reconnectDebounceTimeout = null
-      }
-      // Remove event listeners
-      if (connection) {
-        try {
-          if (readyHandler) {
-            connection.removeEventListener('ready', readyHandler)
-          }
-          if (disconnectedHandler) {
-            connection.removeEventListener('disconnected', disconnectedHandler)
-          }
-        } catch (err) {
-          logger.debug('Error removing WebSocket event listeners:', err)
-        }
-      }
-      // Unsubscribe from state changes
-      if (unsubscribe) {
-        try {
-          unsubscribe()
-        } catch (err) {
-          logger.debug('Error unsubscribing from WebSocket:', err)
-        }
-        unsubscribe = null
-      }
-      // Close connection
-      if (connection) {
-        try {
-          connection.close()
-        } catch (err) {
-          logger.debug('Error closing WebSocket connection:', err)
-        }
-        connection = null
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, isConnected])
-
-  return [ state, error ]
-
+  return [state, error]
 }
 
 export const toggleGarageDoor = (isLoading, config = {}) => {
