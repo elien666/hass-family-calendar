@@ -785,6 +785,15 @@ async def proxy_websocket(websocket: WebSocket):
     await websocket.accept()
     logger.info("Client WebSocket accepted")
     
+    # Send initial auth_required immediately so client library knows to authenticate
+    # This prevents the client from timing out while we connect to HA
+    try:
+        initial_auth_required = json.dumps({"type": "auth_required", "ha_version": "2024.1.0"})
+        await websocket.send_text(initial_auth_required)
+        logger.info("Sent initial auth_required to client")
+    except Exception as e:
+        logger.warning(f"Failed to send initial auth_required to client: {e}")
+    
     try:
         logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
         async with websockets.connect(ha_ws_url) as ha_websocket:
