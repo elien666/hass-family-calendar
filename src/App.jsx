@@ -9,6 +9,8 @@ import 'react-toastify/dist/ReactToastify.css'
 import './fonts/fonts.css'
 import useReload from './utils/use-reload'
 import ErrorBoundary from './components/ErrorBoundary'
+import ConfigStatusBanner from './components/ConfigStatusBanner'
+import { useConfigError, useIsUsingCachedConfig, useConfigLoading } from './utils/ConfigProvider'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -33,6 +35,8 @@ const Div = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: ${props => props.hasBanner ? '48px' : '0'};
+  transition: padding-top 0.2s;
 
   .main {
     display: grid;
@@ -51,10 +55,29 @@ const Div = styled.div`
 
 function MainApp() {
   useReload()
+  const configError = useConfigError()
+  const isUsingCachedConfig = useIsUsingCachedConfig()
+  const loading = useConfigLoading()
+  
+  // Check if banner was dismissed (same logic as ConfigStatusBanner)
+  const [dismissed] = React.useState(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('hass-family-calendar-config-banner-dismissed') === 'true'
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return false
+  })
+  
+  // Determine if banner should be visible (same logic as ConfigStatusBanner)
+  const hasBanner = !loading && !dismissed && (configError || isUsingCachedConfig)
 
   return (
-    <Div>
+    <Div hasBanner={hasBanner}>
       <GlobalStyle/>
+      <ConfigStatusBanner />
       <div className={'main'}>
         <ErrorBoundary>
           <Week />

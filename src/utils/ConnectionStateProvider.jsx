@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useRef } from 'react'
 import { useConnectionState } from './use-connection-state'
 import { setGlobalConnectionCheckTrigger } from './config'
+import { useReloadConfig } from './ConfigProvider'
+import logger from './logger'
 
 const ConnectionStateContext = createContext(null)
 
@@ -9,6 +11,8 @@ const ConnectionStateContext = createContext(null)
  */
 export const ConnectionStateProvider = ({ children }) => {
   const connectionState = useConnectionState()
+  const reloadConfig = useReloadConfig()
+  const wasDisconnectedRef = useRef(false)
 
   // Register the trigger function globally so axios interceptors can use it
   useEffect(() => {
@@ -17,6 +21,26 @@ export const ConnectionStateProvider = ({ children }) => {
       setGlobalConnectionCheckTrigger(null)
     }
   }, [connectionState.triggerCheck])
+
+  // Trigger config reload when connection is restored
+  useEffect(() => {
+    const isCurrentlyConnected = connectionState.isConnected
+    
+    // Track if we were disconnected
+    if (!isCurrentlyConnected) {
+      wasDisconnectedRef.current = true
+      return
+    }
+
+    // If we were disconnected and are now connected, reload config
+    if (wasDisconnectedRef.current && isCurrentlyConnected) {
+      logger.debug('Connection restored - triggering config reload')
+      reloadConfig().catch((error) => {
+        logger.warn('Failed to reload config after connection restore:', error)
+      })
+      wasDisconnectedRef.current = false
+    }
+  }, [connectionState.isConnected, reloadConfig])
 
   return (
     <ConnectionStateContext.Provider value={connectionState}>
