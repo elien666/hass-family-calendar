@@ -789,6 +789,9 @@ async def proxy_websocket(websocket: WebSocket):
         logger.info(f"Connecting to Home Assistant WebSocket at: {ha_ws_url}")
         async with websockets.connect(ha_ws_url) as ha_websocket:
             logger.info("Connected to Home Assistant WebSocket")
+            # Track if we've sent initial auth_required
+            initial_auth_sent = initial_auth_sent
+            
             # Helper function to check if client is still connected
             def is_client_connected():
                 try:
@@ -865,21 +868,27 @@ async def proxy_websocket(websocket: WebSocket):
                             # Handle other types (convert to string if possible)
                             if not await safe_send_to_client(str(message), is_text=True):
                                 break
-                except websockets.ConnectionClosed:
-                    logger.debug("Home Assistant WebSocket closed normally")
+                except websockets.ConnectionClosed as e:
+                    logger.warning(f"Home Assistant WebSocket closed: {e}")
                     try:
                         if is_client_connected():
+                            logger.info("Closing client WebSocket due to HA connection closed")
                             await websocket.close(code=1006, reason="HA connection closed")
-                    except Exception:
-                        pass
+                        else:
+                            logger.info("Client already disconnected when HA closed")
+                    except Exception as close_err:
+                        logger.debug(f"Error closing client WebSocket: {close_err}")
                     return
                 except Exception as e:
-                    logger.error(f"Error forwarding from HA to client: {e}")
+                    logger.error(f"Error forwarding from HA to client: {e}", exc_info=True)
                     try:
                         if is_client_connected():
+                            logger.info("Closing client WebSocket due to error")
                             await websocket.close(code=1011, reason="Connection error")
-                    except Exception:
-                        pass
+                        else:
+                            logger.info("Client already disconnected when error occurred")
+                    except Exception as close_err:
+                        logger.debug(f"Error closing client WebSocket: {close_err}")
                     return
             
             # Forward messages from client to HA
@@ -923,18 +932,18 @@ async def proxy_websocket(websocket: WebSocket):
                             elif message_bytes:
                                 await ha_websocket.send(message_bytes)
                         except WebSocketDisconnect:
-                            logger.debug("Client disconnected normally")
+                            logger.info("Client disconnected normally - stopping forward_to_ha")
                             break
                         except RuntimeError as e:
                             # Handle "Cannot call receive once a disconnect message has been received"
                             if "disconnect" in str(e).lower():
-                                logger.debug("WebSocket disconnect detected, stopping forward_to_ha")
+                                logger.info("WebSocket disconnect detected, stopping forward_to_ha")
                                 break
                             else:
-                                logger.error(f"Error forwarding from client to HA: {e}")
+                                logger.error(f"Error forwarding from client to HA: {e}", exc_info=True)
                                 break
                         except Exception as e:
-                            logger.error(f"Error forwarding from client to HA: {e}")
+                            logger.error(f"Error forwarding from client to HA: {e}", exc_info=True)
                             break
                 except Exception as e:
                     logger.error(f"Error in forward_to_ha: {e}")
