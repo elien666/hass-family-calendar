@@ -1,4 +1,4 @@
-**1.41 - 2025-12-18**
+**1.42 - 2025-12-18**
 
-- Connect to HA before accepting client connection
+- Restore v1.34 WebSocket proxy behavior - simple and working
 
