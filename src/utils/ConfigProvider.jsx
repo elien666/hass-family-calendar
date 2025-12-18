@@ -117,14 +117,21 @@ const ConfigContext = createContext(null)
 
 export const ConfigProvider = ({ children }) => {
   // Initialize config from cache if available, otherwise use defaults
+  // In development mode, always use build-time env vars, not cached config
   // Use lazy initialization to compute cached config only once
   const [config, setConfig] = useState(() => {
+    if (isDevelopment) {
+      return getDefaultConfig()
+    }
     const cached = loadCachedConfig()
     return cached || getDefaultConfig()
   })
   const [loading, setLoading] = useState(true)
   const [configError, setConfigError] = useState(null)
   const [isUsingCachedConfig, setIsUsingCachedConfig] = useState(() => {
+    if (isDevelopment) {
+      return false
+    }
     return !!loadCachedConfig()
   })
   const isMountedRef = useRef(true)
@@ -213,10 +220,26 @@ export const ConfigProvider = ({ children }) => {
   }, [])
 
   // Reload config function (exposed via context)
+  const reloadConfigRef = useRef(null)
   const reloadConfig = useCallback(async () => {
+    // Skip reload in development mode
+    if (isDevelopment) {
+      logger.debug('Skipping config reload in development mode')
+      return true
+    }
+    
+    // Prevent concurrent reloads
+    if (reloadConfigRef.current) {
+      logger.debug('Config reload already in progress, skipping')
+      return reloadConfigRef.current
+    }
+    
     logger.debug('Reloading config...')
-    const success = await loadConfig(true)
-    return success
+    const reloadPromise = loadConfig(true).finally(() => {
+      reloadConfigRef.current = null
+    })
+    reloadConfigRef.current = reloadPromise
+    return reloadPromise
   }, [loadConfig])
 
   // Initial load on mount
