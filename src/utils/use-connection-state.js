@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
 import logger from './logger'
+import { isDevelopment } from './config'
 
 // Debounce delay after network errors before rechecking
 const DEBOUNCE_DELAY = 3000 // 3 seconds
@@ -32,6 +33,15 @@ export const useConnectionState = () => {
    * Performs a health check to determine if backend is reachable
    */
   const performHealthCheck = useCallback(async () => {
+    // Skip health checks in development mode
+    // In dev, we assume connection is always available
+    if (isDevelopment) {
+      if (!isConnectedRef.current) {
+        setIsConnected(true)
+      }
+      return
+    }
+
     // Prevent concurrent checks
     if (isCheckingRef.current) {
       return
@@ -135,6 +145,11 @@ export const useConnectionState = () => {
 
   // Initial health check on mount
   useEffect(() => {
+    // Skip in development mode
+    if (isDevelopment) {
+      return
+    }
+    
     // Small delay to let app initialize
     const initialCheck = setTimeout(() => {
       performHealthCheck()
@@ -143,7 +158,7 @@ export const useConnectionState = () => {
     return () => {
       clearTimeout(initialCheck)
     }
-  }, []) // Only run on mount
+  }, [performHealthCheck]) // Include performHealthCheck in dependencies
 
   // Cleanup timers on unmount
   useEffect(() => {
