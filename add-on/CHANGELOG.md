@@ -1,4 +1,5 @@
-**1.36 - 2025-12-18**
+**1.37 - 2025-12-18**
 
-- Fix WebSocket proxy authentication conflicts in production
+- Restore transparent WebSocket proxy from v1.34
+- Add detailed logging to WebSocket proxy for debugging
 
