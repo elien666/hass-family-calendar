@@ -3,7 +3,13 @@ import { logAxiosError, logAxiosSuccess } from './axios-error-handler'
 import logger from './logger'
 
 // Re-export from ConfigProvider for convenience
-export { useConfig, useConfigLoading } from './ConfigProvider'
+export { 
+  useConfig, 
+  useConfigLoading, 
+  useConfigError, 
+  useIsUsingCachedConfig, 
+  useReloadConfig 
+} from './ConfigProvider'
 
 // Global connection check trigger (set by ConnectionStateProvider)
 // This allows axios interceptors (which run outside React) to trigger connection checks

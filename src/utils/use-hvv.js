@@ -6,23 +6,52 @@ import useTimeout from './use-timeout'
 import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import createSignature from './create-signature'
+import { isDevelopment } from './config'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
-// Backend now handles Geofox authentication (signature generation)
-// Frontend just sends the request body
-const callApi = async (endPoint, data, signal) => (
-  axios({
-    method: 'post',
-    url: `./gti/public/${endPoint}`,
-    data: data,
-    signal: signal, // Add abort signal to cancel request if component unmounts
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json;charset=UTF-8',
-    }
-  })
-)
+// Call Geofox API with authentication
+// In development mode: generate signature in frontend and use Vite proxy to avoid CORS
+// In production: use backend proxy which handles signature generation
+const callApi = async (endPoint, data, signal, config) => {
+  const geofoxUser = config.GEOFOX_USER || ''
+  const geofoxSecret = config.GEOFOX_SECRET || ''
+  
+  const headers = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json;charset=UTF-8',
+  }
+  
+  // If we have credentials and are in development mode, generate signature in frontend
+  // and send through Vite proxy (which forwards to Geofox API)
+  if (isDevelopment && geofoxUser && geofoxSecret) {
+    // Generate signature in frontend
+    const signature = await createSignature(data, geofoxSecret)
+    
+    // Add authentication headers - Vite proxy will forward these
+    headers['geofox-auth-user'] = geofoxUser
+    headers['geofox-auth-signature'] = signature
+    
+    // Use Vite proxy (relative URL) to avoid CORS issues
+    return axios({
+      method: 'post',
+      url: `/gti/public/${endPoint}`,
+      data: data,
+      signal: signal,
+      headers: headers,
+    })
+  } else {
+    // Use backend proxy (for production/add-on mode or when credentials not available)
+    return axios({
+      method: 'post',
+      url: `/gti/public/${endPoint}`,
+      data: data,
+      signal: signal,
+      headers: headers,
+    })
+  }
+}
 
 const byRealtimeOffset = (a, b) => a.realtimeOffset - b.realtimeOffset
 
@@ -100,7 +129,7 @@ const useHvv = (endPoint) => {
 
     }
 
-    callApi(endPoint, data, abortController.signal)
+    callApi(endPoint, data, abortController.signal, config)
       .then((response) => {
         if (isMounted) {
           if (endPoint === SUPPORTED_CALLS.departureList) {

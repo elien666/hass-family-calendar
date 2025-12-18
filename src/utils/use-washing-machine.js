@@ -1,15 +1,11 @@
-import {
-  createLongLivedTokenAuth,
-  createConnection,
-} from 'home-assistant-js-websocket'
 import React from 'react'
 import axios from 'axios'
 import { useConfig } from './ConfigProvider'
-import { buildHaUrl, buildWebSocketHost, buildWebSocketUrl, isDevelopment } from "./config";
-import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js';
+import { buildHaUrl } from './config'
+import { mdiWashingMachineAlert, mdiWashingMachineOff, mdiWashingMachine } from '@mdi/js'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
-import { useConnectionStateContext } from './ConnectionStateProvider'
+import { useHomeAssistantWebSocket } from './use-home-assistant-websocket'
 
 // Authorization header is configured centrally in ConfigProvider
 
@@ -33,8 +29,6 @@ const useWashingMachine = () => {
   const config = useConfig()
   const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
   const LAUNDRY_MACHINES = config.LAUNDRY_MACHINES || []
-  const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
-  const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
   
   // LAUNDRY_MACHINES is stable (from config, doesn't change during component lifecycle)
   // so it's safe to call hooks in a map - the number of hooks will be consistent
@@ -116,10 +110,8 @@ const useWashingMachine = () => {
 }
 
 const useSubscription = ( entity, config ) => {
-  const { isConnected } = useConnectionStateContext()
-
   const [ state, setState ] = React.useState('off')
-  const [ error, setError ] = React.useState(false)
+  const [ restError, setRestError ] = React.useState(false)
 
   // Check if entity is configured
   const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
@@ -141,14 +133,14 @@ const useSubscription = ( entity, config ) => {
       .then((response) => {
         if (isMounted) {
           setState(response.data.state)
-          setError(false)
+          setRestError(false)
         }
       })
       .catch((err) => {
         // Don't set error if request was aborted or component unmounted
         if (isMounted && !abortController.signal.aborted) {
           // Error is already logged by interceptor, format for UI
-          setError(formatErrorForUI(err))
+          setRestError(formatErrorForUI(err))
         }
       })
 
@@ -159,248 +151,30 @@ const useSubscription = ( entity, config ) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, isConfigured, url])
 
-  React.useEffect(() => {
-    let connection = null
-    let unsubscribe = null
-    let isMounted = true
-    let reconnectTimeout = null
-    let reconnectDebounceTimeout = null
-    let isConnecting = false
-    let readyHandler = null
-    let disconnectedHandler = null
-
-    async function setupConnection() {
-      // Skip if not configured
-      if (!isConfigured || !entity || !isMounted) {
-        return
+  // WebSocket subscription
+  const { error: wsError } = useHomeAssistantWebSocket({
+    enabled: isConfigured && !!entity,
+    logPrefix: entity,
+    onReady: async (connection) => {
+      const trigger = (result) => {
+        setState(result.variables.trigger.to_state.state)
       }
 
-      // Check connection state before attempting to connect
-      if (!isConnected) {
-        logger.debug(`Skipping WebSocket connection for ${entity} - backend not connected`)
-        return
-      }
+      const unsubscribe = await connection.subscribeMessage(trigger, {
+        type: 'subscribe_trigger',
+        trigger: {
+          platform: 'state',
+          entity_id: entity,
+        },
+      })
+      logger.debug(`Subscribed to ${entity} state changes`)
+      return unsubscribe
+    },
+    dependencies: [entity, isConfigured],
+  })
 
-      // Prevent multiple simultaneous connection attempts
-      if (isConnecting) {
-        return
-      }
-
-      // Close existing connection if any
-      if (connection) {
-        try {
-          // Remove event listeners before closing
-          if (readyHandler) {
-            connection.removeEventListener('ready', readyHandler)
-            readyHandler = null
-          }
-          if (disconnectedHandler) {
-            connection.removeEventListener('disconnected', disconnectedHandler)
-            disconnectedHandler = null
-          }
-          if (unsubscribe) {
-            unsubscribe()
-            unsubscribe = null
-          }
-          connection.close()
-        } catch (err) {
-          logger.debug(`Error closing existing WebSocket connection for ${entity}:`, err)
-        }
-        connection = null
-      }
-
-      isConnecting = true
-
-      // Use buildWebSocketHost() to get reliable host URL using INGRESS_URL from config API
-      // The Apache proxy forwards /api/websocket to ws://supervisor/core/websocket
-      // The supervisor WebSocket API uses the standard auth flow and accepts SUPERVISOR_TOKEN in the auth message
-      const host = buildWebSocketHost(config)
-      
-      // In production, use SUPERVISOR_TOKEN if available, otherwise fall back to HASS_ACCESS_TOKEN
-      // In development, use HASS_ACCESS_TOKEN
-      const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
-      const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
-      const token = isDevelopment 
-        ? (HASS_ACCESS_TOKEN || '')
-        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
-
-      // Skip WebSocket connection if no token
-      if (!token) {
-        logger.debug('Skipping WebSocket connection - no access token (using REST API only)')
-        isConnecting = false
-        return
-      }
-
-      // Build WebSocket URL using ingress route
-      const wsUrl = buildWebSocketUrl(config)
-      
-      if (!wsUrl) {
-        logger.error('Failed to build WebSocket URL - cannot connect')
-        if (isMounted) {
-          setError('WebSocket URL konnte nicht erstellt werden.')
-        }
-        isConnecting = false
-        return
-      }
-      
-      // Create custom socket factory that uses the ingress URL
-      const createSocket = () => {
-        return new Promise((resolve, reject) => {
-          const socket = new WebSocket(wsUrl)
-          socket.onopen = () => resolve(socket)
-          socket.onerror = (err) => reject(err)
-        })
-      }
-
-      try {
-        const auth = createLongLivedTokenAuth(host, token)
-        connection = await createConnection({ auth, createSocket })
-
-        // Handle connection ready event
-        readyHandler = () => {
-          if (isMounted) {
-            logger.debug(`WebSocket connection ready for ${entity}`)
-            setError(false) // Clear error state on successful connection
-          }
-        }
-        connection.addEventListener('ready', readyHandler)
-
-        // Handle disconnection events - attempt to reconnect when connection state is available
-        disconnectedHandler = () => {
-          if (isMounted && !isConnecting) {
-            logger.debug(`WebSocket disconnected for ${entity}`)
-            // Clear connection reference
-            connection = null
-            unsubscribe = null
-            readyHandler = null
-            disconnectedHandler = null
-            
-            // Clear any existing reconnect timeout
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-            
-            // Attempt to reconnect only if backend is connected
-            // The connection state will trigger reconnection when it becomes available
-            if (isConnected) {
-              // Debounce reconnection attempt
-              reconnectTimeout = setTimeout(() => {
-                if (isMounted && !isConnecting && isConnected) {
-                  logger.debug(`Attempting to reconnect WebSocket for ${entity}`)
-                  setupConnection()
-                }
-              }, 2000) // 2 second debounce
-            } else {
-              logger.debug(`Skipping reconnection for ${entity} - waiting for backend connection`)
-            }
-          }
-        }
-        connection.addEventListener('disconnected', disconnectedHandler)
-
-        const trigger = (result) => {
-          if (isMounted) {
-            setState(result.variables.trigger.to_state.state)
-          }
-        }
-
-        unsubscribe = await connection.subscribeMessage(trigger, {
-          "type": "subscribe_trigger",
-          "trigger":
-            {
-              "platform": "state",
-              "entity_id": entity,
-            }
-        })
-
-        isConnecting = false
-      } catch (err) {
-        isConnecting = false
-        if (isMounted) {
-          logger.error(`Failed to setup WebSocket connection for ${entity}:`, err)
-          setError(err instanceof Error ? err.message : String(err))
-          // Only attempt to reconnect if backend is connected
-          if (isConnected) {
-            reconnectTimeout = setTimeout(() => {
-              if (isMounted && !isConnecting && isConnected) {
-                logger.debug(`Attempting to reconnect WebSocket for ${entity} after error`)
-                setupConnection()
-              }
-            }, 2000) // 2 second debounce
-          } else {
-            logger.debug(`Skipping reconnection for ${entity} after error - waiting for backend connection`)
-          }
-        }
-      }
-    }
-
-    // Initial connection attempt
-    if (isConnected) {
-      setupConnection()
-    }
-
-    // Reconnect when connection state becomes available
-    if (isConnected && !connection && !isConnecting) {
-      // Clear any existing debounce timeout
-      if (reconnectDebounceTimeout) {
-        clearTimeout(reconnectDebounceTimeout)
-        reconnectDebounceTimeout = null
-      }
-      // Debounce reconnection when connection state changes
-      reconnectDebounceTimeout = setTimeout(() => {
-        if (isMounted && isConnected && !connection && !isConnecting) {
-          logger.debug(`Backend connection restored - reconnecting WebSocket for ${entity}`)
-          setupConnection()
-        }
-      }, 1000) // 1 second debounce when connection state changes
-    }
-
-    return () => {
-      isMounted = false
-      isConnecting = false
-      // Clear reconnect timeouts
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-        reconnectTimeout = null
-      }
-      if (reconnectDebounceTimeout) {
-        clearTimeout(reconnectDebounceTimeout)
-        reconnectDebounceTimeout = null
-      }
-      // Remove event listeners
-      if (connection) {
-        try {
-          if (readyHandler) {
-            connection.removeEventListener('ready', readyHandler)
-          }
-          if (disconnectedHandler) {
-            connection.removeEventListener('disconnected', disconnectedHandler)
-          }
-        } catch (err) {
-          logger.debug(`Error removing WebSocket event listeners for ${entity}:`, err)
-        }
-      }
-      // Unsubscribe from state changes
-      if (unsubscribe) {
-        try {
-          unsubscribe()
-        } catch (err) {
-          logger.debug(`Error unsubscribing from WebSocket for ${entity}:`, err)
-        }
-        unsubscribe = null
-      }
-      // Close connection
-      if (connection) {
-        try {
-          connection.close()
-        } catch (err) {
-          logger.debug(`Error closing WebSocket connection for ${entity}:`, err)
-        }
-        connection = null
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity, isConfigured, isConnected])
+  // Combine REST and WebSocket errors
+  const error = restError || wsError || false
 
   return [ state, error ]
 
