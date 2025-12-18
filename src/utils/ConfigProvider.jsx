@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import axios from 'axios'
 import logger, { setLoggingEnabled } from './logger'
 
@@ -135,6 +135,12 @@ export const ConfigProvider = ({ children }) => {
     return !!loadCachedConfig()
   })
   const isMountedRef = useRef(true)
+  const configRef = useRef(config)
+  
+  // Keep ref in sync with config state
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
 
   // Load config from API
   const loadConfig = useCallback(async (isReload = false) => {
@@ -161,10 +167,20 @@ export const ConfigProvider = ({ children }) => {
         if (typeof response.data === 'object' && !Array.isArray(response.data)) {
           // Success - update config and save to localStorage
           if (isMountedRef.current) {
-            setConfig(response.data)
-            setIsUsingCachedConfig(false)
-            setConfigError(null)
-            saveConfig(response.data)
+            // Only update config if values actually changed (prevent unnecessary re-renders)
+            // Use ref to get current config value (avoids stale closure)
+            const currentConfig = configRef.current
+            const configChanged = JSON.stringify(response.data) !== JSON.stringify(currentConfig)
+            if (configChanged) {
+              setConfig(response.data)
+              setIsUsingCachedConfig(false)
+              setConfigError(null)
+              saveConfig(response.data)
+            } else {
+              // Config values haven't changed, just clear error state
+              setIsUsingCachedConfig(false)
+              setConfigError(null)
+            }
             
             // Get enabled features for summary
             const enabledFeatures = Object.keys(response.data)
@@ -281,14 +297,18 @@ export const ConfigProvider = ({ children }) => {
     }
   }, [config.ENABLE_LOGGING])
 
+  // Memoize context value to prevent unnecessary re-renders
+  // Only recreate when config values actually change
+  const contextValue = useMemo(() => ({
+    config,
+    loading,
+    configError,
+    isUsingCachedConfig,
+    reloadConfig
+  }), [config, loading, configError, isUsingCachedConfig, reloadConfig])
+
   return (
-    <ConfigContext.Provider value={{ 
-      config, 
-      loading, 
-      configError,
-      isUsingCachedConfig,
-      reloadConfig 
-    }}>
+    <ConfigContext.Provider value={contextValue}>
       {children}
     </ConfigContext.Provider>
   )
