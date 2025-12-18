@@ -787,12 +787,52 @@ async def proxy_websocket(websocket: WebSocket):
         async with websockets.connect(ha_ws_url) as ha_websocket:
             # Authentication state
             authenticated = False
+            client_connected = True
+            
+            # Send fake auth_required to client immediately so client library knows it needs to authenticate
+            # The backend will handle actual authentication with HA transparently
+            try:
+                fake_auth_required = json.dumps({"type": "auth_required", "ha_version": "2024.1.0"})
+                await websocket.send_text(fake_auth_required)
+                logger.debug("Sent fake auth_required to client to initiate authentication flow")
+            except Exception as e:
+                logger.debug(f"Error sending fake auth_required to client: {e}")
+            
+            # Helper function to check if client is still connected
+            def is_client_connected():
+                try:
+                    return websocket.client_state.name == "CONNECTED"
+                except Exception:
+                    return False
+            
+            # Helper function to safely send message to client
+            async def safe_send_to_client(message, is_text=True):
+                if not is_client_connected():
+                    return False
+                try:
+                    if is_text:
+                        await websocket.send_text(message)
+                    else:
+                        await websocket.send_bytes(message)
+                    return True
+                except (RuntimeError, WebSocketDisconnect) as e:
+                    # Client disconnected or connection closed
+                    logger.debug(f"Client disconnected while sending message: {e}")
+                    return False
+                except Exception as e:
+                    logger.debug(f"Error sending message to client: {e}")
+                    return False
             
             # Forward messages from HA to client
             async def forward_to_client():
-                nonlocal authenticated
+                nonlocal authenticated, client_connected
                 try:
                     async for message in ha_websocket:
+                        # Check if client is still connected before processing
+                        if not is_client_connected():
+                            logger.debug("Client disconnected, stopping forward_to_client")
+                            break
+                        
                         # Handle text messages (JSON)
                         if isinstance(message, str):
                             try:
@@ -801,7 +841,8 @@ async def proxy_websocket(websocket: WebSocket):
                                 # Ensure data is a dict (not a list)
                                 if not isinstance(data, dict):
                                     # If it's a list or other type, forward as-is
-                                    await websocket.send_text(message)
+                                    if not await safe_send_to_client(message, is_text=True):
+                                        break
                                     continue
                                 
                                 # Handle auth_required message
@@ -812,34 +853,43 @@ async def proxy_websocket(websocket: WebSocket):
                                         "access_token": auth_token
                                     }
                                     await ha_websocket.send(json.dumps(auth_message))
+                                    logger.debug("Backend proxy authenticated with Home Assistant")
+                                    # Don't forward auth_required to client - backend handles authentication transparently
                                     continue
                                 
                                 # Handle auth_ok message
                                 if data.get("type") == "auth_ok":
                                     authenticated = True
+                                    logger.debug("Backend proxy received auth_ok from Home Assistant, forwarding to client")
+                                    # Forward auth_ok to client so client library knows authentication succeeded
                             except json.JSONDecodeError:
                                 pass  # Not JSON, forward as-is
                             
                             # Forward text message to client
-                            await websocket.send_text(message)
+                            if not await safe_send_to_client(message, is_text=True):
+                                break
                         elif isinstance(message, bytes):
                             # Forward binary message to client
-                            await websocket.send_bytes(message)
+                            if not await safe_send_to_client(message, is_text=False):
+                                break
                         else:
                             # Handle other types (convert to string if possible)
-                            await websocket.send_text(str(message))
+                            if not await safe_send_to_client(str(message), is_text=True):
+                                break
                 except websockets.ConnectionClosed:
                     logger.debug("Home Assistant WebSocket closed normally")
+                    client_connected = False
                     try:
-                        if websocket.client_state.name == "CONNECTED":
+                        if is_client_connected():
                             await websocket.close(code=1006, reason="HA connection closed")
                     except Exception:
                         pass
                     return
                 except Exception as e:
                     logger.error(f"Error forwarding from HA to client: {e}")
+                    client_connected = False
                     try:
-                        if websocket.client_state.name == "CONNECTED":
+                        if is_client_connected():
                             await websocket.close(code=1011, reason="Connection error")
                     except Exception:
                         pass
@@ -847,40 +897,76 @@ async def proxy_websocket(websocket: WebSocket):
             
             # Forward messages from client to HA
             async def forward_to_ha():
+                nonlocal client_connected
                 try:
                     while True:
                         try:
+                            # Check if client is still connected before receiving
+                            if not is_client_connected():
+                                logger.debug("Client disconnected, stopping forward_to_ha")
+                                break
+                            
                             # Receive message (text or binary)
                             message = await websocket.receive()
                             
-                            # Handle different message types from FastAPI WebSocket
+                            # Extract message text/bytes
+                            message_text = None
+                            message_bytes = None
+                            
                             if isinstance(message, dict):
-                                if "text" in message:
-                                    await ha_websocket.send(message["text"])
-                                elif "bytes" in message:
-                                    await ha_websocket.send(message["bytes"])
+                                message_text = message.get("text")
+                                message_bytes = message.get("bytes")
                             else:
-                                # If it's a WebSocketMessage object, access its attributes
                                 if hasattr(message, "text") and message.text:
-                                    await ha_websocket.send(message.text)
+                                    message_text = message.text
                                 elif hasattr(message, "bytes") and message.bytes:
-                                    await ha_websocket.send(message.bytes)
+                                    message_bytes = message.bytes
+                            
+                            # Intercept and drop auth messages from client (backend handles authentication)
+                            if message_text:
+                                try:
+                                    data = json.loads(message_text)
+                                    if isinstance(data, dict) and data.get("type") == "auth":
+                                        # Drop auth messages from client - backend handles authentication transparently
+                                        logger.debug("Dropping auth message from client (backend handles authentication transparently)")
+                                        # Always send fake auth_ok to client so client library knows authentication succeeded
+                                        # The backend handles actual authentication with HA in the background
+                                        fake_auth_ok = json.dumps({"type": "auth_ok"})
+                                        try:
+                                            await websocket.send_text(fake_auth_ok)
+                                            logger.debug("Sent fake auth_ok to client after dropping auth message")
+                                        except Exception as e:
+                                            logger.debug(f"Error sending fake auth_ok to client: {e}")
+                                        continue
+                                except json.JSONDecodeError:
+                                    pass  # Not JSON, forward as-is
+                            
+                            # Forward message to HA
+                            if message_text:
+                                await ha_websocket.send(message_text)
+                            elif message_bytes:
+                                await ha_websocket.send(message_bytes)
                         except WebSocketDisconnect:
                             logger.debug("Client disconnected normally")
+                            client_connected = False
                             break
                         except RuntimeError as e:
                             # Handle "Cannot call receive once a disconnect message has been received"
                             if "disconnect" in str(e).lower():
                                 logger.debug("WebSocket disconnect detected, stopping forward_to_ha")
+                                client_connected = False
                                 break
                             else:
                                 logger.error(f"Error forwarding from client to HA: {e}")
+                                client_connected = False
                                 break
                         except Exception as e:
                             logger.error(f"Error forwarding from client to HA: {e}")
+                            client_connected = False
                             break
                 except Exception as e:
                     logger.error(f"Error in forward_to_ha: {e}")
+                    client_connected = False
             
             # Run both forwarding tasks concurrently
             try:
