@@ -1,4 +1,5 @@
-**1.38 - 2025-12-18**
+**1.39 - 2025-12-18**
 
-- Add detailed logging to WebSocket proxy to debug connection issues
+- Send initial auth_required immediately after client connection
+- Add more detailed logging for WebSocket disconnections
 
