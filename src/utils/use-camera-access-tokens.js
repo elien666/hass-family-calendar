@@ -18,6 +18,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
   const [tokens, setTokens] = React.useState({})
   const [loading, setLoading] = React.useState(true)
   const [restError, setRestError] = React.useState(null)
+  const isMountedRef = React.useRef(true)
 
   // Initial fetch via REST API
   React.useEffect(() => {
@@ -27,7 +28,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
       return
     }
 
-    let isMounted = true
+    isMountedRef.current = true
 
     async function fetchTokens() {
       setLoading(true)
@@ -52,7 +53,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
 
         const results = await Promise.all(fetchPromises)
         
-        if (isMounted) {
+        if (isMountedRef.current) {
           // Build map of entity_id -> access_token
           const tokenMap = {}
           results.forEach(({ entityId, accessToken }) => {
@@ -65,7 +66,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
           setLoading(false)
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMountedRef.current) {
           logger.error('Failed to fetch camera access tokens:', err)
           setRestError(formatErrorForUI(err))
           setLoading(false)
@@ -76,7 +77,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     fetchTokens()
 
     return () => {
-      isMounted = false
+      isMountedRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraEntityIds?.length, cameraEntityIds?.join(',')]) // Re-fetch if entity IDs change
@@ -208,10 +209,66 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     dependencies: [cameraEntityIds?.length, cameraEntityIds?.join(',')],
   })
 
+  // Manual refresh function for tokens
+  const refreshTokens = React.useCallback(async () => {
+    if (!cameraEntityIds || cameraEntityIds.length === 0) {
+      return
+    }
+
+    setLoading(true)
+    setRestError(null)
+
+    try {
+      // Fetch all camera entity states in parallel
+      const fetchPromises = cameraEntityIds.map(async (entityId) => {
+        try {
+          const url = buildHaUrl(`/api/states/${entityId}`, config)
+          const response = await axios(url)
+          
+          // Extract access_token from entity attributes
+          const accessToken = response.data?.attributes?.access_token || null
+          
+          return { entityId, accessToken }
+        } catch (err) {
+          logger.error(`Failed to refresh access token for ${entityId}:`, err)
+          return { entityId, accessToken: null }
+        }
+      })
+
+      const results = await Promise.all(fetchPromises)
+      
+      if (isMountedRef.current) {
+        // Build map of entity_id -> access_token
+        const tokenMap = {}
+        results.forEach(({ entityId, accessToken }) => {
+          if (accessToken) {
+            tokenMap[entityId] = accessToken
+          }
+        })
+        
+        setTokens(prevTokens => ({ ...prevTokens, ...tokenMap }))
+        setLoading(false)
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        logger.error('Failed to refresh camera access tokens:', err)
+        setRestError(formatErrorForUI(err))
+        setLoading(false)
+      }
+    }
+  }, [cameraEntityIds, config])
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   // Combine REST and WebSocket errors
   const error = restError || wsError || null
 
-  return [tokens, loading, error]
+  return [tokens, loading, error, refreshTokens]
 }
 
 // Helper function to build camera stream URL
