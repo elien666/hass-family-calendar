@@ -130,6 +130,23 @@ const Doorbell = () => {
     }, [DOORBELL_CAMERAS])
 
     const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
+    
+    // Refs to track camera img elements so we can stop streams when overlay closes
+    const cameraImgRefs = React.useRef(new Map())
+
+    // Stop all camera streams when overlay closes
+    React.useEffect(() => {
+        if (!showDoorCams) {
+            // Clear all img src attributes to stop streaming
+            cameraImgRefs.current.forEach((imgElement) => {
+                if (imgElement && imgElement.src) {
+                    imgElement.src = ''
+                }
+            })
+            // Clear the refs map
+            cameraImgRefs.current.clear()
+        }
+    }, [showDoorCams])
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
@@ -283,12 +300,19 @@ const Doorbell = () => {
                                         }}
                                     >
                                         <img
-                                            src={streamUrl}
+                                            ref={(el) => {
+                                                if (el) {
+                                                    cameraImgRefs.current.set(`${camera.entity_id}-${index}`, el)
+                                                } else {
+                                                    cameraImgRefs.current.delete(`${camera.entity_id}-${index}`)
+                                                }
+                                            }}
+                                            src={showDoorCams ? streamUrl : ''}
                                             className={orientation}
                                             alt="Camera stream"
                                             crossOrigin="anonymous"
                                             key={`${camera.entity_id}-${index}`}
-                                        />   
+                                        />
                                         <div 
                                             className="video-overlay"
                                             onClick={() => openDoor()}
