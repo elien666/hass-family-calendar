@@ -158,11 +158,7 @@ const Garage = () => {
   const config = useConfig()
   const ENABLE_GARAGE = config.ENABLE_GARAGE || false
   
-  // Don't render if garage feature is disabled
-  if (!ENABLE_GARAGE) {
-    return null
-  }
-
+  // Call all hooks unconditionally (before any early returns)
   const [ garageDoor, error ] = useGarageDoor()
   const [ garageInMotion, setGarageInMotion ] = React.useState(undefined)
   const [ animate, setAnimate ] = React.useState(false)
@@ -217,6 +213,11 @@ const Garage = () => {
       toggle(true)
     }
   }, [error])
+
+  // Don't render if garage feature is disabled
+  if (!ENABLE_GARAGE) {
+    return null
+  }
 
   return (
     <Div className={clsx({ disabled: error !== false })}>

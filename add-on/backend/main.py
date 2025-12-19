@@ -6,15 +6,23 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Callable
 from contextlib import suppress
 
 # Configure logging FIRST before importing other modules that use logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# Set up root logger to prevent uvicorn from capturing all logs
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Remove default handlers to avoid duplicate logs
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+
+# Add our own handler with consistent format
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+handler.setFormatter(formatter)
+root_logger.addHandler(handler)
 
 import asyncio
 import httpx
@@ -23,9 +31,11 @@ from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, 
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import get_config, clear_cache
 from .proxy import create_geofox_signature
+from .websocket_manager import WebSocketStateManager
 
 # Configure all loggers to use the same format
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -68,16 +78,44 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Family Calendar Backend")
 
+# Global WebSocket state manager instance
+websocket_manager: Optional[WebSocketStateManager] = None
+
 
 @app.on_event("startup")
 async def startup_event():
-    """Load and log configuration at startup."""
+    """Load and log configuration at startup, initialize WebSocket state manager."""
+    global websocket_manager
+    
     logger.info("Application starting up, loading configuration...")
     try:
         config = get_config()
         logger.info("Configuration loaded successfully at startup")
+        
+        # Initialize WebSocket state manager
+        # If this fails, the backend should still start (WebSocket features just won't work)
+        try:
+            websocket_manager = WebSocketStateManager(config)
+            await websocket_manager.start()
+            logger.info("WebSocket State Manager started")
+        except Exception as ws_error:
+            logger.error(f"Failed to start WebSocket State Manager: {ws_error}", exc_info=True)
+            logger.warning("Backend will continue without WebSocket functionality")
+            websocket_manager = None
     except Exception as e:
         logger.error(f"Failed to load configuration at startup: {e}", exc_info=True)
+        # Don't raise - let the backend start even if config fails
+        # It will just have limited functionality
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop WebSocket state manager on shutdown."""
+    global websocket_manager
+    
+    if websocket_manager:
+        await websocket_manager.stop()
+        logger.info("WebSocket State Manager stopped")
 
 
 # CORS middleware (if needed for development)
@@ -88,6 +126,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware to add cache headers for static assets
+# This prevents HA cloud/ingress from caching old versions
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Add cache headers based on path
+        path = request.url.path
+        
+        if path.startswith("/assets/"):
+            # Hashed assets (JS/CSS with content hashes) can be cached long-term
+            # They change when content changes, so caching is safe
+            if any(path.endswith(ext) for ext in [".js", ".css", ".woff", ".woff2", ".ttf", ".otf", ".png", ".jpg", ".jpeg", ".svg", ".ico"]):
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            else:
+                # Other assets, cache for shorter time
+                response.headers["Cache-Control"] = "public, max-age=3600"
+        elif path == "/" or path.endswith(".html"):
+            # HTML files should never be cached - they reference the hashed assets
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        
+        return response
+
+app.add_middleware(CacheControlMiddleware)
 
 # Determine static files directory
 STATIC_DIR = Path("/usr/local/apache2/htdocs")
@@ -115,9 +180,24 @@ else:
 
 @app.get("/api/config")
 async def get_config_endpoint():
-    """Provide configuration to frontend."""
+    """Provide configuration to frontend (excluding secrets)."""
     config = get_config()
-    return JSONResponse(content=config)
+    
+    # Create a safe copy of config without secrets
+    safe_config = config.copy()
+    
+    # Remove secrets that should stay in backend only
+    secrets_to_remove = [
+        "GEOFOX_SECRET",
+        "WEATHER_API_KEY",
+        "HASS_ACCESS_TOKEN",
+        "SUPERVISOR_TOKEN",
+    ]
+    
+    for secret in secrets_to_remove:
+        safe_config.pop(secret, None)
+    
+    return JSONResponse(content=safe_config)
 
 
 @app.post("/api/log")
@@ -160,7 +240,16 @@ async def log_endpoint(request: Request):
 async def proxy_gti(endpoint: str, request: Request):
     """
     Proxy Geofox API requests with server-side signature generation.
+    This is a public endpoint that doesn't require HA authentication,
+    but accepts Authorization headers to satisfy supervisor middleware.
     """
+    # Check for Authorization header to satisfy supervisor middleware
+    # This endpoint doesn't require HA auth, but including a token prevents warnings
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        # Token provided - that's fine, but we don't validate it for this public endpoint
+        logger.debug("Geofox request received with Authorization header (not required but accepted)")
+    
     config = get_config()
     
     if not config.get("ENABLE_HVV"):
@@ -238,10 +327,10 @@ async def proxy_gti(endpoint: str, request: Request):
         raise HTTPException(status_code=502, detail=f"Error connecting to Geofox API: {str(e)}")
 
 
-@app.get("/forecast/{api_key}/{coordinates}")
-async def proxy_forecast(api_key: str, coordinates: str, request: Request):
+@app.get("/forecast/{coordinates}")
+async def proxy_forecast(coordinates: str, request: Request):
     """
-    Proxy weather forecast API requests with API key validation.
+    Proxy weather forecast API requests using backend-configured API key.
     """
     config = get_config()
     
@@ -250,13 +339,12 @@ async def proxy_forecast(api_key: str, coordinates: str, request: Request):
     
     configured_api_key = config.get("WEATHER_API_KEY", "")
     
-    # Validate API key matches configured value
-    if not configured_api_key or api_key != configured_api_key:
-        raise HTTPException(status_code=403, detail="Invalid API key")
+    if not configured_api_key:
+        raise HTTPException(status_code=500, detail="Weather API key not configured")
     
-    # Forward request to weather API
+    # Forward request to weather API using backend-configured key
     query_params = dict(request.query_params)
-    target_url = f"https://api.pirateweather.net/forecast/{api_key}/{coordinates}"
+    target_url = f"https://api.pirateweather.net/forecast/{configured_api_key}/{coordinates}"
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -318,8 +406,8 @@ async def proxy_api(path: str, request: Request):
         # Build target URL
         target_url = f"{hass_api_url.rstrip('/')}/{path}"
     
-    # Log proxy request details for debugging
-    logger.info(f"Proxying {request.method} request to: {target_url}")
+    # Log proxy request details for debugging (DEBUG level in dev, not shown in prod)
+    logger.debug(f"Proxying {request.method} request to: {target_url}")
     logger.debug(f"Request path: {path}, Query params: {dict(request.query_params)}")
     
     # Log ALL incoming request headers to find where "Björn" might be coming from
@@ -454,14 +542,16 @@ async def proxy_api(path: str, request: Request):
     
     try:
         # Use longer timeout for camera streams (they're continuous)
-        timeout_value = None if is_camera_stream else 30.0
+        # Use longer timeout for calendar requests (they can be slow with many events)
+        is_calendar_request = "calendars" in path
+        timeout_value = None if is_camera_stream else (60.0 if is_calendar_request else 30.0)
         
         async with httpx.AsyncClient(timeout=timeout_value) as client:
             if is_camera_stream:
                 # For MJPEG streams, use streaming response
                 # Camera streams use token as query parameter (already in request.query_params)
                 query_params = dict(request.query_params)
-                logger.info(f"Proxying camera stream request to {target_url} with query params: {list(query_params.keys())}")
+                logger.debug(f"Proxying camera stream request to {target_url} with query params: {list(query_params.keys())}")
                 try:
                     # Use stream() context manager but keep it open
                     stream_context = client.stream(
@@ -473,8 +563,8 @@ async def proxy_api(path: str, request: Request):
                     )
                     stream_response = await stream_context.__aenter__()
                     
-                    logger.info(f"Camera stream response status: {stream_response.status_code}")
-                    logger.info(f"Camera stream response headers: {dict(stream_response.headers)}")
+                    logger.debug(f"Camera stream response status: {stream_response.status_code}")
+                    logger.debug(f"Camera stream response headers: {dict(stream_response.headers)}")
                     
                     # Get response headers (exclude problematic ones)
                     response_headers = {}
@@ -504,7 +594,7 @@ async def proxy_api(path: str, request: Request):
                     async def generate():
                         chunk_count = 0
                         try:
-                            logger.info("Starting to read camera stream chunks...")
+                            logger.debug("Starting to read camera stream chunks...")
                             # Read response in chunks
                             async for chunk in stream_response.aiter_bytes(chunk_size=8192):
                                 if not chunk:
@@ -512,7 +602,7 @@ async def proxy_api(path: str, request: Request):
                                     continue
                                 chunk_count += 1
                                 if chunk_count == 1:
-                                    logger.info(f"First camera stream chunk received, size: {len(chunk)} bytes")
+                                    logger.debug(f"First camera stream chunk received, size: {len(chunk)} bytes")
                                 elif chunk_count % 100 == 0:
                                     logger.debug(f"Camera stream: {chunk_count} chunks received so far")
                                 yield chunk
@@ -520,7 +610,7 @@ async def proxy_api(path: str, request: Request):
                             if chunk_count == 0:
                                 logger.warning("Camera stream ended with no chunks received")
                             else:
-                                logger.info(f"Camera stream ended normally after {chunk_count} chunks")
+                                logger.debug(f"Camera stream ended normally after {chunk_count} chunks")
                         finally:
                             # Close the stream context when generator exits
                             try:
@@ -647,7 +737,7 @@ async def proxy_api(path: str, request: Request):
                     logger.error(f"Error making HTTP request to {target_url}: {type(request_err).__name__}: {request_err}")
                     raise
                 
-                logger.info(f"Response status: {response.status_code} from {target_url}")
+                logger.debug(f"Response status: {response.status_code} from {target_url}")
                 
                 # Safely log response headers
                 try:
@@ -758,157 +848,182 @@ async def proxy_api(path: str, request: Request):
 
 
 @app.websocket("/api/websocket")
-async def proxy_websocket(websocket: WebSocket):
+async def client_websocket(websocket: WebSocket):
     """
-    Proxy WebSocket connections to Home Assistant with transparent authentication.
+    WebSocket endpoint for clients to subscribe to entity state updates.
+    
+    Custom protocol:
+    - subscribe_entity: Subscribe to entity updates
+    - get_state: Get current state of an entity
+    - get_states: Get current state of multiple entities
+    - unsubscribe_entity: Unsubscribe from entity updates
     """
-    config = get_config()
+    global websocket_manager
     
-    # Get WebSocket URL from config (handles both HA and local dev)
-    ha_ws_url = config.get("HASS_WEBSOCKET_URL", "ws://supervisor/core/websocket")
-    
-    # Get authentication token
-    # In HA: use SUPERVISOR_TOKEN
-    # In local dev: use HASS_ACCESS_TOKEN from environment
-    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
-    hass_access_token = os.environ.get("HASS_ACCESS_TOKEN")
-    
-    # Prefer SUPERVISOR_TOKEN, fallback to HASS_ACCESS_TOKEN
-    auth_token = supervisor_token or hass_access_token
-    
-    if not auth_token:
-        await websocket.close(code=1008, reason="SUPERVISOR_TOKEN or HASS_ACCESS_TOKEN not configured")
+    if not websocket_manager:
+        await websocket.close(code=1011, reason="WebSocket state manager not initialized")
         return
     
-    # Accept client connection
     await websocket.accept()
     
-    try:
-        async with websockets.connect(ha_ws_url) as ha_websocket:
-            # Authentication state
-            authenticated = False
-            
-            # Forward messages from HA to client
-            async def forward_to_client():
-                nonlocal authenticated
-                try:
-                    async for message in ha_websocket:
-                        # Handle text messages (JSON)
-                        if isinstance(message, str):
-                            try:
-                                data = json.loads(message)
-                                
-                                # Ensure data is a dict (not a list)
-                                if not isinstance(data, dict):
-                                    # If it's a list or other type, forward as-is
-                                    await websocket.send_text(message)
-                                    continue
-                                
-                                # Handle auth_required message
-                                if data.get("type") == "auth_required":
-                                    # Send auth message with auth token
-                                    auth_message = {
-                                        "type": "auth",
-                                        "access_token": auth_token
-                                    }
-                                    await ha_websocket.send(json.dumps(auth_message))
-                                    continue
-                                
-                                # Handle auth_ok message
-                                if data.get("type") == "auth_ok":
-                                    authenticated = True
-                            except json.JSONDecodeError:
-                                pass  # Not JSON, forward as-is
-                            
-                            # Forward text message to client
-                            await websocket.send_text(message)
-                        elif isinstance(message, bytes):
-                            # Forward binary message to client
-                            await websocket.send_bytes(message)
-                        else:
-                            # Handle other types (convert to string if possible)
-                            await websocket.send_text(str(message))
-                except websockets.ConnectionClosed:
-                    logger.debug("Home Assistant WebSocket closed normally")
-                    try:
-                        if websocket.client_state.name == "CONNECTED":
-                            await websocket.close(code=1006, reason="HA connection closed")
-                    except Exception:
-                        pass
-                    return
-                except Exception as e:
-                    logger.error(f"Error forwarding from HA to client: {e}")
-                    try:
-                        if websocket.client_state.name == "CONNECTED":
-                            await websocket.close(code=1011, reason="Connection error")
-                    except Exception:
-                        pass
-                    return
-            
-            # Forward messages from client to HA
-            async def forward_to_ha():
-                try:
-                    while True:
-                        try:
-                            # Receive message (text or binary)
-                            message = await websocket.receive()
-                            
-                            # Handle different message types from FastAPI WebSocket
-                            if isinstance(message, dict):
-                                if "text" in message:
-                                    await ha_websocket.send(message["text"])
-                                elif "bytes" in message:
-                                    await ha_websocket.send(message["bytes"])
-                            else:
-                                # If it's a WebSocketMessage object, access its attributes
-                                if hasattr(message, "text") and message.text:
-                                    await ha_websocket.send(message.text)
-                                elif hasattr(message, "bytes") and message.bytes:
-                                    await ha_websocket.send(message.bytes)
-                        except WebSocketDisconnect:
-                            logger.debug("Client disconnected normally")
-                            break
-                        except RuntimeError as e:
-                            # Handle "Cannot call receive once a disconnect message has been received"
-                            if "disconnect" in str(e).lower():
-                                logger.debug("WebSocket disconnect detected, stopping forward_to_ha")
-                                break
-                            else:
-                                logger.error(f"Error forwarding from client to HA: {e}")
-                                break
-                        except Exception as e:
-                            logger.error(f"Error forwarding from client to HA: {e}")
-                            break
-                except Exception as e:
-                    logger.error(f"Error in forward_to_ha: {e}")
-            
-            # Run both forwarding tasks concurrently
-            try:
-                await asyncio.gather(
-                    forward_to_client(),
-                    forward_to_ha(),
-                    return_exceptions=True
-                )
-            except Exception as e:
-                logger.error(f"WebSocket proxy error: {e}")
+    # Track client subscriptions
+    client_subscriptions: Dict[str, Callable] = {}
     
-    except Exception as e:
-        # Safely encode error message to avoid encoding issues
+    async def send_to_client(message: Dict[str, Any]):
+        """Helper to send message to client."""
         try:
-            error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-            logger.error(f"Error connecting to Home Assistant WebSocket: {error_msg}")
-        except Exception:
-            logger.error("Error connecting to Home Assistant WebSocket: encoding error")
-            error_msg = "Connection error"
-        
-        try:
-            reason = f"Connection error: {error_msg}".encode('utf-8', errors='replace').decode('utf-8')
-            await websocket.close(code=1011, reason=reason)
-        except Exception:
+            await websocket.send_text(json.dumps(message))
+        except Exception as e:
+            logger.debug(f"Error sending message to client: {e}")
+    
+    def create_state_callback():
+        """Create a callback function for state updates."""
+        async def callback(update: Dict[str, Any]):
+            await send_to_client(update)
+        return callback
+    
+    try:
+        while True:
             try:
-                await websocket.close(code=1011, reason="Connection error")
-            except Exception:
-                pass
+                # Receive message from client
+                message = await websocket.receive()
+                
+                # Extract message text
+                message_text = None
+                if isinstance(message, dict):
+                    message_text = message.get("text")
+                elif hasattr(message, "text") and message.text:
+                    message_text = message.text
+                
+                if not message_text:
+                    continue
+                
+                # Parse JSON
+                try:
+                    data = json.loads(message_text)
+                except json.JSONDecodeError:
+                    await send_to_client({"type": "error", "message": "Invalid JSON"})
+                    continue
+                
+                if not isinstance(data, dict) or "type" not in data:
+                    await send_to_client({"type": "error", "message": "Invalid message format"})
+                    continue
+                
+                msg_type = data.get("type")
+                
+                # Handle subscribe_entity
+                if msg_type == "subscribe_entity":
+                    entity_id = data.get("entity_id")
+                    if not entity_id:
+                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                        continue
+                    
+                    # Create callback for this client
+                    callback = create_state_callback()
+                    websocket_manager.subscribe_client(entity_id, callback)
+                    client_subscriptions[entity_id] = callback
+                    
+                    # Send current state if available
+                    state = websocket_manager.get_state(entity_id)
+                    if state:
+                        await send_to_client({
+                            "type": "state_response",
+                            "entity_id": entity_id,
+                            "state": state.get("state"),
+                            "attributes": state.get("attributes", {})
+                        })
+                    else:
+                        await send_to_client({
+                            "type": "subscribed",
+                            "entity_id": entity_id,
+                            "message": "Subscribed, waiting for state update"
+                        })
+                
+                # Handle get_state
+                elif msg_type == "get_state":
+                    entity_id = data.get("entity_id")
+                    if not entity_id:
+                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                        continue
+                    
+                    state = websocket_manager.get_state(entity_id)
+                    if state:
+                        await send_to_client({
+                            "type": "state_response",
+                            "entity_id": entity_id,
+                            "state": state.get("state"),
+                            "attributes": state.get("attributes", {})
+                        })
+                    else:
+                        await send_to_client({
+                            "type": "error",
+                            "message": f"State not available for {entity_id}"
+                        })
+                
+                # Handle get_states
+                elif msg_type == "get_states":
+                    entity_ids = data.get("entity_ids", [])
+                    if not isinstance(entity_ids, list):
+                        await send_to_client({"type": "error", "message": "entity_ids must be a list"})
+                        continue
+                    
+                    states = {}
+                    for entity_id in entity_ids:
+                        state = websocket_manager.get_state(entity_id)
+                        if state:
+                            states[entity_id] = {
+                                "state": state.get("state"),
+                                "attributes": state.get("attributes", {})
+                            }
+                    
+                    await send_to_client({
+                        "type": "states_response",
+                        "states": states
+                    })
+                
+                # Handle unsubscribe_entity
+                elif msg_type == "unsubscribe_entity":
+                    entity_id = data.get("entity_id")
+                    if not entity_id:
+                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                        continue
+                    
+                    if entity_id in client_subscriptions:
+                        callback = client_subscriptions[entity_id]
+                        websocket_manager.unsubscribe_client(entity_id, callback)
+                        del client_subscriptions[entity_id]
+                        await send_to_client({
+                            "type": "unsubscribed",
+                            "entity_id": entity_id
+                        })
+                    else:
+                        await send_to_client({
+                            "type": "error",
+                            "message": f"Not subscribed to {entity_id}"
+                        })
+                
+                else:
+                    await send_to_client({"type": "error", "message": f"Unknown message type: {msg_type}"})
+            
+            except WebSocketDisconnect:
+                logger.debug("Client disconnected normally")
+                break
+            except RuntimeError as e:
+                if "disconnect" in str(e).lower():
+                    logger.debug("WebSocket disconnect detected")
+                    break
+                else:
+                    logger.error(f"Error handling client message: {e}")
+                    break
+            except Exception as e:
+                logger.error(f"Error in client WebSocket handler: {e}", exc_info=True)
+                break
+    
+    finally:
+        # Unsubscribe from all entities
+        for entity_id, callback in client_subscriptions.items():
+            websocket_manager.unsubscribe_client(entity_id, callback)
+        logger.debug("Client WebSocket connection closed, unsubscribed from all entities")
 
 
 @app.get("/{full_path:path}")
@@ -922,9 +1037,16 @@ async def serve_spa(full_path: str):
         raise HTTPException(status_code=404, detail="Not found")
     
     # Serve index.html for SPA routing
+    # IMPORTANT: Set no-cache headers to prevent HA cloud/ingress from caching old versions
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(str(index_file))
+        response = FileResponse(str(index_file))
+        # Prevent caching of index.html - it references the hashed JS files
+        # If index.html is cached, users might get old HTML that references old JS files
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     else:
         raise HTTPException(status_code=404, detail="index.html not found")
 

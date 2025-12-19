@@ -134,9 +134,17 @@ const Week = () => {
   const { nextWeek, previousWeek, startWeekWithToday } = useShortcuts(setStartDate)
   
   React.useEffect(() => {
-    startWeekWithToday()
+    // Set initial start date to Monday of current week
+    if (startDate === undefined) {
+      startWeekWithToday()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('Week component - startDate:', startDate?.toISO(), 'data length:', data.length, 'error:', error)
+  }, [startDate, data.length, error])
 
   const swipeHandlers = useSwipe({
     onSwipedLeft: () => nextWeek(),

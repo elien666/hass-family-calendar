@@ -20,16 +20,16 @@ const getDefaultConfig = () => {
 
   return {
     HASS_HOST: getEnv('HASS_HOST', ''),
+    // HASS_ACCESS_TOKEN: Only available in local dev, not exposed in production
     HASS_ACCESS_TOKEN: getEnv('HASS_ACCESS_TOKEN', ''),
-    SUPERVISOR_TOKEN: getEnv('SUPERVISOR_TOKEN', ''),
     INGRESS_URL: getEnv('INGRESS_URL', ''),
     ENABLE_WEATHER: getEnv('ENABLE_WEATHER', false),
-    WEATHER_API_KEY: getEnv('WEATHER_API_KEY', ''),
+    // WEATHER_API_KEY: Removed - handled by backend only
     WEATHER_LATITUDE: getEnv('WEATHER_LATITUDE'),
     WEATHER_LONGITUDE: getEnv('WEATHER_LONGITUDE'),
     ENABLE_HVV: getEnv('ENABLE_HVV', false),
     GEOFOX_USER: getEnv('GEOFOX_USER', ''),
-    GEOFOX_SECRET: getEnv('GEOFOX_SECRET', ''),
+    // GEOFOX_SECRET: Removed - handled by backend only
     ENABLE_GARAGE: getEnv('ENABLE_GARAGE', false),
     ENTITY_GARAGE_DOOR: getEnv('ENTITY_GARAGE_DOOR', ''),
     ENABLE_LAUNDRY: getEnv('ENABLE_LAUNDRY', false),
@@ -136,6 +136,8 @@ export const ConfigProvider = ({ children }) => {
   })
   const isMountedRef = useRef(true)
   const configRef = useRef(config)
+  const isLoadingRef = useRef(false) // Prevent concurrent loads
+  const hasInitializedRef = useRef(false) // Track if we've done initial load
   
   // Keep ref in sync with config state
   useEffect(() => {
@@ -144,96 +146,129 @@ export const ConfigProvider = ({ children }) => {
 
   // Load config from API
   const loadConfig = useCallback(async (isReload = false) => {
-    // In development, use build-time env vars (already set as default)
-    if (isDevelopment) {
-      if (!isReload) {
-        setLoading(false)
-      }
-      return true
+    // Prevent concurrent loads
+    if (isLoadingRef.current && !isReload) {
+      logger.debug('Config load already in progress, skipping')
+      return false
     }
-
-    // In production, fetch from API endpoint
-    // Use relative URL to work correctly with ingress paths
+    
+    // For initial load, check if we've already initialized
+    if (!isReload && hasInitializedRef.current) {
+      logger.debug('Config already initialized, skipping load')
+      return false
+    }
+    
+    isLoadingRef.current = true
+    if (!isReload) {
+      hasInitializedRef.current = true
+    }
+    logger.debug('Starting config load', { isReload, hasInitialized: hasInitializedRef.current })
+    // In development, fetch from backend API (http://localhost:8000/api/config)
+    // This ensures we get the same config structure as production
+    const configUrl = isDevelopment 
+      ? 'http://localhost:8000/api/config'
+      : (typeof window !== 'undefined' && window.location 
+          ? `${window.location.pathname.replace(/\/$/, '')}/api/config`
+          : '/api/config')
+    
     try {
-      // Get the base path from current location (handles ingress paths)
-      const basePath = typeof window !== 'undefined' && window.location 
-        ? window.location.pathname.replace(/\/$/, '') 
-        : ''
-      const configUrl = `${basePath}/api/config`
       const response = await axios.get(configUrl, { timeout: 5000 })
       
       if (response.data && typeof response.data === 'object') {
         // Validate config structure (basic check)
         if (typeof response.data === 'object' && !Array.isArray(response.data)) {
+          // Log the received config to debug CALENDARS issue
+          logger.debug('Config loaded from API:', {
+            hasCALENDARS: 'CALENDARS' in response.data,
+            CALENDARS: response.data.CALENDARS,
+            CALENDARSCount: Array.isArray(response.data.CALENDARS) ? response.data.CALENDARS.length : 'not array',
+            allKeys: Object.keys(response.data)
+          })
+          
           // Success - update config and save to localStorage
-          if (isMountedRef.current) {
-            // Only update config if values actually changed (prevent unnecessary re-renders)
-            // Use ref to get current config value (avoids stale closure)
-            const currentConfig = configRef.current
-            const configChanged = JSON.stringify(response.data) !== JSON.stringify(currentConfig)
-            if (configChanged) {
-              setConfig(response.data)
-              setIsUsingCachedConfig(false)
-              setConfigError(null)
+          // Check if config actually changed to avoid infinite loops
+          const currentConfig = configRef.current
+          const configChanged = JSON.stringify(response.data) !== JSON.stringify(currentConfig)
+          
+          logger.debug('Updating config with new data from API:', {
+            configChanged,
+            CALENDARSCount: Array.isArray(response.data.CALENDARS) ? response.data.CALENDARS.length : 'not array',
+            currentCALENDARSCount: Array.isArray(currentConfig?.CALENDARS) ? currentConfig.CALENDARS.length : 'not array',
+            responseKeys: Object.keys(response.data).length,
+            currentConfigKeys: Object.keys(currentConfig || {}).length
+          })
+          
+          // Only update if config actually changed to prevent infinite loops
+          if (configChanged) {
+            setConfig(response.data)
+            setIsUsingCachedConfig(false)
+            setConfigError(null)
+            if (!isDevelopment) {
               saveConfig(response.data)
-            } else {
-              // Config values haven't changed, just clear error state
-              setIsUsingCachedConfig(false)
-              setConfigError(null)
             }
-            
-            // Get enabled features for summary
-            const enabledFeatures = Object.keys(response.data)
-              .filter(k => k.startsWith('ENABLE_') && response.data[k])
-              .map(k => k.replace('ENABLE_', ''))
-            
-            // Log summary to backend
-            logger.info(
-              `Configuration ${isReload ? 'reloaded' : 'loaded'} from API endpoint. Enabled features: ${enabledFeatures.length > 0 ? enabledFeatures.join(', ') : 'none'}`,
-              {
-                enabledFeatures,
-                totalConfigKeys: Object.keys(response.data).length
-              }
-            )
+          } else {
+            // Config hasn't changed, just clear error state
+            setIsUsingCachedConfig(false)
+            setConfigError(null)
           }
+          
+          // Get enabled features for summary
+          const enabledFeatures = Object.keys(response.data)
+            .filter(k => k.startsWith('ENABLE_') && response.data[k])
+            .map(k => k.replace('ENABLE_', ''))
+          
+          // Log summary to backend
+          logger.info(
+            `Configuration ${isReload ? 'reloaded' : 'loaded'} from API endpoint. Enabled features: ${enabledFeatures.length > 0 ? enabledFeatures.join(', ') : 'none'}`,
+            {
+              enabledFeatures,
+              totalConfigKeys: Object.keys(response.data).length
+            }
+          )
+          
+          if (!isReload) {
+            setLoading(false)
+          }
+          isLoadingRef.current = false
           return true
         } else {
-          throw new Error('Invalid config structure: expected object')
+          throw new Error('Invalid config structure: expected object, got array')
         }
       } else {
-        throw new Error('Invalid config response: expected object')
+        throw new Error('Invalid config response: missing or invalid data')
       }
     } catch (error) {
-      // Failed to load config
-      if (isMountedRef.current) {
-        const errorMessage = error.response 
-          ? `HTTP ${error.response.status}: ${error.response.statusText}`
-          : error.message || 'Unknown error'
-        
-        setConfigError(errorMessage)
-        
-        if (isReload) {
-          // On reload failure, keep using current config (cached or default)
-          logger.warn('Failed to reload config from API, keeping current config:', errorMessage)
-        } else {
-          // On initial load failure, check if we have cached config
-          const cached = loadCachedConfig()
-          if (cached) {
-            logger.warn('Failed to load config from API, using cached config:', errorMessage)
+      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error'
+      
+      if (isReload) {
+        // For reloads, just log warning and keep current config
+        logger.warn('Failed to reload config from API, keeping current config:', errorMessage)
+        return false
+      } else {
+        // For initial load, try to use cached config or defaults
+        const cached = loadCachedConfig()
+        if (cached) {
+          logger.warn('Failed to load config from API, using cached config:', errorMessage)
+          if (isMountedRef.current) {
+            setConfig(cached)
             setIsUsingCachedConfig(true)
-          } else {
-            logger.debug('Failed to load config from API, using defaults:', errorMessage)
-            setIsUsingCachedConfig(false)
+            setConfigError(errorMessage)
+            setLoading(false)
           }
+          return false
+        } else {
+          logger.debug('Failed to load config from API, using defaults:', errorMessage)
+          if (isMountedRef.current) {
+            setConfigError(errorMessage)
+            setLoading(false)
+          }
+          return false
         }
       }
-      return false
     } finally {
-      if (isMountedRef.current && !isReload) {
-        setLoading(false)
-      }
+      isLoadingRef.current = false
     }
-  }, [])
+  }, []) // Empty deps - only run on mount
 
   // Reload config function (exposed via context)
   const reloadConfigRef = useRef(null)
@@ -258,17 +293,31 @@ export const ConfigProvider = ({ children }) => {
     return reloadPromise
   }, [loadConfig])
 
-  // Initial load on mount
+  // Initial load on mount - only run once
+  const hasLoadedRef = useRef(false)
   useEffect(() => {
+    // Only load once, even with StrictMode double-invocation
+    if (hasLoadedRef.current) {
+      logger.debug('Config already loaded, skipping initial load')
+      return
+    }
+    
+    // Set flag immediately to prevent double-invocation
+    hasLoadedRef.current = true
+    logger.debug('Initial config load starting')
+    
+    // Call loadConfig directly - the guards inside will prevent duplicate calls
     loadConfig(false)
     
     return () => {
       isMountedRef.current = false
     }
-  }, []) // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run on mount - loadConfig is stable (only depends on isMountedRef which is a ref)
 
   // Update axios defaults when config changes
   // This runs on mount and whenever HASS_ACCESS_TOKEN changes
+  // Note: HASS_ACCESS_TOKEN is only available in local dev mode, not in production
   useEffect(() => {
     const token = config.HASS_ACCESS_TOKEN || ''
     const hasValidToken = token &&
@@ -279,7 +328,7 @@ export const ConfigProvider = ({ children }) => {
 
     if (hasValidToken) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      logger.debug('Axios Authorization header set from config')
+      logger.debug('Axios Authorization header set from config (local dev mode)')
     } else {
       // Explicitly remove Authorization header for add-on mode
       // Backend proxy adds SUPERVISOR_TOKEN, so frontend should not send Authorization header

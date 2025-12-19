@@ -19,8 +19,9 @@ echo "  Source: $ADDON_DIR"
 echo "  Destination: ${SSH_USER}@${SSH_HOST}:${REMOTE_PATH}"
 echo ""
 
-# Use rsync to copy all contents
-rsync -av "$ADDON_DIR/" "${SSH_USER}@${SSH_HOST}:${REMOTE_PATH}/"
+# Use rsync to sync all contents (--delete removes files on destination that don't exist in source)
+# This ensures the destination is 100% identical to the source, with no leftover files
+rsync -av --delete "$ADDON_DIR/" "${SSH_USER}@${SSH_HOST}:${REMOTE_PATH}/"
 
 echo ""
 echo "Upload completed!"

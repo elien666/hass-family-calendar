@@ -56,21 +56,36 @@ const useDoorbell = () => {
   const { error: wsError } = useHomeAssistantWebSocket({
     enabled: isConfigured && !!ENTITY_DOORBELL,
     logPrefix: 'doorbell',
-    onReady: async (connection) => {
-      const trigger = (result) => {
-        const newState = result.variables.trigger.to_state.state
-        setState(newState)
+    onReady: (connection, subscriptionsRef) => {
+      // Create callback for state updates
+      const callback = (data) => {
+        if (data.state !== undefined) {
+          setState(data.state)
+        }
       }
 
-      const unsubscribe = await connection.subscribeMessage(trigger, {
-        type: 'subscribe_trigger',
-        trigger: {
-          platform: 'state',
-          entity_id: ENTITY_DOORBELL,
-        },
-      })
-      logger.debug('Subscribed to doorbell state changes')
-      return unsubscribe
+      // Register callback
+      subscriptionsRef.current.set(ENTITY_DOORBELL, callback)
+
+      // Subscribe to entity
+      if (connection.readyState === WebSocket.OPEN) {
+        connection.send(JSON.stringify({
+          type: 'subscribe_entity',
+          entity_id: ENTITY_DOORBELL
+        }))
+        logger.debug('Subscribed to doorbell state changes')
+      }
+
+      // Return unsubscribe function
+      return () => {
+        subscriptionsRef.current.delete(ENTITY_DOORBELL)
+        if (connection.readyState === WebSocket.OPEN) {
+          connection.send(JSON.stringify({
+            type: 'unsubscribe_entity',
+            entity_id: ENTITY_DOORBELL
+          }))
+        }
+      }
     },
     dependencies: [isConfigured, ENTITY_DOORBELL],
   })

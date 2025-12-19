@@ -115,11 +115,7 @@ const Doorbell = () => {
     const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
     const DOORBELL_CAMERAS = config.DOORBELL_CAMERAS || []
     
-    // Don't render if doorbell feature is disabled
-    if (!ENABLE_DOORBELL) {
-        return null
-    }
-
+    // Call all hooks unconditionally (before any early returns)
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()
     const [ cancelId, setCancelId ] = React.useState(undefined)
@@ -202,6 +198,11 @@ const Doorbell = () => {
         }
     }, [showDoorCams])
 
+    // Don't render if doorbell feature is disabled
+    if (!ENABLE_DOORBELL) {
+        return null
+    }
+
     return (
         <>
             <button onClick={() => toggle(v => !v)}>CCTV</button>
@@ -264,7 +265,7 @@ const Doorbell = () => {
 
                                 // Get access token for this camera entity
                                 const accessToken = accessTokens[camera.entity_id] || null
-                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config.HASS_HOST)
+                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config)
 
                                 if (!streamUrl) {
                                     return null

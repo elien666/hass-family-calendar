@@ -55,20 +55,36 @@ const useGarageDoor = () => {
   const { error: wsError } = useHomeAssistantWebSocket({
     enabled: isConfigured && !!ENTITY_GARAGE_DOOR,
     logPrefix: 'garage door',
-    onReady: async (connection) => {
-      const trigger = (result) => {
-        setState(result.variables.trigger.to_state.state)
+    onReady: (connection, subscriptionsRef) => {
+      // Create callback for state updates
+      const callback = (data) => {
+        if (data.state !== undefined) {
+          setState(data.state)
+        }
       }
 
-      const unsubscribe = await connection.subscribeMessage(trigger, {
-        type: 'subscribe_trigger',
-        trigger: {
-          platform: 'state',
-          entity_id: ENTITY_GARAGE_DOOR,
-        },
-      })
-      logger.debug('Subscribed to garage door state changes')
-      return unsubscribe
+      // Register callback
+      subscriptionsRef.current.set(ENTITY_GARAGE_DOOR, callback)
+
+      // Subscribe to entity
+      if (connection.readyState === WebSocket.OPEN) {
+        connection.send(JSON.stringify({
+          type: 'subscribe_entity',
+          entity_id: ENTITY_GARAGE_DOOR
+        }))
+        logger.debug('Subscribed to garage door state changes')
+      }
+
+      // Return unsubscribe function
+      return () => {
+        subscriptionsRef.current.delete(ENTITY_GARAGE_DOOR)
+        if (connection.readyState === WebSocket.OPEN) {
+          connection.send(JSON.stringify({
+            type: 'unsubscribe_entity',
+            entity_id: ENTITY_GARAGE_DOOR
+          }))
+        }
+      }
     },
     dependencies: [isConfigured, ENTITY_GARAGE_DOOR],
   })

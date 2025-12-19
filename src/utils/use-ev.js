@@ -94,10 +94,11 @@ const useEv = () => {
     maxReconnectAttempts: 5,
     reconnectDelay: 1000,
     logPrefix: 'EV entities',
-    onReady: async (connection) => {
-      const trigger = (result) => {
-        const entityId = result.variables.trigger.to_state.entity_id
-        const newState = result.variables.trigger.to_state.state
+    onReady: (connection, subscriptionsRef) => {
+      // Create callback for state updates
+      const callback = (data) => {
+        const entityId = data.entity_id
+        const newState = data.state
 
         setState(prev => {
           const updated = { ...prev }
@@ -121,19 +122,32 @@ const useEv = () => {
       if (ENTITY_STATE_OF_CHARGE) entityIds.push(ENTITY_STATE_OF_CHARGE)
 
       // Subscribe to each entity
-      const unsubscribes = []
-      for (const entityId of entityIds) {
-        const unsubscribe = await connection.subscribeMessage(trigger, {
-          type: 'subscribe_trigger',
-          trigger: {
-            platform: 'state',
-            entity_id: entityId,
-          },
+      if (connection.readyState === WebSocket.OPEN) {
+        entityIds.forEach(entityId => {
+          // Register callback for this entity
+          subscriptionsRef.current.set(entityId, callback)
+          
+          // Subscribe to entity
+          connection.send(JSON.stringify({
+            type: 'subscribe_entity',
+            entity_id: entityId
+          }))
         })
-        unsubscribes.push(unsubscribe)
+        logger.debug(`Subscribed to EV entity state changes: ${entityIds.join(', ')}`)
       }
-      logger.debug(`Subscribed to EV entity state changes: ${entityIds.join(', ')}`)
-      return unsubscribes
+
+      // Return unsubscribe function
+      return () => {
+        entityIds.forEach(entityId => {
+          subscriptionsRef.current.delete(entityId)
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.send(JSON.stringify({
+              type: 'unsubscribe_entity',
+              entity_id: entityId
+            }))
+          }
+        })
+      }
     },
     dependencies: [isConfigured, ENTITY_PRECLIMATE_STATUS, ENTITY_CHARGING_STATE, ENTITY_STATE_OF_CHARGE],
   })

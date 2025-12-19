@@ -1,7 +1,7 @@
 import React from 'react'
 import axios from 'axios'
 import { useConfig } from './ConfigProvider'
-import { buildHaUrl } from './config'
+import { buildHaUrl, isDevelopment } from './config'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
 import { useHomeAssistantWebSocket } from './use-home-assistant-websocket'
@@ -31,7 +31,7 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
 
     async function fetchTokens() {
       setLoading(true)
-      setError(null)
+      setRestError(null)
 
       try {
         // Fetch all camera entity states in parallel
@@ -156,40 +156,54 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
     maxReconnectAttempts: 5,
     reconnectDelay: 1000,
     logPrefix: 'camera tokens',
-    onReady: async (connection) => {
-      // Subscribe to state changes for each camera entity
-      const unsubscribes = []
-      for (const entityId of cameraEntityIds) {
-        const trigger = (result) => {
-          const newState = result.variables.trigger.to_state
-          const accessToken = newState?.attributes?.access_token || null
-          
-          // Update tokens map with new token for this entity
-          // Only update if a valid token is provided - don't remove existing tokens
-          // if access_token is missing from state update (it may still be valid)
-          setTokens(prevTokens => {
-            if (accessToken) {
-              // Only update if we have a new valid token
-              return { ...prevTokens, [entityId]: accessToken }
+    onReady: (connection, subscriptionsRef) => {
+      // Create callback for state updates
+      const callback = (data) => {
+        const entityId = data.entity_id
+        const attributes = data.attributes || {}
+        const accessToken = attributes.access_token || null
+              
+              // Update tokens map with new token for this entity
+              // Only update if a valid token is provided - don't remove existing tokens
+              // if access_token is missing from state update (it may still be valid)
+              setTokens(prevTokens => {
+                if (accessToken) {
+                  // Only update if we have a new valid token
+                  return { ...prevTokens, [entityId]: accessToken }
+                }
+                // Don't remove token if it's missing from state update - keep existing token
+                // State updates may not always include access_token, but the token may still be valid
+                return prevTokens
+              })
             }
-            // Don't remove token if it's missing from state update - keep existing token
-            // State updates may not always include access_token, but the token may still be valid
-            return prevTokens
-          })
-        }
 
-        const unsubscribe = await connection.subscribeMessage(trigger, {
-          type: 'subscribe_trigger',
-          trigger: {
-            platform: 'state',
-            entity_id: entityId,
-          },
+      // Subscribe to all camera entities
+      if (connection.readyState === WebSocket.OPEN) {
+        cameraEntityIds.forEach(entityId => {
+          // Register callback for this entity
+          subscriptionsRef.current.set(entityId, callback)
+          
+          // Subscribe to entity
+          connection.send(JSON.stringify({
+            type: 'subscribe_entity',
+            entity_id: entityId
+          }))
         })
-        
-        unsubscribes.push(unsubscribe)
+        logger.debug(`Subscribed to camera entity state changes: ${cameraEntityIds.join(', ')}`)
       }
-      logger.debug(`Subscribed to camera entity state changes: ${cameraEntityIds.join(', ')}`)
-      return unsubscribes
+
+      // Return unsubscribe function
+    return () => {
+        cameraEntityIds.forEach(entityId => {
+          subscriptionsRef.current.delete(entityId)
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.send(JSON.stringify({
+              type: 'unsubscribe_entity',
+              entity_id: entityId
+            }))
+        }
+        })
+      }
     },
     dependencies: [cameraEntityIds?.length, cameraEntityIds?.join(',')],
   })
@@ -200,43 +214,35 @@ export const useCameraAccessTokens = (cameraEntityIds) => {
   return [tokens, loading, error]
 }
 
-// Helper function to build HA camera stream URL
-// Uses the HA camera proxy stream API endpoint with access_token as query parameter
-// Format: <protocol>//<host>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
-// Camera streams must go directly to HA host (bypassing ingress proxy) for better performance
-// Uses the current window location's protocol, hostname, and port
-// Based on advanced-camera-card implementation pattern
-// entityId should be the full entity ID (e.g., "camera.front_door")
-// accessToken is the access_token from camera entity attributes (optional - will work without but may have auth issues)
+// Helper function to build camera stream URL
+// Always goes through FastAPI backend proxy (not directly to HA)
+// In development: http://localhost:8000/api/camera_proxy_stream/...
+// In production: /api/camera_proxy_stream/... (relative URL, backend is already behind ingress)
+// The backend will proxy the request to Home Assistant with proper authentication
+// Format: <backend>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
 // Video elements can't send Authorization headers, so token is passed as query parameter
-export const buildCameraStreamUrl = (entityId, accessToken = null, hassHost = null) => {
+export const buildCameraStreamUrl = (entityId, accessToken = null, config = {}) => {
   if (!entityId) {
     return null
   }
 
-  let host = hassHost || ''
-  
-  // In production (HA add-on), HASS_HOST might be empty
-  // Try to construct from window.location if available
-  if (!host && !isDevelopment && typeof window !== 'undefined' && window.location) {
-    // In production, try to use window.location to construct HA host
-    // This assumes the app is served from the same origin as HA
-    // For ingress, this might not work - camera streams may need to go through proxy
-    const protocol = window.location.protocol
-    const hostname = window.location.hostname
-    const port = window.location.port ? `:${window.location.port}` : ''
-    host = `${protocol}//${hostname}${port}`
+  // Camera streams should ALWAYS go through the backend proxy, not directly to HA
+  // Even when using ingress, the backend is already behind ingress, so use relative URL
+  let url
+  if (isDevelopment) {
+    // Development: use backend directly
+    url = `http://localhost:8000/api/camera_proxy_stream/${entityId}`
+  } else {
+    // Production: use relative URL (backend is already behind ingress)
+    // This ensures the request goes through the backend proxy, not directly to HA
+    url = `/api/camera_proxy_stream/${entityId}`
   }
   
-  if (!host) {
-    logger.warn('HASS_HOST not configured and cannot derive from window.location, cannot build camera stream URL')
-    return null
-  }
-  
-  // Build direct URL to HA camera stream endpoint
-  const url = `${host}/api/camera_proxy_stream/${entityId}`
+  // Add access token as query parameter if provided
   if (accessToken) {
-    return `${url}?token=${encodeURIComponent(accessToken)}`
+    const separator = url.includes('?') ? '&' : '?'
+    url = `${url}${separator}token=${encodeURIComponent(accessToken)}`
   }
+  
   return url
 }

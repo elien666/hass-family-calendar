@@ -26,6 +26,7 @@
   },
   "scripts": {
     "start": "vite",
+    "dev": "bash scripts/dev-start.sh",
     "build": "vite build",
     "serve": "vite preview",
     "postinstall": "node scripts/fix-merry-timeline.js",
