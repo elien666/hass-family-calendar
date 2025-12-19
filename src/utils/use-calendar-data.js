@@ -34,7 +34,7 @@ const getIconFromString = (iconString) => {
 
 const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
   axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
-    timeout: 10000, // 10 second timeout
+    timeout: 65000, // 65 second timeout (backend has 60s timeout, add buffer)
     signal: signal // Add abort signal to cancel request if component unmounts
   })
     .then((response) => {
@@ -120,12 +120,20 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, ca
 
   // Skip if no calendars configured
   if (!calendars || calendars.length === 0) {
+    logger.warn('loadAll: No calendars configured, skipping fetch', { calendars })
     if (isMountedRef.current) {
       setData(newData)
       toggleLoading(false)
     }
     return
   }
+  
+  logger.debug('loadAll: Starting calendar fetch', { 
+    calendarsCount: calendars.length,
+    calendars: calendars.map(c => c.name),
+    startDate: startDate.toISO(),
+    endDate: dateRange[6].toISO()
+  })
 
   // Fetch data
   const abortController = new AbortController()
@@ -182,16 +190,50 @@ const useCalendarData = (startDate) => {
   const config = useConfig()
   const CALENDARS = config.CALENDARS || []
   
+  // Debug: Log config changes
+  React.useEffect(() => {
+    logger.debug('useCalendarData: config changed', {
+      hasCALENDARS: 'CALENDARS' in config,
+      CALENDARS: config.CALENDARS,
+      CALENDARSCount: Array.isArray(config.CALENDARS) ? config.CALENDARS.length : 'not array',
+      configKeys: Object.keys(config)
+    })
+  }, [config])
+  
   // Process calendars from config: map icon strings to icon objects
   const calendars = React.useMemo(() => {
-    return CALENDARS.map((calendar) => ({
+    const processed = CALENDARS.map((calendar) => ({
       name: calendar.name,
       icon: getIconFromString(calendar.icon)
     }))
+    logger.debug('Processing calendars from config (memo update):', { 
+      CALENDARS, 
+      count: CALENDARS.length,
+      processedCount: processed.length,
+      processed: processed.map(c => c.name)
+    })
+    return processed
   }, [CALENDARS])
+  
+  // Debug: Log when CALENDARS changes
+  React.useEffect(() => {
+    logger.debug('CALENDARS array changed:', { 
+      CALENDARS, 
+      count: CALENDARS.length,
+      calendarsMemoCount: calendars.length
+    })
+  }, [CALENDARS, calendars.length])
 
-  const host = React.useCallback((name) => buildHaUrl(`/api/calendars/${name}`, config), [config])
-  const url = React.useCallback((name, params) => `${host(name)}?${qs.stringify(params)}`, [host])
+  const host = React.useCallback((name) => {
+    const url = buildHaUrl(`/api/calendars/${name}`, config)
+    logger.debug(`Building calendar URL for ${name}:`, url)
+    return url
+  }, [config])
+  const url = React.useCallback((name, params) => {
+    const fullUrl = `${host(name)}?${qs.stringify(params)}`
+    logger.debug(`Full calendar URL for ${name}:`, fullUrl)
+    return fullUrl
+  }, [host])
 
   const [ data, setData ] = React.useState(emptyData)
   const [ isLoading, setIsLoading ] = React.useState(false)
@@ -207,7 +249,16 @@ const useCalendarData = (startDate) => {
   React.useEffect(() => {
     isMountedRef.current = true
     
-    if (startDate !== undefined) {
+    logger.debug('useCalendarData effect triggered:', { 
+      startDate: startDate?.toISO(), 
+      calendarsCount: calendars.length,
+      calendars: calendars.map(c => c.name),
+      hasStartDate: startDate !== undefined,
+      hasCalendars: calendars.length > 0
+    })
+    
+    // Only fetch if we have both startDate and calendars
+    if (startDate !== undefined && calendars.length > 0) {
       const isNewDate = currentStartDate === null || !currentStartDate.equals(startDate)
       
       if (isNewDate) {
@@ -216,7 +267,18 @@ const useCalendarData = (startDate) => {
         setCurrentStartDate(startDate)
       }
       
+      logger.debug('useCalendarData: Calling loadAll', {
+        startDate: startDate.toISO(),
+        calendarsCount: calendars.length
+      })
       loadAll(startDate, data, setData, setIsLoading, abortRef, setError, calendars, url, isMountedRef)
+    } else {
+      if (startDate === undefined) {
+        logger.debug('useCalendarData: startDate is undefined, skipping fetch')
+      }
+      if (calendars.length === 0) {
+        logger.debug('useCalendarData: No calendars configured yet, skipping fetch')
+      }
     }
 
     return () => {
@@ -225,8 +287,7 @@ const useCalendarData = (startDate) => {
         abortRef.current.abort()
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, calendars])
+  }, [startDate, calendars, url]) // Include url so it re-runs when config changes
 
   return [ data, error ]
 }

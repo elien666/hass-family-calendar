@@ -188,11 +188,7 @@ const Ev = () => {
   const config = useConfig()
   const ENABLE_EV = config.ENABLE_EV || false
   
-  // Don't render if EV feature is disabled
-  if (!ENABLE_EV) {
-    return null
-  }
-
+  // Call all hooks unconditionally (before any early returns)
   const [ evState, error ] = useEv()
   const { preclimateStatus, chargingState, stateOfCharge } = evState
 
@@ -350,6 +346,11 @@ const Ev = () => {
 
   const progressColor = animationDirection === 'start' ? '#17e146' : '#f85a5a'
   const progressDirection = animationDirection === 'start' ? 'clockwise' : 'counterclockwise'
+
+  // Don't render if EV feature is disabled
+  if (!ENABLE_EV) {
+    return null
+  }
 
   return (
     <Div className={clsx({ disabled: error !== false })}>

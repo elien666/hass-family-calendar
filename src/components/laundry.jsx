@@ -96,11 +96,7 @@ const Laundry = () => {
   const config = useConfig()
   const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
   
-  // Don't render if laundry feature is disabled
-  if (!ENABLE_LAUNDRY) {
-    return null
-  }
-
+  // Call all hooks unconditionally (before any early returns)
   const [ status, states, error ] = useWashingMachine()
   const [ showLaundry, toggle ] = React.useState(false)
   
@@ -110,6 +106,11 @@ const Laundry = () => {
     }
   }, [error])
   const closeLaundry = useCallback(() => toggle(false), [])
+
+  // Don't render if laundry feature is disabled
+  if (!ENABLE_LAUNDRY) {
+    return null
+  }
 
   return (
     <Div className={clsx({ disabled: error !== false })}>

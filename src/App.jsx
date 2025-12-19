@@ -35,7 +35,7 @@ const Div = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding-top: ${props => props.hasBanner ? '48px' : '0'};
+  padding-top: ${props => props.$hasBanner ? '48px' : '0'};
   transition: padding-top 0.2s;
 
   .main {
@@ -75,7 +75,7 @@ function MainApp() {
   const hasBanner = !loading && !dismissed && (configError || isUsingCachedConfig)
 
   return (
-    <Div hasBanner={hasBanner}>
+    <Div $hasBanner={hasBanner}>
       <GlobalStyle/>
       <ConfigStatusBanner />
       <div className={'main'}>

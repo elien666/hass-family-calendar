@@ -30,37 +30,125 @@ const useWashingMachine = () => {
   const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
   const LAUNDRY_MACHINES = config.LAUNDRY_MACHINES || []
   
-  // LAUNDRY_MACHINES is stable (from config, doesn't change during component lifecycle)
-  // so it's safe to call hooks in a map - the number of hooks will be consistent
   const machines = Array.isArray(LAUNDRY_MACHINES) ? LAUNDRY_MACHINES : []
   
-  // Call useSubscription for each machine
-  // Note: This violates the rules-of-hooks lint rule, but it's safe because:
-  // 1. LAUNDRY_MACHINES is stable (from config, doesn't change during render)
-  // 2. The array length is consistent across renders
-  // 3. We need dynamic number of subscriptions based on config
-  const subscriptions = machines.map((machine, index) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [state, error] = useSubscription(machine.entity_id, config)
-    return { state, error, name: machine.name }
+  // Use a single WebSocket connection for all machines
+  // This avoids calling hooks conditionally or in loops
+  const [machineStates, setMachineStates] = React.useState({})
+  const [machineErrors, setMachineErrors] = React.useState({})
+  
+  // Single WebSocket subscription for all laundry machines
+  const { error: wsError } = useHomeAssistantWebSocket({
+    enabled: ENABLE_LAUNDRY && machines.length > 0,
+    logPrefix: 'laundry',
+    onReady: (connection, subscriptionsRef) => {
+      // Subscribe to all machine entities
+      machines.forEach(machine => {
+        if (machine.entity_id) {
+          const callback = (data) => {
+            if (data.state !== undefined) {
+              setMachineStates(prev => ({
+                ...prev,
+                [machine.entity_id]: data.state
+              }))
+            }
+          }
+          
+          subscriptionsRef.current.set(machine.entity_id, callback)
+          
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.send(JSON.stringify({
+              type: 'subscribe_entity',
+              entity_id: machine.entity_id
+            }))
+            logger.debug(`Subscribed to ${machine.entity_id} state changes`)
+          }
+        }
+      })
+      
+      return () => {
+        machines.forEach(machine => {
+          if (machine.entity_id) {
+            subscriptionsRef.current.delete(machine.entity_id)
+            if (connection.readyState === WebSocket.OPEN) {
+              connection.send(JSON.stringify({
+                type: 'unsubscribe_entity',
+                entity_id: machine.entity_id
+              }))
+            }
+          }
+        })
+      }
+    },
+    dependencies: [machines.map(m => m.entity_id).join(',')],
   })
+  
+  // Fetch initial states via REST API
+  React.useEffect(() => {
+    if (!ENABLE_LAUNDRY || machines.length === 0) {
+      return
+    }
+    
+    const abortControllers = new Map()
+    
+    machines.forEach(machine => {
+      if (!machine.entity_id) return
+      
+      const url = urlPattern(machine.entity_id, config)
+      if (!url) return
+      
+      const abortController = new AbortController()
+      abortControllers.set(machine.entity_id, abortController)
+      
+      axios(url, { signal: abortController.signal })
+        .then((response) => {
+          setMachineStates(prev => ({
+            ...prev,
+            [machine.entity_id]: response.data.state
+          }))
+          setMachineErrors(prev => ({
+            ...prev,
+            [machine.entity_id]: false
+          }))
+        })
+        .catch((err) => {
+          if (!abortController.signal.aborted) {
+            setMachineErrors(prev => ({
+              ...prev,
+              [machine.entity_id]: formatErrorForUI(err)
+            }))
+          }
+        })
+    })
+    
+    return () => {
+      abortControllers.forEach(controller => controller.abort())
+    }
+  }, [ENABLE_LAUNDRY, machines.map(m => m.entity_id).join(','), config])
+  
+  // Build subscriptions array from state
+  const subscriptions = machines.map(machine => ({
+    state: machineStates[machine.entity_id] || 'off',
+    error: machineErrors[machine.entity_id] || wsError || false,
+    name: machine.name
+  }))
 
   const [ state, setState ] = React.useState(mapToPresentation['off'])
   const [ error, setError ] = React.useState(false)
 
   // Extract states and errors from subscriptions
-  const machineStates = subscriptions.map(sub => sub.state)
-  const machineErrors = subscriptions.map(sub => sub.error)
+  const machineStatesArray = subscriptions.map(sub => sub.state)
+  const machineErrorsArray = subscriptions.map(sub => sub.error)
 
   React.useEffect(() => {
     // Aggregate errors from all subscriptions
-    const hasError = machineErrors.some(err => err !== false)
-    setError(hasError ? machineErrors.find(err => err !== false) || false : false)
-  }, [machineErrors])
+    const hasError = machineErrorsArray.some(err => err !== false)
+    setError(hasError ? machineErrorsArray.find(err => err !== false) || false : false)
+  }, [machineErrorsArray])
 
   React.useEffect(() => {
     // Calculate sum of all machine values
-    const sum = machineStates.reduce((acc, machineState) => {
+    const sum = machineStatesArray.reduce((acc, machineState) => {
       return acc + (mapToValue[machineState] || 0)
     }, 0)
 
@@ -98,7 +186,7 @@ const useWashingMachine = () => {
     else {
       setState(mapToPresentation['running'])
     }
-  }, [machineStates])
+  }, [machineStatesArray])
 
   // Return states array with machine names from config
   const states = subscriptions.map(sub => ({
@@ -107,77 +195,6 @@ const useWashingMachine = () => {
   }))
 
   return [ state, states, error ]
-}
-
-const useSubscription = ( entity, config ) => {
-  const [ state, setState ] = React.useState('off')
-  const [ restError, setRestError ] = React.useState(false)
-
-  // Check if entity is configured
-  const ENABLE_LAUNDRY = config.ENABLE_LAUNDRY || false
-  const isConfigured = ENABLE_LAUNDRY && entity
-  const url = urlPattern(entity, config)
-
-  React.useEffect(() => {
-    // Skip if not configured
-    if (!isConfigured || !url) {
-      return
-    }
-
-    let isMounted = true
-    const abortController = new AbortController()
-
-    axios(url, {
-      signal: abortController.signal
-    })
-      .then((response) => {
-        if (isMounted) {
-          setState(response.data.state)
-          setRestError(false)
-        }
-      })
-      .catch((err) => {
-        // Don't set error if request was aborted or component unmounted
-        if (isMounted && !abortController.signal.aborted) {
-          // Error is already logged by interceptor, format for UI
-          setRestError(formatErrorForUI(err))
-        }
-      })
-
-    return () => {
-      isMounted = false
-      abortController.abort()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity, isConfigured, url])
-
-  // WebSocket subscription
-  const { error: wsError } = useHomeAssistantWebSocket({
-    enabled: isConfigured && !!entity,
-    logPrefix: entity,
-    onReady: async (connection) => {
-      const trigger = (result) => {
-        setState(result.variables.trigger.to_state.state)
-      }
-
-      const unsubscribe = await connection.subscribeMessage(trigger, {
-        type: 'subscribe_trigger',
-        trigger: {
-          platform: 'state',
-          entity_id: entity,
-        },
-      })
-      logger.debug(`Subscribed to ${entity} state changes`)
-      return unsubscribe
-    },
-    dependencies: [entity, isConfigured],
-  })
-
-  // Combine REST and WebSocket errors
-  const error = restError || wsError || false
-
-  return [ state, error ]
-
 }
 
 export default useWashingMachine
