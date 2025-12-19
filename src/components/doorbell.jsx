@@ -78,6 +78,45 @@ const Container = styled.div`
             z-index: 1;
             cursor: pointer;
         }
+
+        .token-error {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            z-index: 2;
+
+            button {
+                margin-top: 1rem;
+                padding: 0.5rem 1rem;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 8px;
+                color: white;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: background-color 0.2s;
+
+                &:hover {
+                    background-color: rgba(255, 255, 255, 0.3);
+                }
+
+                &:active {
+                    background-color: rgba(255, 255, 255, 0.4);
+                }
+
+                &:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+            }
+        }
     }
 
     .open-door {
@@ -129,7 +168,24 @@ const Doorbell = () => {
             .filter(Boolean) // Remove any undefined/null values
     }, [DOORBELL_CAMERAS])
 
-    const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
+    const [accessTokens, tokensLoading, tokensError, refreshTokens] = useCameraAccessTokens(cameraEntityIds)
+    
+    // Refs to track camera img elements so we can stop streams when overlay closes
+    const cameraImgRefs = React.useRef(new Map())
+
+    // Stop all camera streams when overlay closes
+    React.useEffect(() => {
+        if (!showDoorCams) {
+            // Clear all img src attributes to stop streaming
+            cameraImgRefs.current.forEach((imgElement) => {
+                if (imgElement && imgElement.src) {
+                    imgElement.src = ''
+                }
+            })
+            // Clear the refs map
+            cameraImgRefs.current.clear()
+        }
+    }, [showDoorCams])
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
@@ -265,7 +321,34 @@ const Doorbell = () => {
 
                                 // Get access token for this camera entity
                                 const accessToken = accessTokens[camera.entity_id] || null
+                                const hasToken = !!accessToken
                                 const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config)
+
+                                if (!streamUrl && !hasToken) {
+                                    // No token and no URL - show error CTA
+                                    return (
+                                        <div
+                                            key={`${orientation}-${cameraIndex}-${index}`}
+                                            className="video-container"
+                                            style={{
+                                                left: `${videoLayout.x}px`,
+                                                top: `${videoLayout.y}px`,
+                                                width: `${videoLayout.width}px`,
+                                                height: `${videoLayout.height}px`
+                                            }}
+                                        >
+                                            <div className="token-error">
+                                                <div>Kamera-Token nicht verfügbar</div>
+                                                <button 
+                                                    onClick={() => refreshTokens()}
+                                                    disabled={tokensLoading}
+                                                >
+                                                    {tokensLoading ? 'Lade...' : 'Token neu laden'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                }
 
                                 if (!streamUrl) {
                                     return null
@@ -282,13 +365,33 @@ const Doorbell = () => {
                                             height: `${videoLayout.height}px`
                                         }}
                                     >
-                                        <img
-                                            src={streamUrl}
-                                            className={orientation}
-                                            alt="Camera stream"
-                                            crossOrigin="anonymous"
-                                            key={`${camera.entity_id}-${index}`}
-                                        />   
+                                        {hasToken && showDoorCams && (
+                                            <img
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        cameraImgRefs.current.set(`${camera.entity_id}-${index}`, el)
+                                                    } else {
+                                                        cameraImgRefs.current.delete(`${camera.entity_id}-${index}`)
+                                                    }
+                                                }}
+                                                src={streamUrl}
+                                                className={orientation}
+                                                alt="Camera stream"
+                                                crossOrigin="anonymous"
+                                                key={`${camera.entity_id}-${index}`}
+                                            />
+                                        )}
+                                        {!hasToken && (
+                                            <div className="token-error">
+                                                <div>Kamera-Token nicht verfügbar</div>
+                                                <button 
+                                                    onClick={() => refreshTokens()}
+                                                    disabled={tokensLoading}
+                                                >
+                                                    {tokensLoading ? 'Lade...' : 'Token neu laden'}
+                                                </button>
+                                            </div>
+                                        )}
                                         <div 
                                             className="video-overlay"
                                             onClick={() => openDoor()}

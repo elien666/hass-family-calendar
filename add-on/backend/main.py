@@ -92,16 +92,23 @@ async def startup_event():
         config = get_config()
         logger.info("Configuration loaded successfully at startup")
         
-        # Initialize WebSocket state manager
+        # Initialize WebSocket state manager in background task
+        # This ensures the FastAPI app starts even if WebSocket connection takes time
         # If this fails, the backend should still start (WebSocket features just won't work)
-        try:
-            websocket_manager = WebSocketStateManager(config)
-            await websocket_manager.start()
-            logger.info("WebSocket State Manager started")
-        except Exception as ws_error:
-            logger.error(f"Failed to start WebSocket State Manager: {ws_error}", exc_info=True)
-            logger.warning("Backend will continue without WebSocket functionality")
-            websocket_manager = None
+        async def init_websocket_manager():
+            try:
+                global websocket_manager
+                websocket_manager = WebSocketStateManager(config)
+                await websocket_manager.start()
+                logger.info("WebSocket State Manager started")
+            except Exception as ws_error:
+                logger.error(f"Failed to start WebSocket State Manager: {ws_error}", exc_info=True)
+                logger.warning("Backend will continue without WebSocket functionality")
+                websocket_manager = None
+        
+        # Start WebSocket manager in background - don't await to avoid blocking startup
+        asyncio.create_task(init_websocket_manager())
+        logger.info("WebSocket State Manager initialization started in background")
     except Exception as e:
         logger.error(f"Failed to load configuration at startup: {e}", exc_info=True)
         # Don't raise - let the backend start even if config fails
@@ -177,6 +184,11 @@ if STATIC_DIR.exists():
 else:
     logger.warning(f"Static directory not found: {STATIC_DIR}")
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for ingress and monitoring."""
+    return JSONResponse(content={"status": "ok", "service": "family-calendar-backend"})
 
 @app.get("/api/config")
 async def get_config_endpoint():
