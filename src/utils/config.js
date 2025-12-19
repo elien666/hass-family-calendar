@@ -22,6 +22,8 @@ export const setGlobalConnectionCheckTrigger = (trigger) => {
 // Use Vite's built-in DEV mode to detect development vs production
 // import.meta.env.DEV is true when running `pnpm start` (dev server)
 // import.meta.env.DEV is false when running `pnpm run build` (production build)
+// Vite will replace this at build time, so it's safe to use directly
+// eslint-disable-next-line no-undef
 export const isDevelopment = import.meta.env.DEV
 
 // All configuration is now loaded via the /api/config endpoint
@@ -91,15 +93,6 @@ axios.interceptors.response.use(
         const duration = Date.now() - error.config.metadata.startTime
         logger.error('Request Duration:', `${duration}ms`, 'Request ID:', error.config.metadata.requestId)
       }
-      
-      // Log window.location state if in production (for ingress debugging)
-      if (!isDevelopment && typeof window !== 'undefined' && window.location) {
-        logger.error('Window Location State:', {
-          origin: window.location.origin,
-          pathname: window.location.pathname,
-          href: window.location.href,
-        })
-      }
 
       // Trigger connection check on network errors
       if (!isHealthCheck && globalConnectionCheckTrigger) {
@@ -129,31 +122,37 @@ export const buildHaUrl = (path, config = {}) => {
   // Ensure path starts with /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
 
-  // In production mode (add-on/ingress), use INGRESS_URL from config API
-  if (!isDevelopment) {
-    if (typeof window !== 'undefined' && window.location) {
-      // Use INGRESS_URL from config if available (from API endpoint)
-      const ingressUrl = config.INGRESS_URL || ''
-      if (ingressUrl && typeof ingressUrl === 'string' && ingressUrl.trim() !== '') {
-        // INGRESS_URL has trailing slash, normalizedPath starts with /
+  // In development mode, always use the FastAPI backend proxy
+  // The backend will proxy requests to Home Assistant
+  if (isDevelopment) {
+    return `http://localhost:8000${normalizedPath}`
+  }
+
+  // In production mode (add-on/ingress)
+  if (typeof window !== 'undefined' && window.location) {
+    // Check if we're accessing through ingress by looking at the current pathname
+    // Ingress URLs look like: /api/hassio_ingress/.../
+    const isIngress = window.location.pathname.includes('/api/hassio_ingress/')
+    
+    if (isIngress) {
+      // When accessed through ingress, we need to include the ingress path
+      // Extract the ingress base path from current location
+      const ingressMatch = window.location.pathname.match(/^(\/api\/hassio_ingress\/[^\/]+\/)/)
+      if (ingressMatch) {
+        const ingressBase = ingressMatch[1]
         // Remove leading slash from normalizedPath to avoid double slashes
         const pathWithoutLeadingSlash = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath
-        return `${window.location.origin}${ingressUrl}${pathWithoutLeadingSlash}`
+        return `${ingressBase}${pathWithoutLeadingSlash}`
       }
-      // Fallback to window.location.pathname if INGRESS_URL not available
-      const basePath = window.location.pathname.replace(/\/$/, '')
-      return `${window.location.origin}${basePath}${normalizedPath}`
     }
-    // Fallback to relative URL if window is not available
+    
+    // If not through ingress, or couldn't extract ingress path, use relative URL
+    // This will resolve relative to current origin
     return normalizedPath
   }
 
-  // In development mode, use HASS_HOST from config if provided
-  const host = config.HASS_HOST || ''
-  if (!host || host === "undefined" || host === "null") {
-    return normalizedPath
-  }
-  return `${host}${normalizedPath}`
+  // Fallback to relative URL if window is not available
+  return normalizedPath
 }
 
 // Helper function to build WebSocket host URL

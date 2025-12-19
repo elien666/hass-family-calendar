@@ -1,18 +1,14 @@
-import {
-  createLongLivedTokenAuth,
-  createConnection,
-} from 'home-assistant-js-websocket'
 import React from 'react'
 import { useConfig } from './ConfigProvider'
-import { buildWebSocketHost, buildWebSocketUrl, isDevelopment } from './config'
+import { isDevelopment, buildWebSocketUrl } from './config'
 import logger from './logger'
 import { useConnectionStateContext } from './ConnectionStateProvider'
 
 /**
- * Reusable hook for Home Assistant WebSocket connections
+ * Reusable hook for Home Assistant WebSocket connections using custom FastAPI protocol
  * 
  * @param {Object} options
- * @param {Function} options.onReady - Called when connection is ready. Should return unsubscribe function(s) or array of unsubscribe functions
+ * @param {Function} options.onReady - Called when connection is ready. Receives entity_id and callback function for state updates
  * @param {boolean} [options.enabled=true] - Whether to connect
  * @param {boolean} [options.checkBackendConnection=true] - Check isConnected from ConnectionStateProvider
  * @param {'simple'|'exponential'} [options.reconnectStrategy='simple'] - Reconnection strategy
@@ -20,7 +16,7 @@ import { useConnectionStateContext } from './ConnectionStateProvider'
  * @param {number} [options.reconnectDelay=2000] - Base delay in ms for reconnection
  * @param {string} [options.logPrefix='WebSocket'] - Prefix for log messages
  * @param {Array} [options.dependencies=[]] - Dependencies that trigger reconnection
- * @returns {{connection: Connection|null, error: string|false, isConnecting: boolean}}
+ * @returns {{connection: WebSocket|null, error: string|false, isConnecting: boolean}}
  */
 export function useHomeAssistantWebSocket({
   onReady,
@@ -47,14 +43,11 @@ export function useHomeAssistantWebSocket({
   const reconnectDebounceTimeoutRef = React.useRef(null)
   const reconnectAttemptsRef = React.useRef(0)
   const isConnectingRef = React.useRef(false)
-  const readyHandlerRef = React.useRef(null)
-  const disconnectedHandlerRef = React.useRef(null)
+  const subscriptionsRef = React.useRef(new Map()) // {entity_id: callback}
 
   // Cleanup function
   const cleanup = React.useCallback(() => {
     const connection = connectionRef.current
-    const readyHandler = readyHandlerRef.current
-    const disconnectedHandler = disconnectedHandlerRef.current
     const unsubscribe = unsubscribeRef.current
 
     // Clear timeouts
@@ -67,34 +60,19 @@ export function useHomeAssistantWebSocket({
       reconnectDebounceTimeoutRef.current = null
     }
 
-    // Remove event listeners
-    if (connection) {
-      try {
-        if (readyHandler) {
-          connection.removeEventListener('ready', readyHandler)
+    // Unsubscribe from all entities
+    if (connection && connection.readyState === WebSocket.OPEN) {
+      subscriptionsRef.current.forEach((callback, entityId) => {
+        try {
+          connection.send(JSON.stringify({
+            type: 'unsubscribe_entity',
+            entity_id: entityId
+          }))
+        } catch (err) {
+          logger.debug(`Error unsubscribing from ${entityId} for ${logPrefix}:`, err)
         }
-        if (disconnectedHandler) {
-          connection.removeEventListener('disconnected', disconnectedHandler)
-        }
-      } catch (err) {
-        logger.debug(`Error removing event listeners for ${logPrefix}:`, err)
-      }
-    }
-
-    // Unsubscribe
-    if (unsubscribe) {
-      try {
-        if (Array.isArray(unsubscribe)) {
-          unsubscribe.forEach(fn => {
-            if (fn) fn()
-          })
-        } else if (typeof unsubscribe === 'function') {
-          unsubscribe()
-        }
-      } catch (err) {
-        logger.debug(`Error unsubscribing for ${logPrefix}:`, err)
-      }
-      unsubscribeRef.current = null
+      })
+      subscriptionsRef.current.clear()
     }
 
     // Close connection
@@ -107,8 +85,7 @@ export function useHomeAssistantWebSocket({
       connectionRef.current = null
     }
 
-    readyHandlerRef.current = null
-    disconnectedHandlerRef.current = null
+    unsubscribeRef.current = null
   }, [logPrefix])
 
   // Connection function
@@ -138,133 +115,113 @@ export function useHomeAssistantWebSocket({
     setIsConnecting(true)
 
     try {
-      // Build host and token
-      const host = buildWebSocketHost(config)
-      const HASS_ACCESS_TOKEN = config.HASS_ACCESS_TOKEN || ''
-      const SUPERVISOR_TOKEN = config.SUPERVISOR_TOKEN || ''
-      const token = isDevelopment
-        ? (HASS_ACCESS_TOKEN || '')
-        : (SUPERVISOR_TOKEN || HASS_ACCESS_TOKEN || '')
-
-      // Skip if no token
-      if (!token) {
-        logger.debug(`Skipping ${logPrefix} connection - no access token (using REST API only)`)
-        isConnectingRef.current = false
-        setIsConnecting(false)
-        return
-      }
-
-      if (!host) {
-        logger.error(`Failed to build WebSocket host for ${logPrefix} - cannot create auth`)
-        if (isMountedRef.current) {
-          setError('WebSocket host konnte nicht erstellt werden.')
-        }
-        isConnectingRef.current = false
-        setIsConnecting(false)
-        return
-      }
-
-      // Create auth
-      let auth
-      try {
-        auth = createLongLivedTokenAuth(host, token)
-        if (isMountedRef.current) setError(false)
-      } catch (err) {
-        if (isMountedRef.current) {
-          logger.error(`Failed to create WebSocket auth for ${logPrefix}:`, err)
-          setError(err instanceof Error ? err.message : String(err))
-        }
-        isConnectingRef.current = false
-        setIsConnecting(false)
-        return
-      }
-
-      // Build connection options
-      let connectionOptions = { auth }
-
-      if (!isDevelopment) {
-        // Build WebSocket URL using ingress route for production
-        const wsUrl = buildWebSocketUrl(config)
-
+      // Build WebSocket URL - always use FastAPI endpoint (not direct HA connection)
+      // In development: connect to local FastAPI server
+      // In production: use buildWebSocketUrl which properly handles ingress paths
+      let wsUrl
+      if (isDevelopment) {
+        wsUrl = 'ws://localhost:8000/api/websocket'
+      } else {
+        // Use buildWebSocketUrl to properly handle ingress URLs
+        wsUrl = buildWebSocketUrl(config)
+        
+        // Fallback if buildWebSocketUrl returns empty (shouldn't happen, but be safe)
         if (!wsUrl) {
-          logger.error(`Failed to build WebSocket URL for ${logPrefix} - cannot connect`)
-          if (isMountedRef.current) {
-            setError('WebSocket URL konnte nicht erstellt werden.')
-          }
-          isConnectingRef.current = false
-          setIsConnecting(false)
-          return
-        }
-
-        // Create custom socket factory that uses the ingress URL
-        connectionOptions.createSocket = () => {
-          return new Promise((resolve, reject) => {
-            const socket = new WebSocket(wsUrl)
-            socket.onopen = () => resolve(socket)
-            socket.onerror = (err) => reject(err)
-          })
+          // Detect protocol from current page
+          const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+          const host = typeof window !== 'undefined' && window.location.host ? window.location.host : ''
+          wsUrl = `${protocol}//${host}/api/websocket`
         }
       }
 
-      // Create connection
-      const connection = await createConnection(connectionOptions)
+      if (!wsUrl) {
+        logger.error(`Failed to build WebSocket URL for ${logPrefix} - cannot connect`)
+        if (isMountedRef.current) {
+          setError('WebSocket URL konnte nicht erstellt werden.')
+        }
+        isConnectingRef.current = false
+        setIsConnecting(false)
+        return
+      }
+
+      logger.debug(`${logPrefix} connecting to: ${wsUrl}`)
+
+      // Create WebSocket connection
+      const connection = new WebSocket(wsUrl)
       connectionRef.current = connection
 
-      // Handle connection ready event
-      const readyHandler = async () => {
-        if (!isMountedRef.current || !connectionRef.current) {
-          logger.debug(`Skipping ready handler for ${logPrefix} - component unmounted or connection is null`)
+      // Handle connection open
+      connection.onopen = () => {
+        if (!isMountedRef.current) {
+          connection.close()
           return
         }
 
-        logger.debug(`${logPrefix} connection ready`)
-        reconnectAttemptsRef.current = 0 // Reset reconnection attempts on successful connection
-        setError(false)
-
-        // Double-check connection is still valid
-        if (!connectionRef.current) {
-          logger.warn(`Connection became null before subscription for ${logPrefix}`)
-          return
+        logger.debug(`${logPrefix} connection opened`)
+        reconnectAttemptsRef.current = 0
+        if (isMountedRef.current) {
+          setError(false)
         }
+        isConnectingRef.current = false
+        setIsConnecting(false)
 
         // Call onReady callback to set up subscriptions
-        try {
-          const unsubscribe = await onReady(connectionRef.current)
-          unsubscribeRef.current = unsubscribe
-        } catch (subscribeErr) {
-          logger.error(`Failed to subscribe for ${logPrefix}:`, subscribeErr)
-          if (isMountedRef.current) {
-            setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+        if (onReady) {
+          try {
+            // onReady receives (entityId, callback) and should return unsubscribe function
+            const unsubscribe = onReady(connection, subscriptionsRef)
+            unsubscribeRef.current = unsubscribe
+          } catch (subscribeErr) {
+            logger.error(`Failed to subscribe for ${logPrefix}:`, subscribeErr)
+            if (isMountedRef.current) {
+              setError(subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr))
+            }
           }
         }
       }
-      readyHandlerRef.current = readyHandler
-      connection.addEventListener('ready', readyHandler)
 
-      // Handle disconnection events
-      const disconnectedHandler = () => {
+      // Handle messages
+      connection.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          // Handle state_update
+          if (data.type === 'state_update') {
+            const entityId = data.entity_id
+            const callback = subscriptionsRef.current.get(entityId)
+            if (callback) {
+              callback(data)
+            }
+          }
+          // Handle state_response
+          else if (data.type === 'state_response') {
+            const entityId = data.entity_id
+            const callback = subscriptionsRef.current.get(entityId)
+            if (callback) {
+              callback(data)
+            }
+          }
+          // Handle error
+          else if (data.type === 'error') {
+            logger.error(`${logPrefix} received error:`, data.message)
+            if (isMountedRef.current) {
+              setError(data.message)
+            }
+          }
+        } catch (err) {
+          logger.error(`Error handling message for ${logPrefix}:`, err)
+        }
+      }
+
+      // Handle connection close
+      connection.onclose = () => {
         if (isMountedRef.current && !isConnectingRef.current) {
           logger.debug(`${logPrefix} disconnected`)
 
-          // Remove event listeners before clearing connection
-          if (connectionRef.current) {
-            try {
-              if (readyHandlerRef.current) {
-                connectionRef.current.removeEventListener('ready', readyHandlerRef.current)
-              }
-              if (disconnectedHandlerRef.current) {
-                connectionRef.current.removeEventListener('disconnected', disconnectedHandlerRef.current)
-              }
-            } catch (err) {
-              logger.debug(`Error removing event listeners on disconnect for ${logPrefix}:`, err)
-            }
-          }
-
           // Clear connection reference
           connectionRef.current = null
+          subscriptionsRef.current.clear()
           unsubscribeRef.current = null
-          readyHandlerRef.current = null
-          disconnectedHandlerRef.current = null
 
           // Clear any existing reconnect timeout
           if (reconnectTimeoutRef.current) {
@@ -307,16 +264,45 @@ export function useHomeAssistantWebSocket({
           }
         }
       }
-      disconnectedHandlerRef.current = disconnectedHandler
-      connection.addEventListener('disconnected', disconnectedHandler)
 
-      // If connection is already ready, trigger the ready handler immediately
-      if (connection && connection.ready) {
-        readyHandler()
+      // Handle connection error
+      connection.onerror = (err) => {
+        logger.error(`WebSocket error for ${logPrefix}:`, err)
+        isConnectingRef.current = false
+        setIsConnecting(false)
+        if (isMountedRef.current) {
+          setError('WebSocket-Verbindungsfehler')
+        }
+
+        // Only attempt to reconnect if backend is connected
+        if (isConnected) {
+          if (reconnectStrategy === 'exponential' && reconnectAttemptsRef.current < maxReconnectAttempts) {
+            const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000)
+            reconnectAttemptsRef.current++
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+                logger.debug(`Attempting to reconnect ${logPrefix} after error (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
+                connect()
+              }
+            }, delay)
+          } else if (reconnectStrategy === 'simple') {
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+                logger.debug(`Attempting to reconnect ${logPrefix} after error`)
+                connect()
+              }
+            }, reconnectDelay)
+          } else {
+            logger.warn(`Max reconnection attempts (${maxReconnectAttempts}) reached for ${logPrefix}, stopping reconnection`)
+            if (isMountedRef.current) {
+              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
+            }
+          }
+        } else {
+          logger.debug(`Skipping reconnection for ${logPrefix} after error - waiting for backend connection`)
+        }
       }
 
-      isConnectingRef.current = false
-      setIsConnecting(false)
     } catch (err) {
       isConnectingRef.current = false
       setIsConnecting(false)
@@ -357,7 +343,7 @@ export function useHomeAssistantWebSocket({
     enabled,
     checkBackendConnection,
     isConnected,
-    config,
+    config, // Include config to rebuild URL when ingress path changes
     reconnectStrategy,
     maxReconnectAttempts,
     reconnectDelay,
@@ -368,7 +354,8 @@ export function useHomeAssistantWebSocket({
 
   // Initial connection attempt
   React.useEffect(() => {
-    if (enabled && isConnected) {
+    // Only connect if enabled, backend is connected, and we don't already have a connection
+    if (enabled && isConnected && !connectionRef.current && !isConnectingRef.current) {
       connect()
     }
   }, [enabled, isConnected, connect, ...dependencies])
@@ -405,4 +392,3 @@ export function useHomeAssistantWebSocket({
     isConnecting,
   }
 }
-
