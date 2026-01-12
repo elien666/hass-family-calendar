@@ -5,7 +5,9 @@ import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import { useConfig } from '../utils/ConfigProvider'
 import { calculateOptimalTiling } from '../utils/video-tiling'
-import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import { fetchCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import logger from '../utils/logger'
+import { formatErrorForUI } from '../utils/axios-error-handler'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -161,14 +163,54 @@ const Doorbell = () => {
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
 
-    // Extract camera entity IDs and fetch access tokens
+    // Extract camera entity IDs
     const cameraEntityIds = React.useMemo(() => {
         return DOORBELL_CAMERAS
             .map(cam => cam.entity_id)
             .filter(Boolean) // Remove any undefined/null values
     }, [DOORBELL_CAMERAS])
 
-    const [accessTokens, tokensLoading, tokensError, refreshTokens] = useCameraAccessTokens(cameraEntityIds)
+    // Fetch tokens fresh when modal opens
+    const [accessTokens, setAccessTokens] = React.useState({})
+    const [tokensLoading, setTokensLoading] = React.useState(false)
+    const [tokensError, setTokensError] = React.useState(null)
+
+    // Fetch tokens when modal opens
+    React.useEffect(() => {
+        if (showDoorCams && cameraEntityIds.length > 0) {
+            setTokensLoading(true)
+            setTokensError(null)
+            
+            fetchCameraAccessTokens(cameraEntityIds, config)
+                .then(({ tokens, error }) => {
+                    setAccessTokens(tokens)
+                    setTokensError(error)
+                    setTokensLoading(false)
+                })
+                .catch((err) => {
+                    logger.error('Failed to fetch camera tokens:', err)
+                    setTokensError(formatErrorForUI(err))
+                    setTokensLoading(false)
+                })
+        } else if (!showDoorCams) {
+            // Clear tokens when modal closes
+            setAccessTokens({})
+            setTokensError(null)
+        }
+    }, [showDoorCams, cameraEntityIds.join(','), config])
+
+    // Manual refresh function
+    const refreshTokens = React.useCallback(async () => {
+        if (cameraEntityIds.length === 0) return
+        
+        setTokensLoading(true)
+        setTokensError(null)
+        
+        const { tokens, error } = await fetchCameraAccessTokens(cameraEntityIds, config)
+        setAccessTokens(tokens)
+        setTokensError(error)
+        setTokensLoading(false)
+    }, [cameraEntityIds, config])
     
     // Refs to track camera img elements so we can stop streams when overlay closes
     const cameraImgRefs = React.useRef(new Map())
