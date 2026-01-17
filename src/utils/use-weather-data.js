@@ -5,6 +5,7 @@ import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCl
 import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import { isDevelopment } from './config'
 
 export const weatherIconToPresentation = {
   'clear-day': { icon: WiDaySunny, label: 'Klar', color: '#eeeef5' },
@@ -33,7 +34,15 @@ const useWeatherData = (toggleLoading) => {
   // Check if weather is configured (API key is handled by backend)
   const isConfigured = ENABLE_WEATHER && WEATHER_LATITUDE && WEATHER_LONGITUDE
   
-  const url = () => `./forecast/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?&units=si&exclude=minutely`
+  const url = () => {
+    const path = `/forecast/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?units=si&exclude=minutely`
+    // In development mode, use the FastAPI backend proxy
+    if (isDevelopment) {
+      return `http://localhost:8000${path}`
+    }
+    // In production mode, use relative URL (backend handles proxying)
+    return `.${path}`
+  }
 
   React.useEffect(() => {
     // Skip if not configured
