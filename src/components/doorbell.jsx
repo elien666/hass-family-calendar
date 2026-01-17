@@ -8,6 +8,8 @@ import { calculateOptimalTiling } from '../utils/video-tiling'
 import { fetchCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
 import { formatErrorForUI } from '../utils/axios-error-handler'
+import Icon from '@mdi/react'
+import { mdiLoading } from '@mdi/js'
 
 // Duration to keep overlay open, afer door ring event stopped
 const DELAY_IN_MS = 45000
@@ -93,6 +95,20 @@ const Container = styled.div`
             text-align: center;
             padding: 1rem;
             z-index: 2;
+
+            .loading-spinner {
+                animation: spin 1s infinite linear;
+                margin: 1rem 0;
+            }
+
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(359deg);
+                }
+            }
 
             button {
                 margin-top: 1rem;
@@ -206,10 +222,16 @@ const Doorbell = () => {
         setTokensLoading(true)
         setTokensError(null)
         
-        const { tokens, error } = await fetchCameraAccessTokens(cameraEntityIds, config)
-        setAccessTokens(tokens)
-        setTokensError(error)
-        setTokensLoading(false)
+        try {
+            const { tokens, error } = await fetchCameraAccessTokens(cameraEntityIds, config)
+            setAccessTokens(tokens)
+            setTokensError(error)
+        } catch (err) {
+            logger.error('Failed to refresh camera tokens:', err)
+            setTokensError(formatErrorForUI(err))
+        } finally {
+            setTokensLoading(false)
+        }
     }, [cameraEntityIds, config])
     
     // Refs to track camera img elements so we can stop streams when overlay closes
@@ -380,13 +402,24 @@ const Doorbell = () => {
                                             }}
                                         >
                                             <div className="token-error">
-                                                <div>Kamera-Token nicht verfügbar</div>
-                                                <button 
-                                                    onClick={() => refreshTokens()}
-                                                    disabled={tokensLoading}
-                                                >
-                                                    {tokensLoading ? 'Lade...' : 'Token neu laden'}
-                                                </button>
+                                                {tokensLoading ? (
+                                                    <>
+                                                        <Icon 
+                                                            path={mdiLoading} 
+                                                            size="48px" 
+                                                            color="#ffffff" 
+                                                            className="loading-spinner"
+                                                        />
+                                                        <div>Lade Token...</div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
+                                                        <button onClick={() => refreshTokens()}>
+                                                            Token neu laden
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     )
@@ -425,13 +458,24 @@ const Doorbell = () => {
                                         )}
                                         {!hasToken && (
                                             <div className="token-error">
-                                                <div>Kamera-Token nicht verfügbar</div>
-                                                <button 
-                                                    onClick={() => refreshTokens()}
-                                                    disabled={tokensLoading}
-                                                >
-                                                    {tokensLoading ? 'Lade...' : 'Token neu laden'}
-                                                </button>
+                                                {tokensLoading ? (
+                                                    <>
+                                                        <Icon 
+                                                            path={mdiLoading} 
+                                                            size="48px" 
+                                                            color="#ffffff" 
+                                                            className="loading-spinner"
+                                                        />
+                                                        <div>Lade Token...</div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
+                                                        <button onClick={() => refreshTokens()}>
+                                                            Token neu laden
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                         <div 

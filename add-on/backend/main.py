@@ -395,6 +395,9 @@ async def proxy_api(path: str, request: Request):
     config = get_config()
     
     # Check if this is a camera stream request (MJPEG streaming)
+    # NOTE: Camera streams are no longer proxied - frontend goes directly to Home Assistant
+    # This check is kept for backwards compatibility but camera_proxy_stream requests
+    # should not reach this endpoint anymore
     is_camera_stream = "camera_proxy_stream" in path
     
     # For camera streams, use HASS_HOST directly (not supervisor API)
@@ -623,6 +626,14 @@ async def proxy_api(path: str, request: Request):
                                 logger.warning("Camera stream ended with no chunks received")
                             else:
                                 logger.debug(f"Camera stream ended normally after {chunk_count} chunks")
+                        except (httpx.ReadError, httpx.StreamClosed, ConnectionError) as e:
+                            # Network errors during streaming are common and expected
+                            # (client disconnects, network interruptions, etc.)
+                            logger.debug(f"Camera stream interrupted: {type(e).__name__}: {e}")
+                            # Generator will exit naturally, no need to re-raise
+                        except Exception as e:
+                            # Log unexpected errors but don't crash the server
+                            logger.warning(f"Unexpected error in camera stream: {type(e).__name__}: {e}")
                         finally:
                             # Close the stream context when generator exits
                             try:
