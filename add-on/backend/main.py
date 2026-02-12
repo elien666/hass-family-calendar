@@ -5,6 +5,7 @@ Serves static files and provides authenticated proxy endpoints.
 import os
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 from contextlib import suppress
@@ -30,6 +31,9 @@ import websockets
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -76,7 +80,48 @@ if not config_logger.handlers:
 # Our application logger
 logger = logging.getLogger(__name__)
 
+# HA entity ID format: domain.object_id (e.g. sensor.temperature, cover.garage_door)
+_ENTITY_ID_RE = re.compile(r'^[a-z_]+\.[a-z0-9_]+$')
+
+
+def _is_valid_entity_id(entity_id: str) -> bool:
+    return isinstance(entity_id, str) and bool(_ENTITY_ID_RE.match(entity_id))
+
+
+# Headers that should not be forwarded from upstream responses
+_EXCLUDED_RESPONSE_HEADERS = {
+    "content-encoding", "transfer-encoding", "content-length",
+    "connection", "server"
+}
+
+
+def filter_response_headers(headers) -> dict:
+    """Filter out hop-by-hop and problematic headers from an upstream response."""
+    return {
+        key: value
+        for key, value in headers.items()
+        if key.lower() not in _EXCLUDED_RESPONSE_HEADERS
+    }
+
+
+def handle_proxy_error(exc: Exception, service_name: str, target_url: str):
+    """Raise appropriate HTTPException for proxy errors (timeout vs generic)."""
+    if isinstance(exc, httpx.TimeoutException):
+        logger.error(f"Timeout connecting to {service_name}: {target_url}")
+        raise HTTPException(status_code=504, detail=f"Timeout connecting to {service_name}")
+    logger.error(f"Error proxying to {service_name} ({target_url}): {exc}")
+    raise HTTPException(status_code=502, detail=f"Error connecting to {service_name}")
+
+
 app = FastAPI(title="Family Calendar Backend")
+
+# Rate limiter for public endpoints
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda request, exc: JSONResponse(
+    status_code=429,
+    content={"detail": "Rate limit exceeded. Try again later."}
+))
 
 # Global WebSocket state manager instance
 websocket_manager: Optional[WebSocketStateManager] = None
@@ -125,14 +170,21 @@ async def shutdown_event():
         logger.info("WebSocket State Manager stopped")
 
 
-# CORS middleware (if needed for development)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware - only needed for local development (Vite dev server on different port)
+# In HA mode, frontend is served from the same origin, so CORS is not needed
+if not os.environ.get("SUPERVISOR_TOKEN"):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Middleware to add cache headers for static assets
 # This prevents HA cloud/ingress from caching old versions
@@ -249,6 +301,7 @@ async def log_endpoint(request: Request):
 
 
 @app.post("/gti/public/{endpoint:path}")
+@limiter.limit("30/minute")
 async def proxy_gti(endpoint: str, request: Request):
     """
     Proxy Geofox API requests with server-side signature generation.
@@ -316,27 +369,13 @@ async def proxy_gti(endpoint: str, request: Request):
             if response.status_code == 401:
                 logger.error(f"Geofox API returned 401 Unauthorized. Response: {response.text[:200]}")
                 logger.error(f"Request headers sent: geofox-auth-user={geofox_user}, signature length={len(signature)}")
-            # Filter headers to avoid Content-Length mismatches
-            response_headers = {}
-            excluded_headers = {
-                "content-encoding", "transfer-encoding", "content-length",
-                "connection", "server"
-            }
-            for key, value in response.headers.items():
-                if key.lower() not in excluded_headers:
-                    response_headers[key] = value
-            
             return Response(
                 content=response.content,
                 status_code=response.status_code,
-                headers=response_headers
+                headers=filter_response_headers(response.headers)
             )
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to Geofox API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to Geofox API")
     except Exception as e:
-        logger.error(f"Error proxying to Geofox API: {e}")
-        raise HTTPException(status_code=502, detail=f"Error connecting to Geofox API: {str(e)}")
+        handle_proxy_error(e, "Geofox API", target_url)
 
 
 @app.get("/forecast/{coordinates}")
@@ -364,27 +403,13 @@ async def proxy_forecast(coordinates: str, request: Request):
                 target_url,
                 params=query_params
             )
-            # Filter headers to avoid Content-Length mismatches
-            response_headers = {}
-            excluded_headers = {
-                "content-encoding", "transfer-encoding", "content-length",
-                "connection", "server"
-            }
-            for key, value in response.headers.items():
-                if key.lower() not in excluded_headers:
-                    response_headers[key] = value
-            
             return Response(
                 content=response.content,
                 status_code=response.status_code,
-                headers=response_headers
+                headers=filter_response_headers(response.headers)
             )
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to weather API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to weather API")
     except Exception as e:
-        logger.error(f"Error proxying to weather API: {e}")
-        raise HTTPException(status_code=502, detail=f"Error connecting to weather API: {str(e)}")
+        handle_proxy_error(e, "weather API", target_url)
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -421,29 +446,8 @@ async def proxy_api(path: str, request: Request):
         # Build target URL
         target_url = f"{hass_api_url.rstrip('/')}/{path}"
     
-    # Log proxy request details for debugging (DEBUG level in dev, not shown in prod)
     logger.debug(f"Proxying {request.method} request to: {target_url}")
-    logger.debug(f"Request path: {path}, Query params: {dict(request.query_params)}")
-    
-    # Log ALL incoming request headers to find where "Björn" might be coming from
-    try:
-        logger.debug("=== INCOMING REQUEST HEADERS ===")
-        for key, value in request.headers.items():
-            try:
-                # Show raw value and its representation
-                value_str = str(value)
-                value_repr = repr(value)
-                value_bytes = value.encode('utf-8', errors='replace') if isinstance(value, str) else bytes(value)
-                logger.debug(f"Header '{key}': str='{value_str[:100]}', repr={value_repr[:200]}, bytes={value_bytes[:100]}")
-                # Check if "Björn" or similar characters are present
-                if 'Bj' in value_str or 'örn' in value_str or 'ö' in value_str or '\xc3' in value_repr:
-                    logger.warning(f"FOUND POTENTIAL ISSUE in header '{key}': {value_repr}")
-            except Exception as header_log_err:
-                logger.debug(f"Error logging header {key}: {header_log_err}")
-        logger.debug("=== END INCOMING REQUEST HEADERS ===")
-    except Exception as header_log_err:
-        logger.debug(f"Error logging incoming headers: {header_log_err}")
-    
+
     # Get authentication token
     # In HA: use SUPERVISOR_TOKEN
     # In local dev: use HASS_ACCESS_TOKEN from environment
@@ -467,86 +471,22 @@ async def proxy_api(path: str, request: Request):
         except Exception:
             pass
     
-    # Prepare headers (exclude Authorization, add auth token)
-    # CRITICAL: HTTP headers should be ASCII-safe according to RFC 7230
-    # Non-ASCII characters must be encoded (RFC 2047) or we must skip/clean them
-    # httpx may try to encode headers internally, and if the system default is ASCII, it will fail
+    # Prepare headers - forward only ASCII-safe headers per RFC 7230
+    # Skip hop-by-hop headers and auth (we inject our own)
+    skip_headers = {"host", "authorization", "content-length"}
     headers = {}
     for key, value in request.headers.items():
-        if key.lower() not in ("host", "authorization", "content-length"):
-            # Ensure header values are strings and handle encoding properly
-            try:
-                # Convert to string if needed, handling any encoding issues
-                if isinstance(value, bytes):
-                    # Try UTF-8 first, then fallback to latin-1 (which can decode any byte)
-                    try:
-                        decoded_value = value.decode('utf-8', errors='strict')
-                    except UnicodeDecodeError:
-                        # If UTF-8 fails, it might be incorrectly encoded
-                        # Try to fix by treating as latin-1 and re-encoding as UTF-8
-                        decoded_value = value.decode('latin-1', errors='replace')
-                        # Re-encode as UTF-8 to normalize
-                        decoded_value = decoded_value.encode('utf-8', errors='replace').decode('utf-8')
-                else:
-                    decoded_value = str(value)
-                
-                # Fix mojibake: "BjÃ¶rn" -> "Björn"
-                # This happens when UTF-8 bytes are decoded as latin-1
-                if 'Ã¶' in decoded_value:
-                    try:
-                        # Try to fix mojibake by re-encoding as latin-1 and decoding as UTF-8
-                        fixed = decoded_value.encode('latin-1', errors='replace').decode('utf-8', errors='replace')
-                        decoded_value = fixed
-                    except Exception:
-                        pass
-                
-                # Normalize the string to ensure it's valid UTF-8
-                try:
-                    # Try to encode/decode to ensure it's valid UTF-8
-                    normalized = decoded_value.encode('utf-8', errors='strict').decode('utf-8')
-                    
-                    # Check if the normalized string contains non-ASCII characters
-                    # If it does, we need to make it ASCII-safe
-                    try:
-                        # Try to encode as ASCII to see if it's safe
-                        normalized.encode('ascii', errors='strict')
-                        # If this succeeds, the string is ASCII-safe
-                        headers[key] = normalized
-                    except UnicodeEncodeError:
-                        # Contains non-ASCII characters - make ASCII-safe by replacing non-ASCII
-                        # This is safer than failing, but we log it
-                        ascii_safe = normalized.encode('ascii', errors='replace').decode('ascii')
-                        logger.warning(f"Header '{key}' contains non-ASCII characters, making ASCII-safe: '{normalized}' -> '{ascii_safe}'")
-                        headers[key] = ascii_safe
-                except (UnicodeDecodeError, UnicodeEncodeError):
-                    # If normalization fails, use replace mode to ensure ASCII-safe fallback
-                    try:
-                        ascii_safe = decoded_value.encode('ascii', errors='replace').decode('ascii')
-                        headers[key] = ascii_safe
-                    except Exception:
-                        # Ultimate fallback: skip the header
-                        logger.warning(f"Skipping header '{key}' due to encoding issues")
-                        continue
-            except (UnicodeDecodeError, UnicodeEncodeError) as header_err:
-                # Skip headers that can't be properly encoded
-                logger.debug(f"Skipping header {key} due to encoding issue: {header_err}")
-                continue
-            except Exception as header_err:
-                logger.debug(f"Skipping header {key} due to unexpected error: {header_err}")
-                continue
-    
-    # Camera streams use token as query parameter, not Authorization header
-    # Other API requests use Authorization header
-    # Ensure Authorization header is UTF-8 safe
-    if not is_camera_stream:
+        if key.lower() in skip_headers:
+            continue
         try:
-            auth_header_value = f"Bearer {auth_token}"
-            # Ensure UTF-8 encoding
-            headers["Authorization"] = auth_header_value.encode('utf-8', errors='replace').decode('utf-8')
-        except Exception as auth_err:
-            logger.error(f"Error encoding Authorization header: {auth_err}")
-            # Fallback: use token directly (should be ASCII anyway)
-            headers["Authorization"] = f"Bearer {auth_token}"
+            str(value).encode('ascii', errors='strict')
+            headers[key] = value
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            logger.debug(f"Skipping non-ASCII header '{key}'")
+
+    # Add auth token (camera streams use query parameter instead)
+    if not is_camera_stream:
+        headers["Authorization"] = f"Bearer {auth_token}"
     
     # Only set Host header if using supervisor (HA mode) and NOT a camera stream
     # Camera streams go directly to HA host, not through supervisor
@@ -581,26 +521,7 @@ async def proxy_api(path: str, request: Request):
                     logger.debug(f"Camera stream response status: {stream_response.status_code}")
                     logger.debug(f"Camera stream response headers: {dict(stream_response.headers)}")
                     
-                    # Get response headers (exclude problematic ones)
-                    response_headers = {}
-                    excluded_headers = {
-                        "content-encoding", "transfer-encoding", "content-length",
-                        "connection", "server"
-                    }
-                    for key, value in stream_response.headers.items():
-                        if key.lower() not in excluded_headers:
-                            # Ensure header values are strings and handle encoding properly
-                            try:
-                                # Convert to string if needed, handling any encoding issues
-                                if isinstance(value, bytes):
-                                    response_headers[key] = value.decode('utf-8', errors='replace')
-                                else:
-                                    response_headers[key] = str(value)
-                            except (UnicodeDecodeError, UnicodeEncodeError):
-                                # Skip headers that can't be properly encoded
-                                logger.debug(f"Skipping stream response header {key} due to encoding issue")
-                                continue
-                    
+                    response_headers = filter_response_headers(stream_response.headers)
                     # Preserve Content-Type for MJPEG streams
                     if "content-type" in stream_response.headers:
                         response_headers["Content-Type"] = stream_response.headers["content-type"]
@@ -655,219 +576,24 @@ async def proxy_api(path: str, request: Request):
                     raise HTTPException(status_code=502, detail=f"Error connecting to camera stream: {str(e)}")
             else:
                 # For regular API requests, use buffered response
-                logger.debug(f"Making {request.method} request to {target_url}")
-                
-                # Safely log request headers
-                try:
-                    safe_req_headers = {}
-                    for k, v in headers.items():
-                        try:
-                            if isinstance(v, bytes):
-                                safe_req_headers[k] = v.decode('utf-8', errors='replace')
-                            else:
-                                str_v = str(v)
-                                safe_req_headers[k] = str_v[:100] + ('...' if len(str_v) > 100 else '')
-                        except Exception:
-                            safe_req_headers[k] = f"<encoding_error>"
-                    logger.debug(f"Request headers: {safe_req_headers}")
-                except Exception as req_header_err:
-                    logger.debug(f"Error logging request headers: {req_header_err}")
-                
-                # Log query params safely
-                try:
-                    safe_params = {}
-                    for k, v in request.query_params.items():
-                        try:
-                            safe_params[k] = str(v).encode('utf-8', errors='replace').decode('utf-8')
-                        except Exception:
-                            safe_params[k] = "<encoding_error>"
-                    logger.debug(f"Query params: {safe_params}")
-                except Exception as param_err:
-                    logger.debug(f"Error logging query params: {param_err}")
-                
-                # Ensure query params are UTF-8 safe
-                safe_query_params = {}
-                try:
-                    for k, v in request.query_params.items():
-                        try:
-                            # Ensure both key and value are UTF-8 safe
-                            safe_key = str(k).encode('utf-8', errors='replace').decode('utf-8')
-                            safe_value = str(v).encode('utf-8', errors='replace').decode('utf-8')
-                            safe_query_params[safe_key] = safe_value
-                        except Exception as param_encode_err:
-                            logger.debug(f"Skipping query param {k} due to encoding error: {param_encode_err}")
-                            continue
-                except Exception as param_err:
-                    logger.debug(f"Error encoding query params: {param_err}")
-                    # Fallback to original params
-                    safe_query_params = dict(request.query_params)
-                
-                # Log headers before request to debug encoding issues
-                try:
-                    logger.debug("=== HEADERS BEING SENT TO HTTPX ===")
-                    for k, v in headers.items():
-                        try:
-                            str_v = str(v)
-                            repr_v = repr(v)
-                            # Check for problematic characters
-                            if 'Bj' in str_v or 'örn' in str_v or 'ö' in str_v or '\xc3' in repr_v:
-                                logger.warning(f"PROBLEMATIC HEADER '{k}': str='{str_v}', repr={repr_v}")
-                            else:
-                                logger.debug(f"Header '{k}': '{str_v[:100]}'")
-                        except Exception as header_err:
-                            logger.warning(f"Error processing header {k}: {header_err}")
-                    logger.debug("=== END HEADERS BEING SENT ===")
-                except Exception as header_log_err:
-                    logger.debug(f"Error logging final headers: {header_log_err}")
-                
-                # Log URL and query params
-                try:
-                    logger.debug(f"URL being sent: {target_url}")
-                    logger.debug(f"Query params being sent: {safe_query_params}")
-                    if body:
-                        body_preview = body[:200] if isinstance(body, bytes) else str(body)[:200]
-                        logger.debug(f"Body preview: {body_preview}")
-                except Exception as url_log_err:
-                    logger.debug(f"Error logging URL/params: {url_log_err}")
-                
-                try:
-                    # Create httpx client with explicit encoding settings
-                    # httpx should handle UTF-8 by default, but we ensure headers are clean
-                    # Use follow_redirects=True to handle redirects properly
-                    response = await client.request(
-                        method=request.method,
-                        url=target_url,
-                        headers=headers,
-                        content=body,
-                        params=safe_query_params,
-                        follow_redirects=True
-                    )
-                except UnicodeEncodeError as encode_err:
-                    # Special handling for encoding errors to get more details
-                    logger.error(f"UnicodeEncodeError details: {encode_err}")
-                    logger.error(f"Encoding error object: {encode_err.object}")
-                    logger.error(f"Encoding error start: {encode_err.start}, end: {encode_err.end}")
-                    logger.error(f"Encoding error reason: {encode_err.reason}")
-                    # Try to identify which header/value caused the issue
-                    for k, v in headers.items():
-                        try:
-                            if encode_err.object in str(v) or encode_err.object in repr(v):
-                                logger.error(f"PROBLEMATIC HEADER FOUND: '{k}' = '{v}' (repr: {repr(v)})")
-                        except Exception:
-                            pass
-                    raise
-                except Exception as request_err:
-                    logger.error(f"Error making HTTP request to {target_url}: {type(request_err).__name__}: {request_err}")
-                    raise
-                
+                response = await client.request(
+                    method=request.method,
+                    url=target_url,
+                    headers=headers,
+                    content=body,
+                    params=dict(request.query_params),
+                    follow_redirects=True
+                )
+
                 logger.debug(f"Response status: {response.status_code} from {target_url}")
-                
-                # Safely log response headers
-                try:
-                    safe_headers = {}
-                    for k, v in response.headers.items():
-                        try:
-                            if isinstance(v, bytes):
-                                safe_headers[k] = v.decode('utf-8', errors='replace')
-                            else:
-                                safe_headers[k] = str(v).encode('utf-8', errors='replace').decode('utf-8')
-                        except Exception:
-                            safe_headers[k] = f"<encoding_error: {type(v).__name__}>"
-                    logger.debug(f"Response headers: {safe_headers}")
-                except Exception as header_log_err:
-                    logger.debug(f"Error logging response headers: {header_log_err}")
-                
-                # Log response content preview (first 500 chars) for debugging encoding issues
-                try:
-                    if response.content:
-                        content_preview = response.content[:500]
-                        # Try to decode as text to see if there are encoding issues
-                        try:
-                            text_preview = content_preview.decode('utf-8', errors='replace')
-                            logger.debug(f"Response content preview (first 500 chars): {text_preview}")
-                        except Exception as decode_err:
-                            logger.debug(f"Could not decode response content as UTF-8: {decode_err}, raw bytes length: {len(response.content)}")
-                except Exception as preview_err:
-                    logger.debug(f"Error previewing response content: {preview_err}")
-                
-                # Return response with appropriate headers
-                # Remove headers that shouldn't be forwarded or might cause issues
-                response_headers = {}
-                excluded_headers = {
-                    "content-encoding",  # Remove encoding headers
-                    "transfer-encoding",  # Remove transfer encoding
-                    "content-length",  # Let FastAPI calculate this automatically
-                    "connection",  # Connection is managed by FastAPI
-                    "server",  # Don't forward server header
-                }
-                
-                for key, value in response.headers.items():
-                    if key.lower() not in excluded_headers:
-                        # Ensure header values are strings and handle encoding properly
-                        try:
-                            # Convert to string if needed, handling any encoding issues
-                            if isinstance(value, bytes):
-                                response_headers[key] = value.decode('utf-8', errors='replace')
-                            else:
-                                # Ensure string is UTF-8 safe
-                                str_value = str(value)
-                                response_headers[key] = str_value.encode('utf-8', errors='replace').decode('utf-8')
-                        except (UnicodeDecodeError, UnicodeEncodeError) as header_err:
-                            # Skip headers that can't be properly encoded
-                            logger.debug(f"Skipping response header {key} due to encoding issue: {header_err}")
-                            continue
-                        except Exception as header_err:
-                            logger.debug(f"Skipping response header {key} due to unexpected error: {header_err}")
-                            continue
-                
-                # Safely create response
-                try:
-                    return Response(
-                        content=response.content,
-                        status_code=response.status_code,
-                        headers=response_headers
-                    )
-                except Exception as response_err:
-                    logger.error(f"Error creating Response object: {response_err}")
-                    logger.error(f"Response status_code: {response.status_code}, headers count: {len(response_headers)}")
-                    raise
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to Home Assistant API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to Home Assistant API")
+
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    headers=filter_response_headers(response.headers)
+                )
     except Exception as e:
-        # Log detailed error information for debugging
-        logger.error(f"Exception type: {type(e).__name__}")
-        logger.error(f"Exception args: {e.args}")
-        
-        # Safely encode error message to avoid encoding issues
-        try:
-            error_msg = str(e)
-            logger.debug(f"Error message (str): {error_msg}")
-        except (UnicodeEncodeError, UnicodeDecodeError) as str_err:
-            logger.error(f"Error converting exception to string: {str_err}")
-            try:
-                error_msg = repr(e)
-                logger.debug(f"Error message (repr): {error_msg}")
-            except Exception as repr_err:
-                logger.error(f"Error converting exception to repr: {repr_err}")
-                error_msg = "Unknown error"
-        
-        # Log error - ensure message is UTF-8 safe
-        try:
-            # Encode/decode to ensure UTF-8 compatibility
-            safe_msg = error_msg.encode('utf-8', errors='replace').decode('utf-8')
-            logger.error(f"Error proxying to Home Assistant API (target_url={target_url}): {safe_msg}")
-        except Exception as log_err:
-            # Ultimate fallback if encoding still fails
-            logger.error(f"Error proxying to Home Assistant API (target_url={target_url}): encoding error in logging: {log_err}")
-            safe_msg = "Unknown error"
-        
-        # Use a safe error detail that won't cause encoding issues
-        try:
-            detail_msg = f"Error connecting to Home Assistant API: {safe_msg}"
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            detail_msg = "Error connecting to Home Assistant API"
-        raise HTTPException(status_code=502, detail=detail_msg)
+        handle_proxy_error(e, "Home Assistant API", target_url)
 
 
 @app.websocket("/api/websocket")
@@ -937,8 +663,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle subscribe_entity
                 if msg_type == "subscribe_entity":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     # Create callback for this client
@@ -965,8 +691,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle get_state
                 elif msg_type == "get_state":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     state = websocket_manager.get_state(entity_id)
@@ -992,6 +718,8 @@ async def client_websocket(websocket: WebSocket):
                     
                     states = {}
                     for entity_id in entity_ids:
+                        if not _is_valid_entity_id(entity_id):
+                            continue
                         state = websocket_manager.get_state(entity_id)
                         if state:
                             states[entity_id] = {
@@ -1007,8 +735,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle unsubscribe_entity
                 elif msg_type == "unsubscribe_entity":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     if entity_id in client_subscriptions:
@@ -1025,6 +753,10 @@ async def client_websocket(websocket: WebSocket):
                             "message": f"Not subscribed to {entity_id}"
                         })
                 
+                # Handle application-level ping (frontend heartbeat)
+                elif msg_type == "ping":
+                    await send_to_client({"type": "pong"})
+
                 else:
                     await send_to_client({"type": "error", "message": f"Unknown message type: {msg_type}"})
             

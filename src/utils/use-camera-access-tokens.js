@@ -13,14 +13,17 @@ import { formatErrorForUI } from './axios-error-handler'
 const fetchSingleToken = async (entityId, config, abortController) => {
   const url = buildHaUrl(`/api/states/${entityId}`, config)
   const response = await axios(url, {
-    timeout: 2000, // 2 second timeout
+    timeout: 5000, // 5 second timeout (camera entities can be slow)
     signal: abortController.signal
   })
-  
+
   // Extract access_token from entity attributes
   const accessToken = response.data?.attributes?.access_token || null
   return { entityId, accessToken }
 }
+
+/** Simple delay helper for retry backoff */
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Fetch access tokens for camera entities on demand with timeout and retry
@@ -36,38 +39,34 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config) => {
   }
 
   const abortController = new AbortController()
-  const TIMEOUT_MS = 2000 // 2 seconds
+  const MAX_ATTEMPTS = 3
 
   try {
     // Fetch all camera entity states in parallel with retry logic
     const fetchPromises = cameraEntityIds.map(async (entityId) => {
       let lastError = null
-      
-      // Try up to 2 times (initial attempt + 1 retry)
-      for (let attempt = 0; attempt < 2; attempt++) {
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         try {
           const result = await fetchSingleToken(entityId, config, abortController)
           return result
         } catch (err) {
           lastError = err
-          
-          // Check if it's a timeout error
-          const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
-          
-          if (isTimeout && attempt === 0) {
-            // First attempt timed out, log and retry
-            logger.debug(`Token fetch timeout for ${entityId}, retrying...`)
+          const isRetryable = err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || err.message?.includes('timeout')
+
+          if (isRetryable && attempt < MAX_ATTEMPTS - 1) {
+            const backoff = 1000 * Math.pow(2, attempt) // 1s, 2s
+            logger.debug(`Token fetch failed for ${entityId} (attempt ${attempt + 1}), retrying in ${backoff}ms...`)
+            await delay(backoff)
             continue
-          } else {
-            // Second attempt failed or non-timeout error, log and return null
-            logger.error(`Failed to fetch access token for ${entityId} (attempt ${attempt + 1}):`, err)
-            return { entityId, accessToken: null }
           }
+
+          logger.error(`Failed to fetch access token for ${entityId} (attempt ${attempt + 1}/${MAX_ATTEMPTS}):`, err)
+          return { entityId, accessToken: null }
         }
       }
-      
-      // If we get here, both attempts failed
-      logger.error(`Failed to fetch access token for ${entityId} after 2 attempts:`, lastError)
+
+      logger.error(`Failed to fetch access token for ${entityId} after ${MAX_ATTEMPTS} attempts:`, lastError)
       return { entityId, accessToken: null }
     })
 

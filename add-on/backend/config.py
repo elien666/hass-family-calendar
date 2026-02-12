@@ -165,6 +165,55 @@ def _get_bool_config(key: str, bashio_key: str = None, default: bool = False, in
     return bool(value)
 
 
+def _load_feature_config(
+    config, *,
+    enabled_env_key,
+    enabled_bashio_key,
+    config_enable_key,
+    auto_enable_env_keys,
+    auto_enable_mode="all",
+    config_keys,
+    in_ha, has_bashio, options_json
+):
+    """Load a feature's configuration following the standard pattern.
+
+    1. Check if the feature is enabled via config/bashio/env.
+    2. Auto-enable in local dev if relevant env vars are set.
+    3. If enabled, load all config keys; otherwise set defaults.
+
+    Args:
+        config: Config dict to populate.
+        enabled_env_key: Env var for the feature enabled flag.
+        enabled_bashio_key: Bashio key for the feature enabled flag.
+        config_enable_key: Output key in config dict (e.g. "ENABLE_WEATHER").
+        auto_enable_env_keys: Env vars checked for auto-enabling in local dev.
+        auto_enable_mode: "all" (all keys must be set) or "any" (at least one).
+        config_keys: List of (env_key, bashio_key, default) tuples.
+        in_ha, has_bashio, options_json: Environment context.
+    """
+    enabled = _get_bool_config(enabled_env_key, enabled_bashio_key, False, in_ha, has_bashio, options_json)
+
+    # Auto-enable in local dev if relevant env vars are set
+    if not enabled and not in_ha and auto_enable_env_keys:
+        env_values = [_get_env_config(key, "") for key in auto_enable_env_keys]
+        if auto_enable_mode == "all":
+            enabled = all(bool(v) for v in env_values)
+        else:
+            enabled = any(bool(v) for v in env_values)
+
+    config[config_enable_key] = enabled
+
+    for env_key, bashio_key, default in config_keys:
+        if enabled:
+            value = _get_config_value(env_key, bashio_key, default, in_ha, has_bashio, options_json)
+            # Ensure list-type values are actually lists
+            if isinstance(default, list) and not isinstance(value, list):
+                value = default
+            config[env_key] = value
+        else:
+            config[env_key] = default
+
+
 def load_config() -> Dict[str, Any]:
     """Load configuration from bashio API and environment variables."""
     global _config_cache
@@ -229,120 +278,62 @@ def load_config() -> Dict[str, Any]:
     else:
         config["INGRESS_URL"] = ""
     
-    # Weather configuration
-    weather_enabled = _get_bool_config("WEATHER_ENABLED", "weather.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if API key is set (for local dev convenience)
-    if not weather_enabled and not in_ha:
-        weather_api_key = _get_env_config("WEATHER_API_KEY", "")
-        weather_enabled = bool(weather_api_key)
-    config["ENABLE_WEATHER"] = weather_enabled
-    if weather_enabled:
-        config["WEATHER_API_KEY"] = _get_config_value("WEATHER_API_KEY", "weather.weather_api_key", "", in_ha, has_bashio, options_json)
-        config["WEATHER_LATITUDE"] = _get_config_value("WEATHER_LATITUDE", "weather.weather_latitude", None, in_ha, has_bashio, options_json)
-        config["WEATHER_LONGITUDE"] = _get_config_value("WEATHER_LONGITUDE", "weather.weather_longitude", None, in_ha, has_bashio, options_json)
-    else:
-        config["WEATHER_API_KEY"] = ""
-        config["WEATHER_LATITUDE"] = None
-        config["WEATHER_LONGITUDE"] = None
-    
-    # HVV/Geofox configuration
-    hvv_enabled = _get_bool_config("HVV_ENABLED", "hvv.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if credentials are set (for local dev convenience)
-    if not hvv_enabled and not in_ha:
-        geofox_user = _get_env_config("GEOFOX_USER", "")
-        geofox_secret = _get_env_config("GEOFOX_SECRET", "")
-        hvv_enabled = bool(geofox_user and geofox_secret)
-    config["ENABLE_HVV"] = hvv_enabled
-    if hvv_enabled:
-        config["GEOFOX_USER"] = _get_config_value("GEOFOX_USER", "hvv.geofox_user", "", in_ha, has_bashio, options_json)
-        config["GEOFOX_SECRET"] = _get_config_value("GEOFOX_SECRET", "hvv.geofox_secret", "", in_ha, has_bashio, options_json)
-    else:
-        config["GEOFOX_USER"] = ""
-        config["GEOFOX_SECRET"] = ""
-    
-    # Garage configuration
-    garage_enabled = _get_bool_config("GARAGE_ENABLED", "garage.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if entity is set (for local dev convenience)
-    if not garage_enabled and not in_ha:
-        entity = _get_env_config("ENTITY_GARAGE_DOOR", "")
-        garage_enabled = bool(entity)
-    config["ENABLE_GARAGE"] = garage_enabled
-    if garage_enabled:
-        config["ENTITY_GARAGE_DOOR"] = _get_config_value("ENTITY_GARAGE_DOOR", "garage.entity_garage_door", "", in_ha, has_bashio, options_json)
-    else:
-        config["ENTITY_GARAGE_DOOR"] = ""
-    
-    # Laundry configuration
-    laundry_enabled = _get_bool_config("LAUNDRY_ENABLED", "laundry.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if machines are set (for local dev convenience)
-    if not laundry_enabled and not in_ha:
-        machines = _get_env_config("LAUNDRY_MACHINES", "[]")
-        if isinstance(machines, str):
-            try:
-                machines = json.loads(machines)
-            except json.JSONDecodeError:
-                machines = []
-        laundry_enabled = bool(machines and len(machines) > 0)
-    config["ENABLE_LAUNDRY"] = laundry_enabled
-    if laundry_enabled:
-        machines = _get_config_value("LAUNDRY_MACHINES", "laundry.machines", [], in_ha, has_bashio, options_json)
-        config["LAUNDRY_MACHINES"] = machines if isinstance(machines, list) else []
-    else:
-        config["LAUNDRY_MACHINES"] = []
-    
-    # Doorbell configuration
-    doorbell_enabled = _get_bool_config("DOORBELL_ENABLED", "doorbell.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if entity is set (for local dev convenience)
-    if not doorbell_enabled and not in_ha:
-        entity = _get_env_config("ENTITY_DOORBELL", "")
-        button = _get_env_config("ENTITY_DOORBELL_BUTTON", "")
-        doorbell_enabled = bool(entity or button)
-    config["ENABLE_DOORBELL"] = doorbell_enabled
-    if doorbell_enabled:
-        config["ENTITY_DOORBELL"] = _get_config_value("ENTITY_DOORBELL", "doorbell.entity_doorbell", "", in_ha, has_bashio, options_json)
-        config["ENTITY_DOORBELL_BUTTON"] = _get_config_value("ENTITY_DOORBELL_BUTTON", "doorbell.entity_doorbell_button", "", in_ha, has_bashio, options_json)
-        cameras = _get_config_value("DOORBELL_CAMERAS", "doorbell.cameras", [], in_ha, has_bashio, options_json)
-        config["DOORBELL_CAMERAS"] = cameras if isinstance(cameras, list) else []
-    else:
-        config["ENTITY_DOORBELL"] = ""
-        config["ENTITY_DOORBELL_BUTTON"] = ""
-        config["DOORBELL_CAMERAS"] = []
-    
-    # Everyday calendar configuration
-    everyday_calendar_enabled = _get_bool_config("EVERYDAY_CALENDAR_ENABLED", "everyday_calendar.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if entity is set (for local dev convenience)
-    if not everyday_calendar_enabled and not in_ha:
-        entity = _get_env_config("ENTITY_EVERYDAY_CALENDAR", "")
-        everyday_calendar_enabled = bool(entity)
-    config["ENABLE_EVERYDAY_CALENDAR"] = everyday_calendar_enabled
-    if everyday_calendar_enabled:
-        config["ENTITY_EVERYDAY_CALENDAR"] = _get_config_value("ENTITY_EVERYDAY_CALENDAR", "everyday_calendar.entity_everyday_calendar", "", in_ha, has_bashio, options_json)
-    else:
-        config["ENTITY_EVERYDAY_CALENDAR"] = ""
-    
-    # EV configuration
-    ev_enabled = _get_bool_config("EV_ENABLED", "ev.enabled", False, in_ha, has_bashio, options_json)
-    # Auto-enable if any entity is set (for local dev convenience)
-    if not ev_enabled and not in_ha:
-        ev_entities = [
-            _get_env_config("ENTITY_PRECLIMATE_STATUS", ""),
-            _get_env_config("ENTITY_CHARGING_STATE", ""),
-            _get_env_config("ENTITY_STATE_OF_CHARGE", "")
-        ]
-        ev_enabled = any(ev_entities)
-    config["ENABLE_EV"] = ev_enabled
-    if ev_enabled:
-        config["ENTITY_PRECLIMATE_STATUS"] = _get_config_value("ENTITY_PRECLIMATE_STATUS", "ev.entity_preclimate_status", "", in_ha, has_bashio, options_json)
-        config["ENTITY_PRECLIMATE_START"] = _get_config_value("ENTITY_PRECLIMATE_START", "ev.entity_preclimate_start", "", in_ha, has_bashio, options_json)
-        config["ENTITY_PRECLIMATE_STOP"] = _get_config_value("ENTITY_PRECLIMATE_STOP", "ev.entity_preclimate_stop", "", in_ha, has_bashio, options_json)
-        config["ENTITY_CHARGING_STATE"] = _get_config_value("ENTITY_CHARGING_STATE", "ev.entity_charging_state", "", in_ha, has_bashio, options_json)
-        config["ENTITY_STATE_OF_CHARGE"] = _get_config_value("ENTITY_STATE_OF_CHARGE", "ev.entity_state_of_charge", "", in_ha, has_bashio, options_json)
-    else:
-        config["ENTITY_PRECLIMATE_STATUS"] = ""
-        config["ENTITY_PRECLIMATE_START"] = ""
-        config["ENTITY_PRECLIMATE_STOP"] = ""
-        config["ENTITY_CHARGING_STATE"] = ""
-        config["ENTITY_STATE_OF_CHARGE"] = ""
+    # Feature configurations — each follows the same pattern:
+    # 1. Check enabled flag  2. Auto-enable in local dev  3. Load keys or set defaults
+    ctx = dict(in_ha=in_ha, has_bashio=has_bashio, options_json=options_json)
+
+    _load_feature_config(config, enabled_env_key="WEATHER_ENABLED",
+        enabled_bashio_key="weather.enabled", config_enable_key="ENABLE_WEATHER",
+        auto_enable_env_keys=["WEATHER_API_KEY"], config_keys=[
+            ("WEATHER_API_KEY", "weather.weather_api_key", ""),
+            ("WEATHER_LATITUDE", "weather.weather_latitude", None),
+            ("WEATHER_LONGITUDE", "weather.weather_longitude", None),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="HVV_ENABLED",
+        enabled_bashio_key="hvv.enabled", config_enable_key="ENABLE_HVV",
+        auto_enable_env_keys=["GEOFOX_USER", "GEOFOX_SECRET"], config_keys=[
+            ("GEOFOX_USER", "hvv.geofox_user", ""),
+            ("GEOFOX_SECRET", "hvv.geofox_secret", ""),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="GARAGE_ENABLED",
+        enabled_bashio_key="garage.enabled", config_enable_key="ENABLE_GARAGE",
+        auto_enable_env_keys=["ENTITY_GARAGE_DOOR"], config_keys=[
+            ("ENTITY_GARAGE_DOOR", "garage.entity_garage_door", ""),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="LAUNDRY_ENABLED",
+        enabled_bashio_key="laundry.enabled", config_enable_key="ENABLE_LAUNDRY",
+        auto_enable_env_keys=["LAUNDRY_MACHINES"], config_keys=[
+            ("LAUNDRY_MACHINES", "laundry.machines", []),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="DOORBELL_ENABLED",
+        enabled_bashio_key="doorbell.enabled", config_enable_key="ENABLE_DOORBELL",
+        auto_enable_env_keys=["ENTITY_DOORBELL", "ENTITY_DOORBELL_BUTTON"],
+        auto_enable_mode="any", config_keys=[
+            ("ENTITY_DOORBELL", "doorbell.entity_doorbell", ""),
+            ("ENTITY_DOORBELL_BUTTON", "doorbell.entity_doorbell_button", ""),
+            ("DOORBELL_CAMERAS", "doorbell.cameras", []),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="EVERYDAY_CALENDAR_ENABLED",
+        enabled_bashio_key="everyday_calendar.enabled", config_enable_key="ENABLE_EVERYDAY_CALENDAR",
+        auto_enable_env_keys=["ENTITY_EVERYDAY_CALENDAR"], config_keys=[
+            ("ENTITY_EVERYDAY_CALENDAR", "everyday_calendar.entity_everyday_calendar", ""),
+        ], **ctx)
+
+    _load_feature_config(config, enabled_env_key="EV_ENABLED",
+        enabled_bashio_key="ev.enabled", config_enable_key="ENABLE_EV",
+        auto_enable_env_keys=["ENTITY_PRECLIMATE_STATUS", "ENTITY_CHARGING_STATE", "ENTITY_STATE_OF_CHARGE"],
+        auto_enable_mode="any", config_keys=[
+            ("ENTITY_PRECLIMATE_STATUS", "ev.entity_preclimate_status", ""),
+            ("ENTITY_PRECLIMATE_START", "ev.entity_preclimate_start", ""),
+            ("ENTITY_PRECLIMATE_STOP", "ev.entity_preclimate_stop", ""),
+            ("ENTITY_CHARGING_STATE", "ev.entity_charging_state", ""),
+            ("ENTITY_STATE_OF_CHARGE", "ev.entity_state_of_charge", ""),
+        ], **ctx)
     
     # Calendars configuration
     calendars = _get_config_value("CALENDARS", "calendars", [], in_ha, has_bashio, options_json)

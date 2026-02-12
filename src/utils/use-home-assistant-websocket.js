@@ -46,6 +46,8 @@ export function useHomeAssistantWebSocket({
   const isConnectingRef = React.useRef(false)
   const stoppedReconnectingRef = React.useRef(false) // Track if we've stopped aggressive reconnection
   const subscriptionsRef = React.useRef(new Map()) // {entity_id: callback}
+  const heartbeatIntervalRef = React.useRef(null)
+  const heartbeatTimeoutRef = React.useRef(null)
 
   // Cleanup function
   const cleanup = React.useCallback(() => {
@@ -64,6 +66,14 @@ export function useHomeAssistantWebSocket({
     if (periodicRetryTimeoutRef.current) {
       clearTimeout(periodicRetryTimeoutRef.current)
       periodicRetryTimeoutRef.current = null
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = null
+    }
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current)
+      heartbeatTimeoutRef.current = null
     }
 
     // Unsubscribe from all entities
@@ -190,6 +200,21 @@ export function useHomeAssistantWebSocket({
             }
           }
         }
+
+        // Start application-level heartbeat every 30s.
+        // If the backend doesn't respond with a pong within 10s, assume the
+        // connection is dead and trigger a reconnect.
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (connection.readyState !== WebSocket.OPEN) return
+          try {
+            connection.send(JSON.stringify({ type: 'ping' }))
+          } catch { return } // send failed — onclose will handle it
+          heartbeatTimeoutRef.current = setTimeout(() => {
+            logger.warn(`${logPrefix} heartbeat timeout — closing stale connection`)
+            try { connection.close(4000, 'heartbeat timeout') } catch {}
+          }, 10000)
+        }, 30000)
       }
 
       // Handle messages
@@ -211,6 +236,13 @@ export function useHomeAssistantWebSocket({
             const callback = subscriptionsRef.current.get(entityId)
             if (callback) {
               callback(data)
+            }
+          }
+          // Handle pong (heartbeat response) — clear the timeout
+          else if (data.type === 'pong') {
+            if (heartbeatTimeoutRef.current) {
+              clearTimeout(heartbeatTimeoutRef.current)
+              heartbeatTimeoutRef.current = null
             }
           }
           // Handle error
