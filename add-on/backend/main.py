@@ -753,6 +753,10 @@ async def client_websocket(websocket: WebSocket):
                             "message": f"Not subscribed to {entity_id}"
                         })
                 
+                # Handle application-level ping (frontend heartbeat)
+                elif msg_type == "ping":
+                    await send_to_client({"type": "pong"})
+
                 else:
                     await send_to_client({"type": "error", "message": f"Unknown message type: {msg_type}"})
             

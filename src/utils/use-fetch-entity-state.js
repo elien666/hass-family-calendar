@@ -2,9 +2,11 @@ import React from 'react'
 import axios from 'axios'
 import { buildHaUrl } from './config'
 import { formatErrorForUI } from './axios-error-handler'
+import { useConnectionStateContext } from './ConnectionStateProvider'
 
 /**
  * Fetch a single HA entity state via REST API with proper cleanup.
+ * Automatically refetches when the backend connection is restored after a disconnect.
  *
  * @param {Object} options
  * @param {string} options.entityId - HA entity ID (e.g. "cover.garage_door")
@@ -23,6 +25,20 @@ const useFetchEntityState = ({
 }) => {
   const [state, setState] = React.useState(initialState)
   const [error, setError] = React.useState(false)
+  const { isConnected } = useConnectionStateContext()
+
+  // Track disconnect→reconnect transitions to trigger a refetch
+  const wasDisconnectedRef = React.useRef(false)
+  const [refetchKey, setRefetchKey] = React.useState(0)
+
+  React.useEffect(() => {
+    if (!isConnected) {
+      wasDisconnectedRef.current = true
+    } else if (wasDisconnectedRef.current) {
+      wasDisconnectedRef.current = false
+      setRefetchKey((k) => k + 1)
+    }
+  }, [isConnected])
 
   const isConfigured = enabled && !!entityId
   const url = entityId ? buildHaUrl(`/api/states/${entityId}`, config) : null
@@ -51,7 +67,7 @@ const useFetchEntityState = ({
       abortController.abort()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, url, entityId])
+  }, [isConfigured, url, entityId, refetchKey])
 
   return [state, error, setState]
 }

@@ -7,7 +7,10 @@ import TilingDemo from './components/tiling-demo'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import './fonts/fonts.css'
-import useReload from './utils/use-reload'
+// Periodic page reload disabled — connection resilience improvements (ping/pong,
+// state refetch on reconnect) should keep the dashboard fresh without full reloads.
+// Re-enable if stale-data issues reappear.
+// import useReload from './utils/use-reload'
 import ErrorBoundary from './components/ErrorBoundary'
 import ConfigStatusBanner from './components/ConfigStatusBanner'
 import { useConfigError, useIsUsingCachedConfig, useConfigLoading } from './utils/ConfigProvider'
@@ -54,7 +57,7 @@ const Div = styled.div`
 `
 
 function MainApp() {
-  useReload()
+  // useReload()
   const configError = useConfigError()
   const isUsingCachedConfig = useIsUsingCachedConfig()
   const loading = useConfigLoading()

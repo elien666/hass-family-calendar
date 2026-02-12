@@ -294,8 +294,18 @@ class WebSocketStateManager:
                     message = await asyncio.wait_for(self.ha_websocket.recv(), timeout=30.0)
                     await self.handle_message(message)
                 except asyncio.TimeoutError:
-                    # Send ping to keep connection alive
-                    logger.debug("No message received in 30s, connection still alive")
+                    # Send a WebSocket ping to verify the connection is truly alive.
+                    # If the peer doesn't respond, websockets raises ConnectionClosed
+                    # which the outer except block handles by triggering reconnection.
+                    try:
+                        pong = await self.ha_websocket.ping()
+                        await asyncio.wait_for(pong, timeout=10.0)
+                        logger.debug("Ping/pong OK — HA connection alive")
+                    except (asyncio.TimeoutError, ConnectionClosed):
+                        logger.warning("Ping to HA timed out or connection lost — triggering reconnect")
+                        self.connected = False
+                        self.authenticated = False
+                        break
                     continue
                 
             except ConnectionClosed as e:
@@ -311,13 +321,40 @@ class WebSocketStateManager:
         
         logger.debug("Message handler loop ended")
     
+    async def _push_refreshed_states_to_clients(self):
+        """Push all cached states to subscribed clients after a reconnect.
+
+        When the backend→HA connection drops and reconnects, already-connected
+        frontend clients won't know that states may have changed.  This method
+        proactively pushes the freshly-fetched cache to every subscriber.
+        """
+        pushed = 0
+        for entity_id, subscribers in list(self.client_subscriptions.items()):
+            cached = self.state_cache.get(entity_id)
+            if not cached:
+                continue
+            update = {
+                "type": "state_update",
+                "entity_id": entity_id,
+                "state": cached.get("state"),
+                "attributes": cached.get("attributes", {}),
+            }
+            for callback in list(subscribers):
+                try:
+                    await callback(update)
+                    pushed += 1
+                except Exception as e:
+                    logger.debug(f"Error pushing refreshed state for {entity_id}: {e}")
+        if pushed:
+            logger.info(f"Pushed refreshed states to {pushed} client subscription(s)")
+
     async def reconnect_loop(self):
         """Handle reconnection to HA."""
         while self._running:
             if not self.connected:
                 logger.info("Attempting to reconnect to HA...")
                 success = await self.connect_to_ha()
-                
+
                 if success:
                     # Restart message handler BEFORE subscribing
                     if self._message_handler_task:
@@ -326,6 +363,8 @@ class WebSocketStateManager:
                     # Small delay to ensure message handler is ready
                     await asyncio.sleep(0.1)
                     await self.subscribe_to_entities()
+                    # Push refreshed states to all already-connected frontend clients
+                    await self._push_refreshed_states_to_clients()
                 else:
                     # Wait before retrying
                     await asyncio.sleep(5)
