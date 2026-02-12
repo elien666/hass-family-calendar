@@ -5,6 +5,7 @@ Serves static files and provides authenticated proxy endpoints.
 import os
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 from contextlib import suppress
@@ -78,6 +79,14 @@ if not config_logger.handlers:
 
 # Our application logger
 logger = logging.getLogger(__name__)
+
+# HA entity ID format: domain.object_id (e.g. sensor.temperature, cover.garage_door)
+_ENTITY_ID_RE = re.compile(r'^[a-z_]+\.[a-z0-9_]+$')
+
+
+def _is_valid_entity_id(entity_id: str) -> bool:
+    return isinstance(entity_id, str) and bool(_ENTITY_ID_RE.match(entity_id))
+
 
 app = FastAPI(title="Family Calendar Backend")
 
@@ -690,8 +699,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle subscribe_entity
                 if msg_type == "subscribe_entity":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     # Create callback for this client
@@ -718,8 +727,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle get_state
                 elif msg_type == "get_state":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     state = websocket_manager.get_state(entity_id)
@@ -745,6 +754,8 @@ async def client_websocket(websocket: WebSocket):
                     
                     states = {}
                     for entity_id in entity_ids:
+                        if not _is_valid_entity_id(entity_id):
+                            continue
                         state = websocket_manager.get_state(entity_id)
                         if state:
                             states[entity_id] = {
@@ -760,8 +771,8 @@ async def client_websocket(websocket: WebSocket):
                 # Handle unsubscribe_entity
                 elif msg_type == "unsubscribe_entity":
                     entity_id = data.get("entity_id")
-                    if not entity_id:
-                        await send_to_client({"type": "error", "message": "Missing entity_id"})
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
                     
                     if entity_id in client_subscriptions:

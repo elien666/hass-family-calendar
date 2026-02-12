@@ -268,7 +268,7 @@ Dieses Pattern wiederholt sich für Garage, Doorbell, EV, Laundry, Weather, HVV 
 | 2         | Debug-Logging aus Hot Path entfernen              | 15 min  | done   |
 | 3         | Encoding-Workaround durch saubere Lösung ersetzen | 30 min  | done   |
 | 4         | Rate-Limiting für `/gti/public/`                  | 15 min  | done   |
-| 5         | Entity-ID-Validierung im WebSocket                | 10 min  |        |
+| 5         | Entity-ID-Validierung im WebSocket                | 10 min  | done   |
 | 6         | `useFetchEntityState` Hook extrahieren            | 45 min  |        |
 | 7         | `useEntitySubscription` Hook extrahieren          | 30 min  |        |
 | 8         | `filter_response_headers()` extrahieren           | 10 min  |        |
