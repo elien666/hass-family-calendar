@@ -321,8 +321,7 @@ deploy_files_ssh() {
     if [ "$HA_SSH_PORT" != "22" ]; then
         ssh_opts+=("-p" "$HA_SSH_PORT")
     fi
-    ssh_opts+=("-o" "StrictHostKeyChecking=no")
-    ssh_opts+=("-o" "UserKnownHostsFile=/dev/null")
+    ssh_opts+=("-o" "StrictHostKeyChecking=accept-new")
     ssh_opts+=("-o" "BatchMode=yes")
 
     # Build SSH command string for rsync -e option
@@ -336,7 +335,7 @@ deploy_files_ssh() {
     if [ "$HA_SSH_PORT" != "22" ]; then
         ssh_cmd="$ssh_cmd -p $HA_SSH_PORT"
     fi
-    ssh_cmd="$ssh_cmd -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes"
+    ssh_cmd="$ssh_cmd -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 
     # Ensure remote directory exists
     log_info "Ensuring remote directory exists: ${HA_SSH_USER}@${HA_SSH_HOST}:${remote_path}"
