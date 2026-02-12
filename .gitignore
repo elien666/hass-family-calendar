@@ -7,6 +7,8 @@
 
 # testing
 /coverage
+.coverage
+.coverage.*
 
 # build
 # /add-on/dist - commented out to allow CI to commit built files
@@ -34,3 +36,6 @@ yarn-error.log*
 __pycache__/
 *.pyc
 *.pyo
+
+# Temp files
+_tmp_*
