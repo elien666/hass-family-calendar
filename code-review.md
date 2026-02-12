@@ -269,10 +269,10 @@ Dieses Pattern wiederholt sich für Garage, Doorbell, EV, Laundry, Weather, HVV 
 | 3         | Encoding-Workaround durch saubere Lösung ersetzen | 30 min  | done   |
 | 4         | Rate-Limiting für `/gti/public/`                  | 15 min  | done   |
 | 5         | Entity-ID-Validierung im WebSocket                | 10 min  | done   |
-| 6         | `useFetchEntityState` Hook extrahieren            | 45 min  |        |
-| 7         | `useEntitySubscription` Hook extrahieren          | 30 min  |        |
-| 8         | `filter_response_headers()` extrahieren           | 10 min  |        |
-| 9         | `handle_api_error()` extrahieren                  | 10 min  |        |
+| 6         | `useFetchEntityState` Hook extrahieren            | 45 min  | done   |
+| 7         | `useEntitySubscription` Hook extrahieren          | 30 min  | done   |
+| 8         | `filter_response_headers()` extrahieren           | 10 min  | done   |
+| 9         | `handle_api_error()` extrahieren                  | 10 min  | done   |
 | 10        | Feature-Config-Loading generalisieren             | 30 min  |        |
 | 11        | SSH StrictHostKeyChecking fixen                   | 5 min   |        |
 | 12        | `.gitignore` Patterns erweitern                   | 5 min   |        |

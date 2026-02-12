@@ -88,6 +88,31 @@ def _is_valid_entity_id(entity_id: str) -> bool:
     return isinstance(entity_id, str) and bool(_ENTITY_ID_RE.match(entity_id))
 
 
+# Headers that should not be forwarded from upstream responses
+_EXCLUDED_RESPONSE_HEADERS = {
+    "content-encoding", "transfer-encoding", "content-length",
+    "connection", "server"
+}
+
+
+def filter_response_headers(headers) -> dict:
+    """Filter out hop-by-hop and problematic headers from an upstream response."""
+    return {
+        key: value
+        for key, value in headers.items()
+        if key.lower() not in _EXCLUDED_RESPONSE_HEADERS
+    }
+
+
+def handle_proxy_error(exc: Exception, service_name: str, target_url: str):
+    """Raise appropriate HTTPException for proxy errors (timeout vs generic)."""
+    if isinstance(exc, httpx.TimeoutException):
+        logger.error(f"Timeout connecting to {service_name}: {target_url}")
+        raise HTTPException(status_code=504, detail=f"Timeout connecting to {service_name}")
+    logger.error(f"Error proxying to {service_name} ({target_url}): {exc}")
+    raise HTTPException(status_code=502, detail=f"Error connecting to {service_name}")
+
+
 app = FastAPI(title="Family Calendar Backend")
 
 # Rate limiter for public endpoints
@@ -344,27 +369,13 @@ async def proxy_gti(endpoint: str, request: Request):
             if response.status_code == 401:
                 logger.error(f"Geofox API returned 401 Unauthorized. Response: {response.text[:200]}")
                 logger.error(f"Request headers sent: geofox-auth-user={geofox_user}, signature length={len(signature)}")
-            # Filter headers to avoid Content-Length mismatches
-            response_headers = {}
-            excluded_headers = {
-                "content-encoding", "transfer-encoding", "content-length",
-                "connection", "server"
-            }
-            for key, value in response.headers.items():
-                if key.lower() not in excluded_headers:
-                    response_headers[key] = value
-            
             return Response(
                 content=response.content,
                 status_code=response.status_code,
-                headers=response_headers
+                headers=filter_response_headers(response.headers)
             )
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to Geofox API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to Geofox API")
     except Exception as e:
-        logger.error(f"Error proxying to Geofox API: {e}")
-        raise HTTPException(status_code=502, detail=f"Error connecting to Geofox API: {str(e)}")
+        handle_proxy_error(e, "Geofox API", target_url)
 
 
 @app.get("/forecast/{coordinates}")
@@ -392,27 +403,13 @@ async def proxy_forecast(coordinates: str, request: Request):
                 target_url,
                 params=query_params
             )
-            # Filter headers to avoid Content-Length mismatches
-            response_headers = {}
-            excluded_headers = {
-                "content-encoding", "transfer-encoding", "content-length",
-                "connection", "server"
-            }
-            for key, value in response.headers.items():
-                if key.lower() not in excluded_headers:
-                    response_headers[key] = value
-            
             return Response(
                 content=response.content,
                 status_code=response.status_code,
-                headers=response_headers
+                headers=filter_response_headers(response.headers)
             )
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to weather API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to weather API")
     except Exception as e:
-        logger.error(f"Error proxying to weather API: {e}")
-        raise HTTPException(status_code=502, detail=f"Error connecting to weather API: {str(e)}")
+        handle_proxy_error(e, "weather API", target_url)
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -524,26 +521,7 @@ async def proxy_api(path: str, request: Request):
                     logger.debug(f"Camera stream response status: {stream_response.status_code}")
                     logger.debug(f"Camera stream response headers: {dict(stream_response.headers)}")
                     
-                    # Get response headers (exclude problematic ones)
-                    response_headers = {}
-                    excluded_headers = {
-                        "content-encoding", "transfer-encoding", "content-length",
-                        "connection", "server"
-                    }
-                    for key, value in stream_response.headers.items():
-                        if key.lower() not in excluded_headers:
-                            # Ensure header values are strings and handle encoding properly
-                            try:
-                                # Convert to string if needed, handling any encoding issues
-                                if isinstance(value, bytes):
-                                    response_headers[key] = value.decode('utf-8', errors='replace')
-                                else:
-                                    response_headers[key] = str(value)
-                            except (UnicodeDecodeError, UnicodeEncodeError):
-                                # Skip headers that can't be properly encoded
-                                logger.debug(f"Skipping stream response header {key} due to encoding issue")
-                                continue
-                    
+                    response_headers = filter_response_headers(stream_response.headers)
                     # Preserve Content-Type for MJPEG streams
                     if "content-type" in stream_response.headers:
                         response_headers["Content-Type"] = stream_response.headers["content-type"]
@@ -609,27 +587,13 @@ async def proxy_api(path: str, request: Request):
 
                 logger.debug(f"Response status: {response.status_code} from {target_url}")
 
-                # Filter response headers
-                response_headers = {}
-                excluded_headers = {
-                    "content-encoding", "transfer-encoding", "content-length",
-                    "connection", "server"
-                }
-                for key, value in response.headers.items():
-                    if key.lower() not in excluded_headers:
-                        response_headers[key] = value
-
                 return Response(
                     content=response.content,
                     status_code=response.status_code,
-                    headers=response_headers
+                    headers=filter_response_headers(response.headers)
                 )
-    except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to Home Assistant API: {target_url}")
-        raise HTTPException(status_code=504, detail="Timeout connecting to Home Assistant API")
     except Exception as e:
-        logger.error(f"Error proxying to Home Assistant API ({target_url}): {e}")
-        raise HTTPException(status_code=502, detail="Error connecting to Home Assistant API")
+        handle_proxy_error(e, "Home Assistant API", target_url)
 
 
 @app.websocket("/api/websocket")
