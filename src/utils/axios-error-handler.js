@@ -218,7 +218,7 @@ export const formatErrorForUI = (error) => {
   
   // Return user-friendly messages based on error type
   if (details.isNetworkError) {
-    return ''
+    return 'Netzwerkfehler: Server nicht erreichbar'
   }
   
   if (details.isTimeoutError) {

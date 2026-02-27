@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import axios from 'axios'
 import logger, { setLoggingEnabled } from './logger'
+import { CONFIG_FETCH_TIMEOUT } from './constants'
 
 // Use Vite's built-in DEV mode to detect development vs production
 const isDevelopment = import.meta.env.DEV
@@ -172,7 +173,7 @@ export const ConfigProvider = ({ children }) => {
           : '/api/config')
     
     try {
-      const response = await axios.get(configUrl, { timeout: 5000 })
+      const response = await axios.get(configUrl, { timeout: CONFIG_FETCH_TIMEOUT })
       
       if (response.data && typeof response.data === 'object') {
         // Validate config structure (basic check)

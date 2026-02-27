@@ -21,7 +21,7 @@
     "react-timeago": "^8.3.0",
     "react-toastify": "^11.0.5",
     "react-router-dom": "^7.0.0",
-    "styled-components": "6.3.9",
+    "styled-components": "6.3.11",
     "weather-icons-react": "^1.2.0"
   },
   "scripts": {
@@ -36,6 +36,11 @@
     "dev:deploy": "bash scripts/dev-deploy.sh",
     "dev:deploy:watch": "bash scripts/dev-deploy.sh --watch",
     "dev:deploy:restart": "bash scripts/dev-deploy.sh --restart"
+  },
+  "pnpm": {
+    "overrides": {
+      "rollup": ">=4.59.0"
+    }
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

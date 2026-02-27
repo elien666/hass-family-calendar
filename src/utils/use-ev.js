@@ -3,157 +3,75 @@ import axios from 'axios'
 import { useConfig } from './ConfigProvider'
 import { buildHaUrl } from './config'
 import logger from './logger'
-import { formatErrorForUI } from './axios-error-handler'
-import { useHomeAssistantWebSocket } from './use-home-assistant-websocket'
-
-// Authorization header is configured centrally in config.js
+import useFetchEntityState from './use-fetch-entity-state'
+import useEntitySubscription from './use-entity-subscription'
 
 const useEv = () => {
   const config = useConfig()
   const ENABLE_EV = config.ENABLE_EV || false
   const ENTITY_PRECLIMATE_STATUS = config.ENTITY_PRECLIMATE_STATUS || ''
-  const ENTITY_PRECLIMATE_START = config.ENTITY_PRECLIMATE_START || ''
-  const ENTITY_PRECLIMATE_STOP = config.ENTITY_PRECLIMATE_STOP || ''
   const ENTITY_CHARGING_STATE = config.ENTITY_CHARGING_STATE || ''
   const ENTITY_STATE_OF_CHARGE = config.ENTITY_STATE_OF_CHARGE || ''
 
-  const [ state, setState ] = React.useState({
-    preclimateStatus: false,
-    chargingState: false,
-    stateOfCharge: 0
-  })
-  const [ restError, setRestError ] = React.useState(false)
-
-  // Check if EV is configured
   const isConfigured = ENABLE_EV && (
-    ENTITY_PRECLIMATE_STATUS || 
-    ENTITY_CHARGING_STATE || 
+    ENTITY_PRECLIMATE_STATUS ||
+    ENTITY_CHARGING_STATE ||
     ENTITY_STATE_OF_CHARGE
   )
 
-  // Fetch initial state for all entities
-  React.useEffect(() => {
-    if (!isConfigured) {
-      return
-    }
-
-    const fetchStates = async () => {
-      const promises = []
-      
-      if (ENTITY_PRECLIMATE_STATUS) {
-        promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_PRECLIMATE_STATUS}`, config))
-            .then(response => ({ type: 'preclimateStatus', value: response.data.state === 'on' }))
-            .catch(err => ({ type: 'preclimateStatus', error: formatErrorForUI(err) }))
-        )
-      }
-      
-      if (ENTITY_CHARGING_STATE) {
-        promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_CHARGING_STATE}`, config))
-            .then(response => ({ type: 'chargingState', value: response.data.state === 'on' }))
-            .catch(err => ({ type: 'chargingState', error: formatErrorForUI(err) }))
-        )
-      }
-      
-      if (ENTITY_STATE_OF_CHARGE) {
-        promises.push(
-          axios(buildHaUrl(`/api/states/${ENTITY_STATE_OF_CHARGE}`, config))
-            .then(response => ({ type: 'stateOfCharge', value: parseFloat(response.data.state) || 0 }))
-            .catch(err => ({ type: 'stateOfCharge', error: formatErrorForUI(err) }))
-        )
-      }
-
-      const results = await Promise.all(promises)
-      let hasError = false
-      
-      results.forEach(result => {
-        if (result.error) {
-          hasError = result.error
-        } else {
-          setState(prev => ({ ...prev, [result.type]: result.value }))
-        }
-      })
-
-      if (hasError) {
-        setRestError(hasError)
-      } else {
-        setRestError(false)
-      }
-    }
-
-    fetchStates()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured, ENABLE_EV, ENTITY_PRECLIMATE_STATUS, ENTITY_CHARGING_STATE, ENTITY_STATE_OF_CHARGE])
-
-  // WebSocket subscription for all entities
-  const { error: wsError } = useHomeAssistantWebSocket({
-    enabled: isConfigured,
-    checkBackendConnection: false, // EV hook doesn't check backend connection
-    reconnectStrategy: 'exponential',
-    maxReconnectAttempts: 5,
-    reconnectDelay: 1000,
-    logPrefix: 'EV entities',
-    onReady: (connection, subscriptionsRef) => {
-      // Create callback for state updates
-      const callback = (data) => {
-        const entityId = data.entity_id
-        const newState = data.state
-
-        setState(prev => {
-          const updated = { ...prev }
-          
-          if (entityId === ENTITY_PRECLIMATE_STATUS) {
-            updated.preclimateStatus = newState === 'on'
-          } else if (entityId === ENTITY_CHARGING_STATE) {
-            updated.chargingState = newState === 'on'
-          } else if (entityId === ENTITY_STATE_OF_CHARGE) {
-            updated.stateOfCharge = parseFloat(newState) || 0
-          }
-          
-          return updated
-        })
-      }
-
-      // Subscribe to all configured entities
-      const entityIds = []
-      if (ENTITY_PRECLIMATE_STATUS) entityIds.push(ENTITY_PRECLIMATE_STATUS)
-      if (ENTITY_CHARGING_STATE) entityIds.push(ENTITY_CHARGING_STATE)
-      if (ENTITY_STATE_OF_CHARGE) entityIds.push(ENTITY_STATE_OF_CHARGE)
-
-      // Subscribe to each entity
-      if (connection.readyState === WebSocket.OPEN) {
-        entityIds.forEach(entityId => {
-          // Register callback for this entity
-          subscriptionsRef.current.set(entityId, callback)
-          
-          // Subscribe to entity
-          connection.send(JSON.stringify({
-            type: 'subscribe_entity',
-            entity_id: entityId
-          }))
-        })
-        logger.debug(`Subscribed to EV entity state changes: ${entityIds.join(', ')}`)
-      }
-
-      // Return unsubscribe function
-      return () => {
-        entityIds.forEach(entityId => {
-          subscriptionsRef.current.delete(entityId)
-          if (connection.readyState === WebSocket.OPEN) {
-            connection.send(JSON.stringify({
-              type: 'unsubscribe_entity',
-              entity_id: entityId
-            }))
-          }
-        })
-      }
-    },
-    dependencies: [isConfigured, ENTITY_PRECLIMATE_STATUS, ENTITY_CHARGING_STATE, ENTITY_STATE_OF_CHARGE],
+  // Preclimate status entity
+  const [preclimateRaw, precRestErr, setPrecState] = useFetchEntityState({
+    entityId: ENTITY_PRECLIMATE_STATUS,
+    enabled: isConfigured && !!ENTITY_PRECLIMATE_STATUS,
+    config,
+    initialState: 'off',
+  })
+  const { error: precWsErr } = useEntitySubscription({
+    entityId: ENTITY_PRECLIMATE_STATUS,
+    enabled: isConfigured && !!ENTITY_PRECLIMATE_STATUS,
+    onStateUpdate: setPrecState,
+    logPrefix: 'EV preclimate',
+    wsOptions: { checkBackendConnection: false, reconnectStrategy: 'exponential', maxReconnectAttempts: 5, reconnectDelay: 1000 },
   })
 
-  // Combine REST and WebSocket errors
-  const error = restError || wsError || false
+  // Charging state entity
+  const [chargingRaw, chgRestErr, setChgState] = useFetchEntityState({
+    entityId: ENTITY_CHARGING_STATE,
+    enabled: isConfigured && !!ENTITY_CHARGING_STATE,
+    config,
+    initialState: 'off',
+  })
+  const { error: chgWsErr } = useEntitySubscription({
+    entityId: ENTITY_CHARGING_STATE,
+    enabled: isConfigured && !!ENTITY_CHARGING_STATE,
+    onStateUpdate: setChgState,
+    logPrefix: 'EV charging',
+    wsOptions: { checkBackendConnection: false, reconnectStrategy: 'exponential', maxReconnectAttempts: 5, reconnectDelay: 1000 },
+  })
+
+  // State of charge entity
+  const [socRaw, socRestErr, setSocState] = useFetchEntityState({
+    entityId: ENTITY_STATE_OF_CHARGE,
+    enabled: isConfigured && !!ENTITY_STATE_OF_CHARGE,
+    config,
+    initialState: '0',
+  })
+  const { error: socWsErr } = useEntitySubscription({
+    entityId: ENTITY_STATE_OF_CHARGE,
+    enabled: isConfigured && !!ENTITY_STATE_OF_CHARGE,
+    onStateUpdate: setSocState,
+    logPrefix: 'EV SoC',
+    wsOptions: { checkBackendConnection: false, reconnectStrategy: 'exponential', maxReconnectAttempts: 5, reconnectDelay: 1000 },
+  })
+
+  // Derive composed state
+  const state = React.useMemo(() => ({
+    preclimateStatus: preclimateRaw === 'on',
+    chargingState: chargingRaw === 'on',
+    stateOfCharge: parseFloat(socRaw) || 0,
+  }), [preclimateRaw, chargingRaw, socRaw])
+
+  const error = precRestErr || precWsErr || chgRestErr || chgWsErr || socRestErr || socWsErr || false
 
   return [state, error]
 }
@@ -165,7 +83,6 @@ export const startPreclimate = (config) => {
     entity_id: ENTITY_PRECLIMATE_START
   })
     .catch((err) => {
-      // Error is already logged by interceptor
       logger.error('Failed to start preclimate:', err)
     })
 }
@@ -177,10 +94,8 @@ export const stopPreclimate = (config) => {
     entity_id: ENTITY_PRECLIMATE_STOP
   })
     .catch((err) => {
-      // Error is already logged by interceptor
       logger.error('Failed to stop preclimate:', err)
     })
 }
 
 export default useEv
-

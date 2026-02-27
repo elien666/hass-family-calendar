@@ -3,6 +3,7 @@ import { useConnectionState } from './use-connection-state'
 import { setGlobalConnectionCheckTrigger, isDevelopment } from './config'
 import { useReloadConfig } from './ConfigProvider'
 import logger from './logger'
+import { CONFIG_RELOAD_DEBOUNCE } from './constants'
 
 const ConnectionStateContext = createContext(null)
 
@@ -71,7 +72,7 @@ export const ConnectionStateProvider = ({ children }) => {
             isReloadingRef.current = false
             reloadTimeoutRef.current = null
           })
-      }, 2000) // 2 second debounce
+      }, CONFIG_RELOAD_DEBOUNCE)
     }
     
     return () => {

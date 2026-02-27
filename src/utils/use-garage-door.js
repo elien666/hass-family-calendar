@@ -4,6 +4,7 @@ import { buildHaUrl } from './config'
 import logger from './logger'
 import useFetchEntityState from './use-fetch-entity-state'
 import useEntitySubscription from './use-entity-subscription'
+import { GARAGE_FEEDBACK_TIMEOUT } from './constants'
 
 const useGarageDoor = () => {
   const config = useConfig()
@@ -35,7 +36,7 @@ export const toggleGarageDoor = (isLoading, config = {}) => {
   const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), GARAGE_FEEDBACK_TIMEOUT)
   axios.post(buildHaUrl('/api/services/cover/toggle', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })
@@ -52,7 +53,7 @@ export const openGarageDoor = (isLoading, config = {}) => {
   const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), GARAGE_FEEDBACK_TIMEOUT)
   axios.post(buildHaUrl('/api/services/cover/open_cover', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })
@@ -69,7 +70,7 @@ export const closeGarageDoor = (isLoading, config = {}) => {
   const ENTITY_GARAGE_DOOR = config.ENTITY_GARAGE_DOOR || ''
   if (!ENTITY_GARAGE_DOOR) return
   isLoading(true)
-  const timeoutId = setTimeout(() => isLoading(false), 3000)
+  const timeoutId = setTimeout(() => isLoading(false), GARAGE_FEEDBACK_TIMEOUT)
   axios.post(buildHaUrl('/api/services/cover/close_cover', config), {
     entity_id: ENTITY_GARAGE_DOOR
   })

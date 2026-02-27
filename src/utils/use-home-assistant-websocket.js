@@ -3,6 +3,7 @@ import { useConfig } from './ConfigProvider'
 import { isDevelopment, buildWebSocketUrl } from './config'
 import logger from './logger'
 import { useConnectionStateContext } from './ConnectionStateProvider'
+import { WS_HEARTBEAT_INTERVAL, WS_HEARTBEAT_TIMEOUT, WS_PERIODIC_RETRY_INTERVAL, WS_RECONNECT_DEBOUNCE } from './constants'
 
 /**
  * Reusable hook for Home Assistant WebSocket connections using custom FastAPI protocol
@@ -48,6 +49,11 @@ export function useHomeAssistantWebSocket({
   const subscriptionsRef = React.useRef(new Map()) // {entity_id: callback}
   const heartbeatIntervalRef = React.useRef(null)
   const heartbeatTimeoutRef = React.useRef(null)
+  const connectRef = React.useRef(null)
+  const isConnectedRef = React.useRef(isConnected)
+
+  // Keep isConnectedRef in sync (avoids stale closures in WebSocket event handlers)
+  isConnectedRef.current = isConnected
 
   // Cleanup function
   const cleanup = React.useCallback(() => {
@@ -112,7 +118,7 @@ export function useHomeAssistantWebSocket({
     }
 
     // Check backend connection if required
-    if (checkBackendConnection && !isConnected) {
+    if (checkBackendConnection && !isConnectedRef.current) {
       logger.debug(`Skipping ${logPrefix} connection - backend not connected`)
       return
     }
@@ -213,8 +219,8 @@ export function useHomeAssistantWebSocket({
           heartbeatTimeoutRef.current = setTimeout(() => {
             logger.warn(`${logPrefix} heartbeat timeout — closing stale connection`)
             try { connection.close(4000, 'heartbeat timeout') } catch {}
-          }, 10000)
-        }, 30000)
+          }, WS_HEARTBEAT_TIMEOUT)
+        }, WS_HEARTBEAT_INTERVAL)
       }
 
       // Handle messages
@@ -277,7 +283,7 @@ export function useHomeAssistantWebSocket({
           // and we've tried multiple times, stop aggressive reconnecting but set up periodic retry
           const neverOpened = !event.wasClean && (event.code === 1006 || reconnectAttemptsRef.current > 0)
           if (neverOpened && reconnectAttemptsRef.current >= 5 && !stoppedReconnectingRef.current) {
-            logger.warn(`Backend appears to be down for ${logPrefix} (${reconnectAttemptsRef.current} failed attempts), switching to periodic retry every 60s`)
+            logger.warn(`Backend appears to be down for ${logPrefix} (${reconnectAttemptsRef.current} failed attempts), switching to periodic retry every ${WS_PERIODIC_RETRY_INTERVAL / 1000}s`)
             stoppedReconnectingRef.current = true
             if (isMountedRef.current) {
               setError('Backend nicht erreichbar. Wiederherstellungsversuche alle 60 Sekunden.')
@@ -285,14 +291,14 @@ export function useHomeAssistantWebSocket({
             // Set up periodic retry every 60 seconds
             const schedulePeriodicRetry = () => {
               periodicRetryTimeoutRef.current = setTimeout(() => {
-                if (isMountedRef.current && !isConnectingRef.current && isConnected && stoppedReconnectingRef.current) {
+                if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current && stoppedReconnectingRef.current) {
                   logger.debug(`Periodic retry attempt for ${logPrefix} (backend might be back up)`)
                   reconnectAttemptsRef.current = 0 // Reset attempts for periodic retry
-                  connect()
+                  connectRef.current()
                   // Schedule next retry
                   schedulePeriodicRetry()
                 }
-              }, 60000) // 60 seconds
+              }, WS_PERIODIC_RETRY_INTERVAL)
             }
             schedulePeriodicRetry()
             return
@@ -313,25 +319,25 @@ export function useHomeAssistantWebSocket({
           }
 
           // Attempt to reconnect only if backend is connected
-          if (isConnected) {
+          if (isConnectedRef.current) {
             if (reconnectStrategy === 'exponential') {
               // Use longer delay if connection never opened (backend might be down)
               const baseDelay = neverOpened ? reconnectDelay * 10 : reconnectDelay
               const delay = Math.min(baseDelay * Math.pow(2, reconnectAttemptsRef.current), 60000)
               reconnectAttemptsRef.current++
               reconnectTimeoutRef.current = setTimeout(() => {
-                if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+                if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current) {
                   logger.debug(`Attempting to reconnect ${logPrefix} (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
-                  connect()
+                  connectRef.current()
                 }
               }, delay)
             } else {
               // Simple strategy: use longer delay if connection never opened
               const delay = neverOpened ? reconnectDelay * 10 : reconnectDelay
               reconnectTimeoutRef.current = setTimeout(() => {
-                if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+                if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current) {
                   logger.debug(`Attempting to reconnect ${logPrefix}`)
-                  connect()
+                  connectRef.current()
                 }
               }, delay)
             }
@@ -342,55 +348,14 @@ export function useHomeAssistantWebSocket({
       }
 
       // Handle connection error
+      // NOTE: onerror always fires BEFORE onclose. Reconnect logic lives exclusively
+      // in onclose to prevent double-counting of attempts and stale-closure issues.
       connection.onerror = (err) => {
         logger.error(`WebSocket error for ${logPrefix}:`, err)
         isConnectingRef.current = false
         setIsConnecting(false)
         if (isMountedRef.current) {
           setError('WebSocket-Verbindungsfehler')
-        }
-
-        // If connection never opened (immediate failure like backend down), don't reconnect aggressively
-        // This prevents spamming supervisor logs when backend is stopped
-        const neverOpened = connection.readyState === WebSocket.CONNECTING || connection.readyState === WebSocket.CLOSED
-        
-        // If we've stopped aggressive reconnection, don't try again here (periodic retry will handle it)
-        if (stoppedReconnectingRef.current) {
-          return
-        }
-        
-        // Only attempt to reconnect if backend is connected and connection was previously established
-        // If connection failed immediately, wait longer before retrying
-        if (isConnected) {
-          
-          if (reconnectStrategy === 'exponential' && reconnectAttemptsRef.current < maxReconnectAttempts) {
-            // Use longer delay for immediate failures
-            const baseDelay = neverOpened ? reconnectDelay * 5 : reconnectDelay
-            const delay = Math.min(baseDelay * Math.pow(2, reconnectAttemptsRef.current), 60000) // Max 60s for immediate failures
-            reconnectAttemptsRef.current++
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
-                logger.debug(`Attempting to reconnect ${logPrefix} after error (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
-                connect()
-              }
-            }, delay)
-          } else if (reconnectStrategy === 'simple') {
-            // Use longer delay for immediate failures
-            const delay = neverOpened ? reconnectDelay * 5 : reconnectDelay
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
-                logger.debug(`Attempting to reconnect ${logPrefix} after error`)
-                connect()
-              }
-            }, delay)
-          } else {
-            logger.warn(`Max reconnection attempts (${maxReconnectAttempts}) reached for ${logPrefix}, stopping reconnection`)
-            if (isMountedRef.current) {
-              setError('Verbindung fehlgeschlagen. Bitte Seite neu laden.')
-            }
-          }
-        } else {
-          logger.debug(`Skipping reconnection for ${logPrefix} after error - waiting for backend connection`)
         }
       }
 
@@ -402,21 +367,21 @@ export function useHomeAssistantWebSocket({
         setError(err instanceof Error ? err.message : String(err))
 
         // Only attempt to reconnect if backend is connected
-        if (isConnected) {
+        if (isConnectedRef.current) {
           if (reconnectStrategy === 'exponential' && reconnectAttemptsRef.current < maxReconnectAttempts) {
             const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000)
             reconnectAttemptsRef.current++
             reconnectTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+              if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current) {
                 logger.debug(`Attempting to reconnect ${logPrefix} after error (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
-                connect()
+                connectRef.current()
               }
             }, delay)
           } else if (reconnectStrategy === 'simple') {
             reconnectTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current && !isConnectingRef.current && isConnected) {
+              if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current) {
                 logger.debug(`Attempting to reconnect ${logPrefix} after error`)
-                connect()
+                connectRef.current()
               }
             }, reconnectDelay)
           } else {
@@ -430,10 +395,12 @@ export function useHomeAssistantWebSocket({
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     enabled,
     checkBackendConnection,
-    isConnected,
+    // isConnected intentionally omitted — accessed via isConnectedRef to avoid
+    // recreating connect (and thus all WS event handlers) on every state change.
     config, // Include config to rebuild URL when ingress path changes
     reconnectStrategy,
     maxReconnectAttempts,
@@ -442,6 +409,9 @@ export function useHomeAssistantWebSocket({
     onReady,
     cleanup,
   ])
+
+  // Keep connectRef in sync so event handlers always call the latest version
+  connectRef.current = connect
 
   // Initial connection attempt
   React.useEffect(() => {
@@ -461,7 +431,7 @@ export function useHomeAssistantWebSocket({
       }
       // Debounce reconnection when connection state changes (1 second)
       reconnectDebounceTimeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current && isConnected && !connectionRef.current && !isConnectingRef.current) {
+        if (isMountedRef.current && isConnectedRef.current && !connectionRef.current && !isConnectingRef.current) {
           logger.debug(`Backend connection restored - reconnecting ${logPrefix}`)
           stoppedReconnectingRef.current = false // Reset stopped flag when backend is back
           reconnectAttemptsRef.current = 0 // Reset attempts
@@ -472,7 +442,7 @@ export function useHomeAssistantWebSocket({
           }
           connect()
         }
-      }, 1000) // 1 second debounce when connection state changes
+      }, WS_RECONNECT_DEBOUNCE)
     }
   }, [enabled, isConnected, connect, logPrefix])
 

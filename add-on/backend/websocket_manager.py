@@ -45,6 +45,9 @@ class WebSocketStateManager:
         self._message_handler_task: Optional[asyncio.Task] = None
         self._running = False
         
+        # Reconnection tracking
+        self._reconnect_attempt = 0
+
         # Subscription IDs for tracking
         self._subscription_id_counter = 1
         self._entity_subscriptions: Dict[int, str] = {}  # {subscription_id: entity_id}
@@ -356,6 +359,7 @@ class WebSocketStateManager:
                 success = await self.connect_to_ha()
 
                 if success:
+                    self._reconnect_attempt = 0
                     # Restart message handler BEFORE subscribing
                     if self._message_handler_task:
                         self._message_handler_task.cancel()
@@ -366,8 +370,10 @@ class WebSocketStateManager:
                     # Push refreshed states to all already-connected frontend clients
                     await self._push_refreshed_states_to_clients()
                 else:
-                    # Wait before retrying
-                    await asyncio.sleep(5)
+                    self._reconnect_attempt += 1
+                    delay = min(5 * (2 ** min(self._reconnect_attempt - 1, 6)), 300)
+                    logger.info(f"Reconnecting in {delay}s (attempt {self._reconnect_attempt})")
+                    await asyncio.sleep(delay)
             else:
                 # Wait a bit before checking again
                 await asyncio.sleep(1)
