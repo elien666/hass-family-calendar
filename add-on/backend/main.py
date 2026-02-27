@@ -412,67 +412,19 @@ async def proxy_forecast(coordinates: str, request: Request):
         handle_proxy_error(e, "weather API", target_url)
 
 
-@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-async def proxy_api(path: str, request: Request):
-    """
-    Proxy Home Assistant REST API requests with SUPERVISOR_TOKEN or HASS_ACCESS_TOKEN injection.
-    """
-    config = get_config()
-    
-    # Check if this is a camera stream request (MJPEG streaming)
-    # NOTE: Camera streams are no longer proxied - frontend goes directly to Home Assistant
-    # This check is kept for backwards compatibility but camera_proxy_stream requests
-    # should not reach this endpoint anymore
-    is_camera_stream = "camera_proxy_stream" in path
-    
-    # For camera streams, use HASS_HOST directly (not supervisor API)
-    # For other API requests, use HASS_API_URL
-    if is_camera_stream:
-        hass_host = config.get("HASS_HOST", "")
-        if not hass_host:
-            # Fallback: try to derive from HASS_API_URL
-            hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
-            # Remove /api suffix if present
-            if hass_api_url.endswith("/api"):
-                hass_host = hass_api_url[:-4]
-            else:
-                hass_host = hass_api_url.replace("/core/api", "").rstrip("/")
-        
-        # Build camera stream URL directly to HA host
-        target_url = f"{hass_host.rstrip('/')}/api/{path}"
-    else:
-        # Get API URL from config (handles both HA and local dev)
-        hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
-        # Build target URL
-        target_url = f"{hass_api_url.rstrip('/')}/{path}"
-    
-    logger.debug(f"Proxying {request.method} request to: {target_url}")
-
-    # Get authentication token
-    # In HA: use SUPERVISOR_TOKEN
-    # In local dev: use HASS_ACCESS_TOKEN from environment
-    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
-    hass_access_token = os.environ.get("HASS_ACCESS_TOKEN")
-    
-    # Prefer SUPERVISOR_TOKEN, fallback to HASS_ACCESS_TOKEN
-    auth_token = supervisor_token or hass_access_token
-    
+def _get_auth_token():
+    """Get authentication token, preferring SUPERVISOR_TOKEN over HASS_ACCESS_TOKEN."""
+    auth_token = os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASS_ACCESS_TOKEN")
     if not auth_token:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail="SUPERVISOR_TOKEN or HASS_ACCESS_TOKEN must be configured"
         )
-    
-    # Get request body if present
-    body = None
-    if request.method in ("POST", "PUT", "PATCH"):
-        try:
-            body = await request.body()
-        except Exception:
-            pass
-    
-    # Prepare headers - forward only ASCII-safe headers per RFC 7230
-    # Skip hop-by-hop headers and auth (we inject our own)
+    return auth_token
+
+
+def _build_proxy_headers(request: Request, *, include_auth: bool = True, set_supervisor_host: bool = True):
+    """Build proxy headers from incoming request, optionally injecting auth."""
     skip_headers = {"host", "authorization", "content-length"}
     headers = {}
     for key, value in request.headers.items():
@@ -484,114 +436,133 @@ async def proxy_api(path: str, request: Request):
         except (UnicodeEncodeError, UnicodeDecodeError):
             logger.debug(f"Skipping non-ASCII header '{key}'")
 
-    # Add auth token (camera streams use query parameter instead)
-    if not is_camera_stream:
-        headers["Authorization"] = f"Bearer {auth_token}"
-    
-    # Only set Host header if using supervisor (HA mode) and NOT a camera stream
-    # Camera streams go directly to HA host, not through supervisor
-    if not is_camera_stream:
-        hass_api_url_for_header = config.get("HASS_API_URL", "http://supervisor/core/api")
-        if "supervisor" in hass_api_url_for_header:
+    if include_auth:
+        headers["Authorization"] = f"Bearer {_get_auth_token()}"
+
+    if set_supervisor_host:
+        config = get_config()
+        hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
+        if "supervisor" in hass_api_url:
             headers["Host"] = "supervisor"
-    
+
+    return headers
+
+
+@app.api_route("/api/camera_proxy_stream/{path:path}", methods=["GET"])
+async def proxy_camera_stream(path: str, request: Request):
+    """Proxy MJPEG camera stream requests to Home Assistant."""
+    config = get_config()
+
+    hass_host = config.get("HASS_HOST", "")
+    if not hass_host:
+        hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
+        if hass_api_url.endswith("/api"):
+            hass_host = hass_api_url[:-4]
+        else:
+            hass_host = hass_api_url.replace("/core/api", "").rstrip("/")
+
+    target_url = f"{hass_host.rstrip('/')}/api/camera_proxy_stream/{path}"
+    headers = _build_proxy_headers(request, include_auth=False, set_supervisor_host=False)
+    query_params = dict(request.query_params)
+
+    logger.debug(f"Proxying camera stream to {target_url} with query params: {list(query_params.keys())}")
+
     try:
-        # Use longer timeout for camera streams (they're continuous)
-        # Use longer timeout for calendar requests (they can be slow with many events)
-        is_calendar_request = "calendars" in path
-        timeout_value = None if is_camera_stream else (60.0 if is_calendar_request else 30.0)
-        
-        async with httpx.AsyncClient(timeout=timeout_value) as client:
-            if is_camera_stream:
-                # For MJPEG streams, use streaming response
-                # Camera streams use token as query parameter (already in request.query_params)
-                query_params = dict(request.query_params)
-                logger.debug(f"Proxying camera stream request to {target_url} with query params: {list(query_params.keys())}")
+        async with httpx.AsyncClient(timeout=None) as client:
+            stream_context = client.stream(
+                method="GET",
+                url=target_url,
+                headers=headers,
+                params=query_params
+            )
+            stream_response = await stream_context.__aenter__()
+
+            logger.debug(f"Camera stream response status: {stream_response.status_code}")
+
+            response_headers = filter_response_headers(stream_response.headers)
+            if "content-type" in stream_response.headers:
+                response_headers["Content-Type"] = stream_response.headers["content-type"]
+
+            async def generate():
+                chunk_count = 0
                 try:
-                    # Use stream() context manager but keep it open
-                    stream_context = client.stream(
-                        method=request.method,
-                        url=target_url,
-                        headers=headers,
-                        content=body,
-                        params=query_params
-                    )
-                    stream_response = await stream_context.__aenter__()
-                    
-                    logger.debug(f"Camera stream response status: {stream_response.status_code}")
-                    logger.debug(f"Camera stream response headers: {dict(stream_response.headers)}")
-                    
-                    response_headers = filter_response_headers(stream_response.headers)
-                    # Preserve Content-Type for MJPEG streams
-                    if "content-type" in stream_response.headers:
-                        response_headers["Content-Type"] = stream_response.headers["content-type"]
-                    
-                    # Stream the response chunks
-                    async def generate():
-                        chunk_count = 0
-                        try:
-                            logger.debug("Starting to read camera stream chunks...")
-                            # Read response in chunks
-                            async for chunk in stream_response.aiter_bytes(chunk_size=8192):
-                                if not chunk:
-                                    logger.warning("Received empty chunk, continuing...")
-                                    continue
-                                chunk_count += 1
-                                if chunk_count == 1:
-                                    logger.debug(f"First camera stream chunk received, size: {len(chunk)} bytes")
-                                elif chunk_count % 100 == 0:
-                                    logger.debug(f"Camera stream: {chunk_count} chunks received so far")
-                                yield chunk
-                            
-                            if chunk_count == 0:
-                                logger.warning("Camera stream ended with no chunks received")
-                            else:
-                                logger.debug(f"Camera stream ended normally after {chunk_count} chunks")
-                        except (httpx.ReadError, httpx.StreamClosed, ConnectionError) as e:
-                            # Network errors during streaming are common and expected
-                            # (client disconnects, network interruptions, etc.)
-                            logger.debug(f"Camera stream interrupted: {type(e).__name__}: {e}")
-                            # Generator will exit naturally, no need to re-raise
-                        except Exception as e:
-                            # Log unexpected errors but don't crash the server
-                            logger.warning(f"Unexpected error in camera stream: {type(e).__name__}: {e}")
-                        finally:
-                            # Close the stream context when generator exits
-                            try:
-                                await stream_context.__aexit__(None, None, None)
-                            except Exception as e:
-                                logger.debug(f"Error closing stream context: {e}")
-                    
-                    return StreamingResponse(
-                        generate(),
-                        status_code=stream_response.status_code,
-                        headers=response_headers
-                    )
-                except httpx.StreamClosed:
-                    # Stream was closed before we could start reading
-                    logger.debug("Camera stream closed before reading")
-                    raise HTTPException(status_code=499, detail="Client closed connection")
+                    async for chunk in stream_response.aiter_bytes(chunk_size=8192):
+                        if not chunk:
+                            continue
+                        chunk_count += 1
+                        if chunk_count == 1:
+                            logger.debug(f"First camera stream chunk received, size: {len(chunk)} bytes")
+                        elif chunk_count % 100 == 0:
+                            logger.debug(f"Camera stream: {chunk_count} chunks received so far")
+                        yield chunk
+
+                    if chunk_count == 0:
+                        logger.warning("Camera stream ended with no chunks received")
+                    else:
+                        logger.debug(f"Camera stream ended normally after {chunk_count} chunks")
+                except (httpx.ReadError, httpx.StreamClosed, ConnectionError) as e:
+                    logger.debug(f"Camera stream interrupted: {type(e).__name__}: {e}")
                 except Exception as e:
-                    logger.error(f"Error setting up camera stream: {e}")
-                    raise HTTPException(status_code=502, detail=f"Error connecting to camera stream: {str(e)}")
-            else:
-                # For regular API requests, use buffered response
-                response = await client.request(
-                    method=request.method,
-                    url=target_url,
-                    headers=headers,
-                    content=body,
-                    params=dict(request.query_params),
-                    follow_redirects=True
-                )
+                    logger.warning(f"Unexpected error in camera stream: {type(e).__name__}: {e}")
+                finally:
+                    try:
+                        await stream_context.__aexit__(None, None, None)
+                    except Exception as e:
+                        logger.debug(f"Error closing stream context: {e}")
 
-                logger.debug(f"Response status: {response.status_code} from {target_url}")
+            return StreamingResponse(
+                generate(),
+                status_code=stream_response.status_code,
+                headers=response_headers
+            )
+    except httpx.StreamClosed:
+        logger.debug("Camera stream closed before reading")
+        raise HTTPException(status_code=499, detail="Client closed connection")
+    except Exception as e:
+        handle_proxy_error(e, "camera stream", target_url)
 
-                return Response(
-                    content=response.content,
-                    status_code=response.status_code,
-                    headers=filter_response_headers(response.headers)
-                )
+
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def proxy_api(path: str, request: Request):
+    """Proxy Home Assistant REST API requests with auth token injection."""
+    config = get_config()
+    hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
+    target_url = f"{hass_api_url.rstrip('/')}/{path}"
+
+    logger.debug(f"Proxying {request.method} request to: {target_url}")
+
+    _get_auth_token()  # Validate early
+
+    body = None
+    if request.method in ("POST", "PUT", "PATCH"):
+        try:
+            body = await request.body()
+        except Exception:
+            pass
+
+    headers = _build_proxy_headers(request)
+
+    try:
+        is_calendar_request = "calendars" in path
+        timeout_value = 60.0 if is_calendar_request else 30.0
+
+        async with httpx.AsyncClient(timeout=timeout_value) as client:
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body,
+                params=dict(request.query_params),
+                follow_redirects=True
+            )
+
+            logger.debug(f"Response status: {response.status_code} from {target_url}")
+
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=filter_response_headers(response.headers)
+            )
     except Exception as e:
         handle_proxy_error(e, "Home Assistant API", target_url)
 

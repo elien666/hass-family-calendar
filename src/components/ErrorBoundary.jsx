@@ -3,28 +3,29 @@ import styled from 'styled-components'
 import logger from '../utils/logger'
 
 const ErrorDiv = styled.div`
-  padding: 2rem;
+  padding: ${props => props.$compact ? '0.75rem' : '2rem'};
   text-align: center;
   color: #ffffff;
   background-color: #2f2f2f;
   border-radius: 4px;
-  margin: 2rem;
-  
+  margin: ${props => props.$compact ? '0' : '2rem'};
+
   h2 {
     color: #f85a5a;
-    margin-bottom: 1rem;
+    margin-bottom: ${props => props.$compact ? '0.5rem' : '1rem'};
+    font-size: ${props => props.$compact ? '1rem' : undefined};
   }
-  
+
   button {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
+    margin-top: ${props => props.$compact ? '0.5rem' : '1rem'};
+    padding: ${props => props.$compact ? '0.3rem 0.6rem' : '0.5rem 1rem'};
     background-color: #356957;
     color: #ffffff;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 1rem;
-    
+    font-size: ${props => props.$compact ? '0.85rem' : '1rem'};
+
     &:hover {
       background-color: #2d5547;
     }
@@ -72,10 +73,11 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const compact = this.props.compact
       return (
-        <ErrorDiv>
-          <h2>Something went wrong</h2>
-          <p>The application encountered an error. Please try reloading the page.</p>
+        <ErrorDiv $compact={compact}>
+          <h2>{compact ? 'Fehler' : 'Something went wrong'}</h2>
+          {!compact && <p>The application encountered an error. Please try reloading the page.</p>}
           {import.meta.env.DEV && this.state.error && (
             <details style={{ marginTop: '1rem', textAlign: 'left' }}>
               <summary>Error details (development only)</summary>

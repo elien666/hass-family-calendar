@@ -4,15 +4,11 @@ import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import { useConfig } from '../utils/ConfigProvider'
-import { calculateOptimalTiling } from '../utils/video-tiling'
-import { fetchCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
 import { formatErrorForUI } from '../utils/axios-error-handler'
-import Icon from '@mdi/react'
-import { mdiLoading } from '@mdi/js'
-
-// Duration to keep overlay open, afer door ring event stopped
-const DELAY_IN_MS = 45000
+import { DOORBELL_OVERLAY_TIMEOUT } from '../utils/constants'
+import CameraGrid from './camera-grid'
 
 const Container = styled.div`
     @keyframes fadeOut {
@@ -257,9 +253,9 @@ const Doorbell = () => {
             const timeoutId = window.setTimeout(() => {
                 toggle(false)
                 setCancelId(undefined)
-            }, DELAY_IN_MS)
+            }, DOORBELL_OVERLAY_TIMEOUT)
             setCancelId(timeoutId)
-            setTransitionDuration(DELAY_IN_MS + 'ms')
+            setTransitionDuration(DOORBELL_OVERLAY_TIMEOUT + 'ms')
             setProgress(0)
             return () => {
                 if (timeoutId) window.clearTimeout(timeoutId)
@@ -340,152 +336,17 @@ const Doorbell = () => {
                     />
 
                     <div className='grid'>
-                        {(() => {
-                            if (DOORBELL_CAMERAS.length === 0) {
-                                return null
-                            }
-
-                            // Convert cameras to format expected by tiling algorithm
-                            const videos = DOORBELL_CAMERAS.map(cam => ({
-                                orientation: cam.orientation || 'landscape'
-                            }))
-
-                            // Calculate optimal layout using the tiling algorithm
-                            const canvasWidth = window.innerWidth
-                            const canvasHeight = window.innerHeight - 10 // Account for progress bar
-                            const layout = calculateOptimalTiling(videos, canvasWidth, canvasHeight)
-
-                            // Create a map of cameras by orientation for lookup
-                            const camerasByOrientation = {
-                                portrait: DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait'),
-                                landscape: DOORBELL_CAMERAS.filter(cam => {
-                                    const orientation = cam.orientation || 'landscape'
-                                    return orientation === 'landscape'
-                                }),
-                                wide: DOORBELL_CAMERAS.filter(cam => cam.orientation === 'wide')
-                            }
-
-                            // Track which camera of each orientation we've used
-                            const usedIndices = {
-                                portrait: 0,
-                                landscape: 0,
-                                wide: 0
-                            }
-
-                            return layout.videos.map((videoLayout, index) => {
-                                const orientation = videoLayout.orientation
-                                const cameraIndex = usedIndices[orientation]
-                                const camera = camerasByOrientation[orientation][cameraIndex]
-                                
-                                if (!camera) {
-                                    return null
-                                }
-
-                                usedIndices[orientation]++
-
-                                // Get access token for this camera entity
-                                const accessToken = accessTokens[camera.entity_id] || null
-                                const hasToken = !!accessToken
-                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config)
-
-                                if (!streamUrl && !hasToken) {
-                                    // No token and no URL - show error CTA
-                                    return (
-                                        <div
-                                            key={`${orientation}-${cameraIndex}-${index}`}
-                                            className="video-container"
-                                            style={{
-                                                left: `${videoLayout.x}px`,
-                                                top: `${videoLayout.y}px`,
-                                                width: `${videoLayout.width}px`,
-                                                height: `${videoLayout.height}px`
-                                            }}
-                                        >
-                                            <div className="token-error">
-                                                {tokensLoading ? (
-                                                    <>
-                                                        <Icon 
-                                                            path={mdiLoading} 
-                                                            size="48px" 
-                                                            color="#ffffff" 
-                                                            className="loading-spinner"
-                                                        />
-                                                        <div>Lade Token...</div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
-                                                        <button onClick={() => refreshTokens()}>
-                                                            Token neu laden
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                }
-
-                                if (!streamUrl) {
-                                    return null
-                                }
-
-                                return (
-                                    <div
-                                        key={`${orientation}-${cameraIndex}-${index}`}
-                                        className="video-container"
-                                        style={{
-                                            left: `${videoLayout.x}px`,
-                                            top: `${videoLayout.y}px`,
-                                            width: `${videoLayout.width}px`,
-                                            height: `${videoLayout.height}px`
-                                        }}
-                                    >
-                                        {hasToken && showDoorCams && (
-                                            <img
-                                                ref={(el) => {
-                                                    if (el) {
-                                                        cameraImgRefs.current.set(`${camera.entity_id}-${index}`, el)
-                                                    } else {
-                                                        cameraImgRefs.current.delete(`${camera.entity_id}-${index}`)
-                                                    }
-                                                }}
-                                                src={streamUrl}
-                                                className={orientation}
-                                                alt="Camera stream"
-                                                crossOrigin="anonymous"
-                                                key={`${camera.entity_id}-${index}`}
-                                            />
-                                        )}
-                                        {!hasToken && (
-                                            <div className="token-error">
-                                                {tokensLoading ? (
-                                                    <>
-                                                        <Icon 
-                                                            path={mdiLoading} 
-                                                            size="48px" 
-                                                            color="#ffffff" 
-                                                            className="loading-spinner"
-                                                        />
-                                                        <div>Lade Token...</div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
-                                                        <button onClick={() => refreshTokens()}>
-                                                            Token neu laden
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                        <div 
-                                            className="video-overlay"
-                                            onClick={() => openDoor()}
-                                        />
-                                    </div>
-                                )
-                            })
-                        })()}
+                        <CameraGrid
+                            cameras={DOORBELL_CAMERAS}
+                            accessTokens={accessTokens}
+                            tokensLoading={tokensLoading}
+                            tokensError={tokensError}
+                            refreshTokens={refreshTokens}
+                            showDoorCams={showDoorCams}
+                            cameraImgRefs={cameraImgRefs}
+                            openDoor={openDoor}
+                            config={config}
+                        />
                     </div>    
                     {confirmationState === 'confirm' && (
                         <div className='open-door confirm'>

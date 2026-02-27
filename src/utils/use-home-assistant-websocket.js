@@ -3,6 +3,7 @@ import { useConfig } from './ConfigProvider'
 import { isDevelopment, buildWebSocketUrl } from './config'
 import logger from './logger'
 import { useConnectionStateContext } from './ConnectionStateProvider'
+import { WS_HEARTBEAT_INTERVAL, WS_HEARTBEAT_TIMEOUT, WS_PERIODIC_RETRY_INTERVAL, WS_RECONNECT_DEBOUNCE } from './constants'
 
 /**
  * Reusable hook for Home Assistant WebSocket connections using custom FastAPI protocol
@@ -213,8 +214,8 @@ export function useHomeAssistantWebSocket({
           heartbeatTimeoutRef.current = setTimeout(() => {
             logger.warn(`${logPrefix} heartbeat timeout — closing stale connection`)
             try { connection.close(4000, 'heartbeat timeout') } catch {}
-          }, 10000)
-        }, 30000)
+          }, WS_HEARTBEAT_TIMEOUT)
+        }, WS_HEARTBEAT_INTERVAL)
       }
 
       // Handle messages
@@ -277,7 +278,7 @@ export function useHomeAssistantWebSocket({
           // and we've tried multiple times, stop aggressive reconnecting but set up periodic retry
           const neverOpened = !event.wasClean && (event.code === 1006 || reconnectAttemptsRef.current > 0)
           if (neverOpened && reconnectAttemptsRef.current >= 5 && !stoppedReconnectingRef.current) {
-            logger.warn(`Backend appears to be down for ${logPrefix} (${reconnectAttemptsRef.current} failed attempts), switching to periodic retry every 60s`)
+            logger.warn(`Backend appears to be down for ${logPrefix} (${reconnectAttemptsRef.current} failed attempts), switching to periodic retry every ${WS_PERIODIC_RETRY_INTERVAL / 1000}s`)
             stoppedReconnectingRef.current = true
             if (isMountedRef.current) {
               setError('Backend nicht erreichbar. Wiederherstellungsversuche alle 60 Sekunden.')
@@ -292,7 +293,7 @@ export function useHomeAssistantWebSocket({
                   // Schedule next retry
                   schedulePeriodicRetry()
                 }
-              }, 60000) // 60 seconds
+              }, WS_PERIODIC_RETRY_INTERVAL)
             }
             schedulePeriodicRetry()
             return
@@ -472,7 +473,7 @@ export function useHomeAssistantWebSocket({
           }
           connect()
         }
-      }, 1000) // 1 second debounce when connection state changes
+      }, WS_RECONNECT_DEBOUNCE)
     }
   }, [enabled, isConnected, connect, logPrefix])
 

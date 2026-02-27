@@ -7,12 +7,8 @@ import TilingDemo from './components/tiling-demo'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import './fonts/fonts.css'
-// Periodic page reload disabled — connection resilience improvements (ping/pong,
-// state refetch on reconnect) should keep the dashboard fresh without full reloads.
-// Re-enable if stale-data issues reappear.
-// import useReload from './utils/use-reload'
 import ErrorBoundary from './components/ErrorBoundary'
-import ConfigStatusBanner from './components/ConfigStatusBanner'
+import ConfigStatusBanner, { DISMISSED_STORAGE_KEY } from './components/ConfigStatusBanner'
 import { useConfigError, useIsUsingCachedConfig, useConfigLoading } from './utils/ConfigProvider'
 
 const GlobalStyle = createGlobalStyle`
@@ -57,16 +53,14 @@ const Div = styled.div`
 `
 
 function MainApp() {
-  // useReload()
   const configError = useConfigError()
   const isUsingCachedConfig = useIsUsingCachedConfig()
   const loading = useConfigLoading()
   
-  // Check if banner was dismissed (same logic as ConfigStatusBanner)
   const [dismissed] = React.useState(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        return window.localStorage.getItem('hass-family-calendar-config-banner-dismissed') === 'true'
+        return localStorage.getItem(DISMISSED_STORAGE_KEY) === 'true'
       }
     } catch (e) {
       // Ignore errors

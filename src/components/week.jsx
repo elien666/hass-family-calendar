@@ -141,11 +141,6 @@ const Week = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
-  // Debug logging
-  React.useEffect(() => {
-    console.log('Week component - startDate:', startDate?.toISO(), 'data length:', data.length, 'error:', error)
-  }, [startDate, data.length, error])
-
   const swipeHandlers = useSwipe({
     onSwipedLeft: () => nextWeek(),
     onSwipedRight: () => previousWeek()
@@ -177,7 +172,6 @@ const Week = () => {
             <div key={index} className={clsx('allDayRow', { weekend: isWeekend(day.date), today: isToday(day.date) })}>
               {day.allDay.map((event, eventIndex) => (
                 <div key={eventIndex} className={'allDayEvent'}>
-                  {/*event.icon && <Icon path={event.icon} size={'1rem'} color="#ffffff"/>*/}
                   {event.summary}
                 </div>
               ))}

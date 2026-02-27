@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
 import { useConfigError, useIsUsingCachedConfig, useReloadConfig, useConfigLoading } from '../utils/ConfigProvider'
 
-const DISMISSED_STORAGE_KEY = 'hass-family-calendar-config-banner-dismissed'
+export const DISMISSED_STORAGE_KEY = 'hass-family-calendar-config-banner-dismissed'
 
 const Banner = styled.div`
   position: fixed;
