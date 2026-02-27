@@ -605,44 +605,66 @@ async def client_websocket(websocket: WebSocket):
     try:
         while True:
             try:
-                # Receive message from client
-                message = await websocket.receive()
-                
+                # Receive message from client with timeout.
+                # If no message arrives within 90s, send a server-initiated ping
+                # to detect dead connections (half-open TCP).
+                try:
+                    message = await asyncio.wait_for(websocket.receive(), timeout=90.0)
+                except asyncio.TimeoutError:
+                    # Client hasn't sent anything for 90s — probe with a ping
+                    try:
+                        await websocket.send_text(json.dumps({"type": "ping"}))
+                        probe = await asyncio.wait_for(websocket.receive(), timeout=10.0)
+                        # Client responded, extract and process the response
+                        probe_text = probe.get("text") if isinstance(probe, dict) else None
+                        if probe_text:
+                            try:
+                                probe_data = json.loads(probe_text)
+                                if probe_data.get("type") == "pong":
+                                    continue  # Client is alive, resume loop
+                            except json.JSONDecodeError:
+                                pass
+                        # Got a response but not a pong — treat as a regular message
+                        message = probe
+                    except (asyncio.TimeoutError, WebSocketDisconnect, RuntimeError):
+                        logger.debug("Client unresponsive after server ping, closing connection")
+                        break
+
                 # Extract message text
                 message_text = None
                 if isinstance(message, dict):
                     message_text = message.get("text")
                 elif hasattr(message, "text") and message.text:
                     message_text = message.text
-                
+
                 if not message_text:
                     continue
-                
+
                 # Parse JSON
                 try:
                     data = json.loads(message_text)
                 except json.JSONDecodeError:
                     await send_to_client({"type": "error", "message": "Invalid JSON"})
                     continue
-                
+
                 if not isinstance(data, dict) or "type" not in data:
                     await send_to_client({"type": "error", "message": "Invalid message format"})
                     continue
-                
+
                 msg_type = data.get("type")
-                
+
                 # Handle subscribe_entity
                 if msg_type == "subscribe_entity":
                     entity_id = data.get("entity_id")
                     if not entity_id or not _is_valid_entity_id(entity_id):
                         await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
-                    
+
                     # Create callback for this client
                     callback = create_state_callback()
                     websocket_manager.subscribe_client(entity_id, callback)
                     client_subscriptions[entity_id] = callback
-                    
+
                     # Send current state if available
                     state = websocket_manager.get_state(entity_id)
                     if state:
@@ -658,14 +680,14 @@ async def client_websocket(websocket: WebSocket):
                             "entity_id": entity_id,
                             "message": "Subscribed, waiting for state update"
                         })
-                
+
                 # Handle get_state
                 elif msg_type == "get_state":
                     entity_id = data.get("entity_id")
                     if not entity_id or not _is_valid_entity_id(entity_id):
                         await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
-                    
+
                     state = websocket_manager.get_state(entity_id)
                     if state:
                         await send_to_client({
@@ -679,14 +701,14 @@ async def client_websocket(websocket: WebSocket):
                             "type": "error",
                             "message": f"State not available for {entity_id}"
                         })
-                
+
                 # Handle get_states
                 elif msg_type == "get_states":
                     entity_ids = data.get("entity_ids", [])
                     if not isinstance(entity_ids, list):
                         await send_to_client({"type": "error", "message": "entity_ids must be a list"})
                         continue
-                    
+
                     states = {}
                     for entity_id in entity_ids:
                         if not _is_valid_entity_id(entity_id):
@@ -697,19 +719,19 @@ async def client_websocket(websocket: WebSocket):
                                 "state": state.get("state"),
                                 "attributes": state.get("attributes", {})
                             }
-                    
+
                     await send_to_client({
                         "type": "states_response",
                         "states": states
                     })
-                
+
                 # Handle unsubscribe_entity
                 elif msg_type == "unsubscribe_entity":
                     entity_id = data.get("entity_id")
                     if not entity_id or not _is_valid_entity_id(entity_id):
                         await send_to_client({"type": "error", "message": "Missing or invalid entity_id (expected format: domain.object_id)"})
                         continue
-                    
+
                     if entity_id in client_subscriptions:
                         callback = client_subscriptions[entity_id]
                         websocket_manager.unsubscribe_client(entity_id, callback)
@@ -723,14 +745,18 @@ async def client_websocket(websocket: WebSocket):
                             "type": "error",
                             "message": f"Not subscribed to {entity_id}"
                         })
-                
+
                 # Handle application-level ping (frontend heartbeat)
                 elif msg_type == "ping":
                     await send_to_client({"type": "pong"})
 
+                # Handle pong (response to server-initiated ping)
+                elif msg_type == "pong":
+                    pass  # Client is alive, nothing to do
+
                 else:
                     await send_to_client({"type": "error", "message": f"Unknown message type: {msg_type}"})
-            
+
             except WebSocketDisconnect:
                 logger.debug("Client disconnected normally")
                 break

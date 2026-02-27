@@ -3,10 +3,16 @@ import axios from 'axios'
 import { buildHaUrl } from './config'
 import { formatErrorForUI } from './axios-error-handler'
 import { useConnectionStateContext } from './ConnectionStateProvider'
+import logger from './logger'
+
+const MAX_FETCH_ATTEMPTS = 3
+const isRetryableError = (err) =>
+  err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || err.message?.includes('timeout')
 
 /**
- * Fetch a single HA entity state via REST API with proper cleanup.
+ * Fetch a single HA entity state via REST API with retry and proper cleanup.
  * Automatically refetches when the backend connection is restored after a disconnect.
+ * Retries up to 3 times with exponential backoff for transient network errors.
  *
  * @param {Object} options
  * @param {string} options.entityId - HA entity ID (e.g. "cover.garage_door")
@@ -49,18 +55,32 @@ const useFetchEntityState = ({
     let isMounted = true
     const abortController = new AbortController()
 
-    axios(url, { signal: abortController.signal })
-      .then((response) => {
-        if (isMounted) {
-          setState(extractState(response))
-          setError(false)
+    const fetchWithRetry = async () => {
+      for (let attempt = 0; attempt < MAX_FETCH_ATTEMPTS; attempt++) {
+        try {
+          const response = await axios(url, { signal: abortController.signal })
+          if (isMounted) {
+            setState(extractState(response))
+            setError(false)
+          }
+          return
+        } catch (err) {
+          if (abortController.signal.aborted) return
+          if (isRetryableError(err) && attempt < MAX_FETCH_ATTEMPTS - 1) {
+            const backoff = 1000 * Math.pow(2, attempt)
+            logger.debug(`Entity fetch failed for ${entityId} (attempt ${attempt + 1}), retrying in ${backoff}ms`)
+            await new Promise(r => setTimeout(r, backoff))
+            continue
+          }
+          if (isMounted) {
+            setError(formatErrorForUI(err))
+          }
+          return
         }
-      })
-      .catch((err) => {
-        if (isMounted && !abortController.signal.aborted) {
-          setError(formatErrorForUI(err))
-        }
-      })
+      }
+    }
+
+    fetchWithRetry()
 
     return () => {
       isMounted = false

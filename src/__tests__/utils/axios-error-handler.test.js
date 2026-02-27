@@ -124,14 +124,14 @@ describe('extractErrorDetails()', () => {
 })
 
 describe('formatErrorForUI()', () => {
-  it('should return empty string for network errors', () => {
+  it('should return network error message for network errors', () => {
     const error = {
       request: { readyState: 0 },
       config: { url: '/api/test' },
       message: 'Network error',
     }
     const msg = formatErrorForUI(error)
-    expect(msg).toBe('')
+    expect(msg).toBe('Netzwerkfehler: Server nicht erreichbar')
   })
 
   it('should return German timeout message', () => {

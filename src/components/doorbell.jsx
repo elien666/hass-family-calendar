@@ -8,6 +8,7 @@ import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
 import { formatErrorForUI } from '../utils/axios-error-handler'
 import { DOORBELL_OVERLAY_TIMEOUT } from '../utils/constants'
+import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
 import CameraGrid from './camera-grid'
 
 const Container = styled.div`
@@ -230,6 +231,22 @@ const Doorbell = () => {
         }
     }, [cameraEntityIds, config])
     
+    // Auto-refresh tokens when backend connection is restored while overlay is open
+    const { isConnected } = useConnectionStateContext()
+    const wasDisconnectedRef = React.useRef(false)
+
+    React.useEffect(() => {
+        if (!isConnected) {
+            wasDisconnectedRef.current = true
+        } else if (wasDisconnectedRef.current) {
+            wasDisconnectedRef.current = false
+            if (showDoorCams && cameraEntityIds.length > 0) {
+                logger.debug('Connection restored while doorbell overlay open — refreshing camera tokens')
+                refreshTokens()
+            }
+        }
+    }, [isConnected, showDoorCams, cameraEntityIds, refreshTokens])
+
     // Refs to track camera img elements so we can stop streams when overlay closes
     const cameraImgRefs = React.useRef(new Map())
 
