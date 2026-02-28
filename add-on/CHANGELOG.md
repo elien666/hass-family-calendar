@@ -1,4 +1,4 @@
-**1.49.2 - 2026-02-28**
+**1.49.3 - 2026-02-28**
 
-- fix: add --app-dir to uvicorn to resolve module import in S6 v3
+- fix: set PYTHONPATH explicitly in S6 run script
 

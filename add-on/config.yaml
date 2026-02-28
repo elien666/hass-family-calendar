@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.49.2"
+version: "1.49.3"
 slug: "family-calendar"
 # Uncomment after first successful GHCR image push to use pre-built images:
 # image: "ghcr.io/elien666/family-calendar/{arch}"
