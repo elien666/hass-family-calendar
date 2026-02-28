@@ -1,4 +1,4 @@
-**1.49.6 - 2026-02-28**
+**1.49.7 - 2026-02-28**
 
-- fix: add nameservice abstraction to AppArmor for DNS resolution
+- fix: restore BUILD_FROM default value in Dockerfile
 
