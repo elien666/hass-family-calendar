@@ -7,6 +7,9 @@ profile family-calendar flags=(attach_disconnected,mediate_deleted) {
   capability net_bind_service,
   capability setgid,
   capability setuid,
+  capability dac_override,
+  capability fowner,
+  capability chown,
 
   # Network access (FastAPI server, outbound HTTP/WebSocket calls)
   network inet stream,
@@ -21,9 +24,8 @@ profile family-calendar flags=(attach_disconnected,mediate_deleted) {
   /usr/bin/** ix,
   /usr/lib/bashio/** ix,
   /etc/s6-overlay/** r,
-  /run/s6/** rwix,
-  /run/s6-rc* rwix,
-  /run/service/** rwix,
+  /run/ rw,
+  /run/** rwkix,
   /command/** rix,
   /package/** rix,
 
