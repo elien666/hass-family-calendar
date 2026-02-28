@@ -4,7 +4,5 @@
 # ==============================================================================
 bashio::log.info "Starting Family Calendar backend..."
 cd /app || bashio::exit.nok "Could not change to /app directory"
-exec python3 -m uvicorn backend.main:app \
-    --host 0.0.0.0 \
-    --port 80 \
-    --app-dir /app
+export PYTHONPATH="/app"
+exec python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 80
