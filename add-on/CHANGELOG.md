@@ -1,4 +1,4 @@
-**1.49.7 - 2026-02-28**
+**1.49.8 - 2026-02-28**
 
-- fix: restore BUILD_FROM default value in Dockerfile
+- fix: drop i386 architecture support
 
