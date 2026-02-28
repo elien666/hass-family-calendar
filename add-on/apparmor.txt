@@ -2,6 +2,7 @@
 
 profile family-calendar flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
+  #include <abstractions/nameservice>
 
   # Capabilities
   capability net_bind_service,
