@@ -1,4 +1,4 @@
-**1.49.8 - 2026-02-28**
+**1.49.9 - 2026-02-28**
 
-- fix: drop i386 architecture support
+- fix: drop armhf and armv7 architecture support
 
