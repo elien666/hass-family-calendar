@@ -1,0 +1,57 @@
+#include <tunables/global>
+
+profile family-calendar flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Capabilities
+  capability net_bind_service,
+  capability setgid,
+  capability setuid,
+
+  # Network access (FastAPI server, outbound HTTP/WebSocket calls)
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+  network netlink raw,
+
+  # S6-overlay v3
+  /init rix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /usr/lib/bashio/** ix,
+  /etc/s6-overlay/** r,
+  /run/s6/** rwix,
+  /run/s6-rc* rwix,
+  /run/service/** rwix,
+  /command/** rix,
+  /package/** rix,
+
+  # Add-on data (options.json, persistent storage)
+  /data/** rw,
+
+  # Application code
+  /app/** r,
+
+  # Static frontend files
+  /usr/local/apache2/htdocs/** r,
+
+  # Python runtime
+  /usr/bin/python3* rix,
+  /usr/lib/python3*/** r,
+  /usr/lib/python3*/lib-dynload/** mr,
+  /usr/lib/python3*/site-packages/** r,
+  /usr/lib/python3*/site-packages/**/*.so mr,
+
+  # Temporary files (Python, uvicorn)
+  /tmp/** rwk,
+
+  # Proc filesystem (process info)
+  /proc/*/status r,
+  /proc/*/fd/ r,
+  /proc/sys/net/** r,
+
+  # Device info
+  /dev/null rw,
+  /dev/urandom r,
+}

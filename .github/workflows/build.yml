@@ -62,6 +62,56 @@ jobs:
       - name: Run frontend tests
         run: pnpm test
 
+      - name: Validate add-on YAML files
+        run: |
+          pip install pyyaml
+          python3 -c "
+          import yaml, sys
+          files = [
+              'add-on/config.yaml',
+              'add-on/build.yaml',
+              'add-on/translations/en.yaml',
+              'add-on/translations/de.yaml',
+          ]
+          failed = False
+          for f in files:
+              try:
+                  with open(f) as fh:
+                      yaml.safe_load(fh)
+                  print(f'{f}: OK')
+              except Exception as e:
+                  print(f'{f}: FAILED - {e}')
+                  failed = True
+          if failed:
+              sys.exit(1)
+          "
+
+      - name: Validate S6-overlay structure
+        run: |
+          ERRORS=0
+          check_file() {
+            if [ ! -f "$1" ]; then
+              echo "MISSING: $1"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "OK: $1"
+            fi
+          }
+          check_file "add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/run"
+          check_file "add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/type"
+          check_file "add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/finish"
+          check_file "add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/dependencies.d/base"
+          check_file "add-on/rootfs/etc/s6-overlay/s6-rc.d/user/contents.d/family-calendar"
+          grep -q "longrun" add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/type || { echo "FAIL: type must contain 'longrun'"; ERRORS=$((ERRORS + 1)); }
+          test -x add-on/rootfs/etc/s6-overlay/s6-rc.d/family-calendar/run || { echo "FAIL: run must be executable"; ERRORS=$((ERRORS + 1)); }
+          if [ $ERRORS -gt 0 ]; then echo "$ERRORS error(s) found"; exit 1; fi
+          echo "S6-overlay structure: OK"
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: add-on/Dockerfile
+
   # Job 1: Build check for PRs to main - validate and write back to PR branch
   build-check:
     runs-on: ubuntu-latest
@@ -109,66 +159,78 @@ jobs:
         id: calculate-version
         shell: bash
         run: |
+          # Semantic Versioning: MAJOR.MINOR.PATCH
+          # Supports both legacy vX.Y tags and new vX.Y.Z tags
+
           # Load major version from repo
-          # First, try to read from VERSION file if it exists
           MAJOR_VERSION=""
           if [ -f "VERSION" ]; then
-            # Read VERSION file and extract first number (handles "2", "v2", "2.0", etc.)
             VERSION_CONTENT=$(cat VERSION | tr -d ' \n')
             MAJOR_VERSION=$(echo "$VERSION_CONTENT" | sed 's/^v*\([0-9]*\).*/\1/' | grep -oE '^[0-9]+' || echo "")
           fi
-          
+
           # If no VERSION file or empty, get major version from latest tag
           if [ -z "$MAJOR_VERSION" ] || [ "$MAJOR_VERSION" = "0" ]; then
-            # Get all tags matching vX.Y pattern
-            LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -1 || echo "")
-            
+            # Match both vX.Y and vX.Y.Z tag formats
+            LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -1 || echo "")
+
             if [ -n "$LATEST_TAG" ]; then
-              # Extract major version from latest tag (e.g., v2.3 -> 2)
-              MAJOR_VERSION=$(echo "$LATEST_TAG" | sed 's/^v\([0-9]*\)\.[0-9]*$/\1/')
+              MAJOR_VERSION=$(echo "$LATEST_TAG" | sed 's/^v\([0-9]*\)\..*/\1/')
             else
-              # No tags exist, default to major version 1
               MAJOR_VERSION="1"
             fi
           fi
-          
+
           # Ensure MAJOR_VERSION is a valid number
           if ! echo "$MAJOR_VERSION" | grep -qE '^[0-9]+$'; then
             echo "Invalid major version: $MAJOR_VERSION, defaulting to 1"
             MAJOR_VERSION="1"
           fi
-          
+
           echo "Major version: $MAJOR_VERSION"
-          
-          # Find highest minor version for this major version
-          # Get all tags matching v{MAJOR}.* pattern
-          TAGS_FOR_MAJOR=$(git tag --sort=-version:refname | grep -E "^v${MAJOR_VERSION}\.[0-9]+$" || echo "")
-          
+
+          # Find highest existing version for this major version
+          # Match both vX.Y and vX.Y.Z tag formats
+          TAGS_FOR_MAJOR=$(git tag --sort=-version:refname | grep -E "^v${MAJOR_VERSION}\.[0-9]+(\.[0-9]+)?$" || echo "")
+
           MINOR_VERSION=0
+          PATCH_VERSION=0
           if [ -n "$TAGS_FOR_MAJOR" ]; then
-            # Get the highest minor version
             HIGHEST_TAG=$(echo "$TAGS_FOR_MAJOR" | head -1)
-            # Extract minor version (e.g., v2.3 -> 3)
-            MINOR_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.\([0-9]*\)$/\1/')
-            # Ensure it's a valid number before incrementing
-            if echo "$MINOR_VERSION" | grep -qE '^[0-9]+$'; then
-              # Increment minor version
-              MINOR_VERSION=$((MINOR_VERSION + 1))
+
+            # Check if tag has patch version (vX.Y.Z vs vX.Y)
+            if echo "$HIGHEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              # Three-part tag: extract minor and patch, increment patch
+              MINOR_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.\([0-9]*\)\.[0-9]*$/\1/')
+              PATCH_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.[0-9]*\.\([0-9]*\)$/\1/')
+              if echo "$PATCH_VERSION" | grep -qE '^[0-9]+$'; then
+                PATCH_VERSION=$((PATCH_VERSION + 1))
+              else
+                PATCH_VERSION=0
+              fi
             else
-              MINOR_VERSION=0
+              # Two-part legacy tag: increment minor, start patch at 0
+              MINOR_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.\([0-9]*\)$/\1/')
+              if echo "$MINOR_VERSION" | grep -qE '^[0-9]+$'; then
+                MINOR_VERSION=$((MINOR_VERSION + 1))
+              else
+                MINOR_VERSION=0
+              fi
+              PATCH_VERSION=0
             fi
           fi
-          
-          # Construct new version
-          NEW_VERSION="${MAJOR_VERSION}.${MINOR_VERSION}"
+
+          # Construct new semantic version
+          NEW_VERSION="${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}"
           TAG_NAME="v${NEW_VERSION}"
-          
+
           echo "New version: $NEW_VERSION"
           echo "Tag name: $TAG_NAME"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "major_version=$MAJOR_VERSION" >> $GITHUB_OUTPUT
           echo "minor_version=$MINOR_VERSION" >> $GITHUB_OUTPUT
+          echo "patch_version=$PATCH_VERSION" >> $GITHUB_OUTPUT
 
       - name: Update version in config.yaml
         id: update-version
@@ -203,8 +265,8 @@ jobs:
           TAG_NAME="${{ steps.update-version.outputs.tag_name }}"
           
           # Get commits between the previous tag and HEAD
-          # Find the latest existing tag (previous release) by getting all tags matching vX.Y pattern
-          ALL_TAGS=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+$' || echo "")
+          # Find the latest existing tag (previous release) matching vX.Y or vX.Y.Z
+          ALL_TAGS=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' || echo "")
           PREVIOUS_TAG=""
           
           if [ -n "$ALL_TAGS" ]; then
@@ -388,3 +450,65 @@ jobs:
             --target main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 3: Build and push Docker images to GHCR after release
+  publish-images:
+    runs-on: ubuntu-latest
+    needs: release
+    if: always() && needs.release.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        arch: [aarch64, amd64, armhf, armv7, i386]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Read version from config.yaml
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Read base image for architecture
+        id: base
+        shell: bash
+        run: |
+          pip install pyyaml
+          BASE=$(python3 -c "
+          import yaml
+          with open('add-on/build.yaml') as f:
+              data = yaml.safe_load(f)
+          print(data['build_from']['${{ matrix.arch }}'])
+          ")
+          echo "base_image=$BASE" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: add-on
+          file: add-on/Dockerfile
+          push: true
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.base_image }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/family-calendar/${{ matrix.arch }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/family-calendar/${{ matrix.arch }}:latest

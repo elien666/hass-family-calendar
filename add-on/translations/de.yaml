@@ -1,0 +1,86 @@
+---
+configuration:
+  weather:
+    name: Wetter
+    description: Konfiguration der Wettervorhersage.
+    fields:
+      enabled:
+        name: Aktiviert
+      weather_api_key:
+        name: Pirate Weather API-Schlüssel
+      weather_latitude:
+        name: Breitengrad
+      weather_longitude:
+        name: Längengrad
+  hvv:
+    name: HVV
+    description: Konfiguration der HVV-Abfahrten.
+    fields:
+      enabled:
+        name: Aktiviert
+      geofox_user:
+        name: Geofox Benutzer
+      geofox_secret:
+        name: Geofox Geheimschlüssel
+  garage:
+    name: Garage
+    description: Konfiguration des Garagentors.
+    fields:
+      enabled:
+        name: Aktiviert
+      entity_garage_door:
+        name: Garagentor-Entität
+      entity_garage_door_control:
+        name: Garagentor-Steuerungs-Entität
+  laundry:
+    name: Wäsche
+    description: Konfiguration der Waschmaschinen.
+    fields:
+      enabled:
+        name: Aktiviert
+      machines:
+        name: Maschinen
+        description: Liste der zu überwachenden Waschmaschinen
+  doorbell:
+    name: Türklingel
+    description: Konfiguration der Türklingel und Kameras.
+    fields:
+      enabled:
+        name: Aktiviert
+      entity_doorbell:
+        name: Türklingel-Entität
+      entity_doorbell_button:
+        name: Türöffner-Entität
+      cameras:
+        name: Kameras
+        description: Liste der anzuzeigenden Kameras
+  everyday_calendar:
+    name: Alltagskalender
+    description: Konfiguration des Alltagskalenders.
+    fields:
+      enabled:
+        name: Aktiviert
+      entity_everyday_calendar:
+        name: Alltagskalender-Entität
+  ev:
+    name: Elektrofahrzeug
+    description: Konfiguration des Elektrofahrzeugs.
+    fields:
+      enabled:
+        name: Aktiviert
+      entity_preclimate_status:
+        name: Vorklimatisierung Status-Entität
+      entity_preclimate_start:
+        name: Vorklimatisierung Start-Entität
+      entity_preclimate_stop:
+        name: Vorklimatisierung Stop-Entität
+      entity_charging_state:
+        name: Ladezustand-Entität
+      entity_state_of_charge:
+        name: Akkustand-Entität
+  calendars:
+    name: Kalender
+    description: Liste der anzuzeigenden Kalender-Entitäten.
+  go2rtc_base_url:
+    name: Go2RTC Basis-URL
+    description: Basis-URL für die Go2RTC Kamerastreams. Falls eine Authentifizierung erforderlich ist, den Token in den URL-Pfad einbetten (z.B. https://domain.com/streams/token).

@@ -1,5 +1,5 @@
 ARG BUILD_FROM
-FROM ${BUILD_FROM:-homeassistant/amd64-base:latest}
+FROM ${BUILD_FROM}
 
 # Install Python 3 and pip
 # Note: bashio is already available in the Home Assistant base image
@@ -23,9 +23,5 @@ RUN pip3 install --no-cache-dir --break-system-packages -r backend/requirements.
 # Set permissions
 RUN chmod -R a+r /usr/local/apache2/htdocs
 
-# Create s6 service to run FastAPI
-RUN mkdir -p /etc/services.d/app && \
-    echo '#!/command/with-contenv bash' > /etc/services.d/app/run && \
-    echo 'cd /app' >> /etc/services.d/app/run && \
-    echo 'exec python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 80' >> /etc/services.d/app/run && \
-    chmod +x /etc/services.d/app/run
+# Copy rootfs overlay (S6-overlay v3 service definitions)
+COPY rootfs /
