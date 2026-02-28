@@ -1,9 +1,8 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.49.9"
+version: "1.49.10"
 slug: "family-calendar"
-# Uncomment after first successful GHCR image push to use pre-built images:
-# image: "ghcr.io/elien666/family-calendar/{arch}"
+image: "ghcr.io/elien666/family-calendar/{arch}"
 init: false
 watchdog: "http://[HOST]:[PORT:80]/health"
 arch:
