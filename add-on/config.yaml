@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.49.7"
+version: "1.49.8"
 slug: "family-calendar"
 # Uncomment after first successful GHCR image push to use pre-built images:
 # image: "ghcr.io/elien666/family-calendar/{arch}"
@@ -11,7 +11,6 @@ arch:
   - amd64
   - armhf
   - armv7
-  - i386
 ingress: true
 ingress_port: 80
 panel_icon: mdi:calendar-week
