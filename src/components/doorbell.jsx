@@ -7,7 +7,7 @@ import { useConfig } from '../utils/ConfigProvider'
 import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
 import { formatErrorForUI } from '../utils/axios-error-handler'
-import { DOORBELL_OVERLAY_TIMEOUT } from '../utils/constants'
+import { DOORBELL_OVERLAY_TIMEOUT, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
 import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
 import CameraGrid from './camera-grid'
 
@@ -188,49 +188,79 @@ const Doorbell = () => {
     const [tokensLoading, setTokensLoading] = React.useState(false)
     const [tokensError, setTokensError] = React.useState(null)
 
-    // Fetch tokens when modal opens
+    // Stable ref for config so effects don't re-run on config reload
+    const configRef = React.useRef(config)
+    React.useEffect(() => { configRef.current = config }, [config])
+
+    // AbortController ref for manual refresh (persists across re-renders)
+    const refreshAbortRef = React.useRef(null)
+
+    // Fetch tokens when modal opens (with abort cleanup)
     React.useEffect(() => {
         if (showDoorCams && cameraEntityIds.length > 0) {
+            const abortController = new AbortController()
             setTokensLoading(true)
             setTokensError(null)
-            
-            fetchCameraAccessTokens(cameraEntityIds, config)
+
+            fetchCameraAccessTokens(cameraEntityIds, configRef.current, abortController.signal)
                 .then(({ tokens, error }) => {
-                    setAccessTokens(tokens)
-                    setTokensError(error)
-                    setTokensLoading(false)
+                    if (!abortController.signal.aborted) {
+                        setAccessTokens(tokens)
+                        setTokensError(error)
+                        setTokensLoading(false)
+                    }
                 })
                 .catch((err) => {
-                    logger.error('Failed to fetch camera tokens:', err)
-                    setTokensError(formatErrorForUI(err))
-                    setTokensLoading(false)
+                    if (!abortController.signal.aborted) {
+                        logger.error('Failed to fetch camera tokens:', err)
+                        setTokensError(formatErrorForUI(err))
+                        setTokensLoading(false)
+                    }
                 })
+
+            return () => { abortController.abort() }
         } else if (!showDoorCams) {
             // Clear tokens when modal closes
             setAccessTokens({})
             setTokensError(null)
+            // Cancel any pending manual refresh
+            refreshAbortRef.current?.abort()
         }
-    }, [showDoorCams, cameraEntityIds.join(','), config])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showDoorCams, cameraEntityIds.join(',')])
 
-    // Manual refresh function
+    // Manual refresh function (cancels previous pending refresh)
     const refreshTokens = React.useCallback(async () => {
         if (cameraEntityIds.length === 0) return
-        
+
+        // Cancel previous refresh if still running
+        refreshAbortRef.current?.abort()
+        const abortController = new AbortController()
+        refreshAbortRef.current = abortController
+
         setTokensLoading(true)
         setTokensError(null)
-        
+
         try {
-            const { tokens, error } = await fetchCameraAccessTokens(cameraEntityIds, config)
-            setAccessTokens(tokens)
-            setTokensError(error)
+            const { tokens, error } = await fetchCameraAccessTokens(
+                cameraEntityIds, configRef.current, abortController.signal
+            )
+            if (!abortController.signal.aborted) {
+                setAccessTokens(tokens)
+                setTokensError(error)
+            }
         } catch (err) {
-            logger.error('Failed to refresh camera tokens:', err)
-            setTokensError(formatErrorForUI(err))
+            if (!abortController.signal.aborted) {
+                logger.error('Failed to refresh camera tokens:', err)
+                setTokensError(formatErrorForUI(err))
+            }
         } finally {
-            setTokensLoading(false)
+            if (!abortController.signal.aborted) {
+                setTokensLoading(false)
+            }
         }
-    }, [cameraEntityIds, config])
-    
+    }, [cameraEntityIds])
+
     // Auto-refresh tokens when backend connection is restored while overlay is open
     const { isConnected } = useConnectionStateContext()
     const wasDisconnectedRef = React.useRef(false)
@@ -246,6 +276,18 @@ const Doorbell = () => {
             }
         }
     }, [isConnected, showDoorCams, cameraEntityIds, refreshTokens])
+
+    // Periodic token refresh while overlay is open (prevents stale tokens)
+    React.useEffect(() => {
+        if (!showDoorCams || cameraEntityIds.length === 0) return
+
+        const intervalId = setInterval(() => {
+            logger.debug('Periodic camera token refresh')
+            refreshTokens()
+        }, CAMERA_TOKEN_REFRESH_INTERVAL)
+
+        return () => clearInterval(intervalId)
+    }, [showDoorCams, cameraEntityIds, refreshTokens])
 
     // Refs to track camera img elements so we can stop streams when overlay closes
     const cameraImgRefs = React.useRef(new Map())

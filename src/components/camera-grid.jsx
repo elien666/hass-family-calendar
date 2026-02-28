@@ -19,7 +19,7 @@ const TokenError = ({ tokensLoading, tokensError, refreshTokens }) => (
     ) : (
       <>
         <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
-        <button onClick={refreshTokens}>
+        <button onClick={(e) => { e.stopPropagation(); refreshTokens() }}>
           Token neu laden
         </button>
       </>
