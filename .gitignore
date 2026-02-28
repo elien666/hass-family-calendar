@@ -40,3 +40,6 @@ __pycache__/
 
 # Temp files
 _tmp_*
+
+# Claude Code
+.claude/

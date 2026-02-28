@@ -186,6 +186,23 @@ if not os.environ.get("SUPERVISOR_TOKEN"):
         allow_headers=["*"],
     )
 
+# Ingress IP restriction - only allow requests from HA Supervisor proxy in production
+# The Supervisor proxy always connects from 172.30.32.2
+SUPERVISOR_PROXY_IP = "172.30.32.2"
+
+
+@app.middleware("http")
+async def restrict_ingress_ip(request: Request, call_next):
+    # Only enforce in HA mode (when SUPERVISOR_TOKEN is set)
+    if os.environ.get("SUPERVISOR_TOKEN"):
+        client_ip = request.client.host if request.client else None
+        # Allow health checks from any IP (Supervisor watchdog may use different IP)
+        if request.url.path != "/health" and client_ip != SUPERVISOR_PROXY_IP:
+            logger.warning(f"Rejected request from {client_ip} to {request.url.path} (only {SUPERVISOR_PROXY_IP} allowed)")
+            return JSONResponse(status_code=403, content={"detail": "Direct access not allowed. Use Home Assistant ingress."})
+    return await call_next(request)
+
+
 # Middleware to add cache headers for static assets
 # This prevents HA cloud/ingress from caching old versions
 class CacheControlMiddleware(BaseHTTPMiddleware):

@@ -7,14 +7,14 @@ import { formatErrorForUI } from './axios-error-handler'
  * Fetch access token for a single camera entity with timeout and retry
  * @param {string} entityId - Camera entity ID
  * @param {object} config - Configuration object
- * @param {AbortController} abortController - AbortController for cancellation
+ * @param {AbortSignal} signal - AbortSignal for cancellation
  * @returns {Promise<{entityId: string, accessToken: string|null}>}
  */
-const fetchSingleToken = async (entityId, config, abortController) => {
+const fetchSingleToken = async (entityId, config, signal) => {
   const url = buildHaUrl(`/api/states/${entityId}`, config)
   const response = await axios(url, {
     timeout: 5000, // 5 second timeout (camera entities can be slow)
-    signal: abortController.signal
+    signal
   })
 
   // Extract access_token from entity attributes
@@ -29,16 +29,19 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
  * Fetch access tokens for camera entities on demand with timeout and retry
  * Returns a map of entity_id -> access_token
  * No caching - always fetches fresh tokens
- * 
- * If a request times out, it will automatically retry once.
- * If both attempts fail, an error is returned.
+ *
+ * @param {string[]} cameraEntityIds - Camera entity IDs to fetch tokens for
+ * @param {object} config - Configuration object
+ * @param {AbortSignal} [signal] - Optional external AbortSignal for cancellation
  */
-export const fetchCameraAccessTokens = async (cameraEntityIds, config) => {
+export const fetchCameraAccessTokens = async (cameraEntityIds, config, signal) => {
   if (!cameraEntityIds || cameraEntityIds.length === 0) {
     return { tokens: {}, error: null }
   }
 
-  const abortController = new AbortController()
+  // Use external signal if provided, otherwise create internal one
+  const internalController = signal ? null : new AbortController()
+  const effectiveSignal = signal || internalController.signal
   const MAX_ATTEMPTS = 3
 
   try {
@@ -48,10 +51,16 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config) => {
 
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         try {
-          const result = await fetchSingleToken(entityId, config, abortController)
+          const result = await fetchSingleToken(entityId, config, effectiveSignal)
           return result
         } catch (err) {
           lastError = err
+
+          // Don't retry if aborted
+          if (effectiveSignal.aborted) {
+            return { entityId, accessToken: null }
+          }
+
           const isRetryable = err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || err.message?.includes('timeout')
 
           if (isRetryable && attempt < MAX_ATTEMPTS - 1) {
@@ -71,7 +80,7 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config) => {
     })
 
     const results = await Promise.all(fetchPromises)
-    
+
     // Build map of entity_id -> access_token
     const tokenMap = {}
     let hasErrors = false
@@ -82,23 +91,23 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config) => {
         hasErrors = true
       }
     })
-    
+
     // If we have some tokens but not all, that's still a partial success
     // If we have no tokens at all, return an error
     if (Object.keys(tokenMap).length === 0 && hasErrors) {
-      return { 
-        tokens: {}, 
-        error: 'Timeout: Kamera-Token konnten nicht geladen werden. Bitte erneut versuchen.' 
+      return {
+        tokens: {},
+        error: 'Timeout: Kamera-Token konnten nicht geladen werden. Bitte erneut versuchen.'
       }
     }
-    
+
     return { tokens: tokenMap, error: null }
   } catch (err) {
     // Cleanup on abort
-    if (abortController.signal.aborted) {
+    if (effectiveSignal.aborted) {
       return { tokens: {}, error: null }
     }
-    
+
     logger.error('Failed to fetch camera access tokens:', err)
     return { tokens: {}, error: formatErrorForUI(err) }
   }

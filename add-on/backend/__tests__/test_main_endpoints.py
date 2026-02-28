@@ -47,6 +47,45 @@ def client(base_config):
             yield tc
 
 
+class TestIngressIPRestriction:
+    """Tests for the ingress IP restriction middleware."""
+
+    def test_allows_all_ips_in_dev_mode(self, client):
+        """Without SUPERVISOR_TOKEN, all IPs should be allowed."""
+        # The default client fixture has SUPERVISOR_TOKEN=""
+        response = client.get("/api/config")
+        assert response.status_code == 200
+
+    def test_blocks_non_supervisor_ip_in_ha_mode(self, base_config):
+        """With SUPERVISOR_TOKEN set, non-supervisor IPs should be blocked."""
+        with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "test-supervisor-token"}, clear=False), \
+             patch("backend.config.get_config", return_value=base_config), \
+             patch("backend.config.clear_cache"), \
+             patch("backend.main.WebSocketStateManager"):
+            from backend.main import app
+            from starlette.testclient import TestClient
+
+            with TestClient(app, raise_server_exceptions=False) as tc:
+                # TestClient connects from 127.0.0.1, which is not the supervisor IP
+                response = tc.get("/api/config")
+                assert response.status_code == 403
+                assert "Direct access not allowed" in response.json()["detail"]
+
+    def test_health_always_accessible(self, base_config):
+        """Health endpoint should be accessible from any IP, even in HA mode."""
+        with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "test-supervisor-token"}, clear=False), \
+             patch("backend.config.get_config", return_value=base_config), \
+             patch("backend.config.clear_cache"), \
+             patch("backend.main.WebSocketStateManager"):
+            from backend.main import app
+            from starlette.testclient import TestClient
+
+            with TestClient(app, raise_server_exceptions=False) as tc:
+                response = tc.get("/health")
+                assert response.status_code == 200
+                assert response.json()["status"] == "ok"
+
+
 class TestHealthEndpoint:
     def test_returns_200(self, client):
         response = client.get("/health")
