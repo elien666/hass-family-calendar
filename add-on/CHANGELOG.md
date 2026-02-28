@@ -1,4 +1,4 @@
-**1.49.1 - 2026-02-28**
+**1.49.2 - 2026-02-28**
 
-- fix: broaden AppArmor profile for S6-overlay init
+- fix: add --app-dir to uvicorn to resolve module import in S6 v3
 
