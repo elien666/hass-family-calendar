@@ -40,8 +40,8 @@ const callApi = async (endPoint, data, signal, config) => {
 
 const byRealtimeOffset = (a, b) => a.realtimeOffset - b.realtimeOffset
 
-const transformData = (data) => {
-  const mapped = data.departures.map((entry) => (
+export const transformData = (data) => {
+  const mapped = (data?.departures ?? []).map((entry) => (
     {
       line: entry.line.name,
       direction: entry.line.direction,
