@@ -461,7 +461,11 @@ jobs:
       packages: write
     strategy:
       matrix:
-        arch: [aarch64, amd64]
+        include:
+          - arch: aarch64
+            platform: linux/arm64
+          - arch: amd64
+            platform: linux/amd64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -506,6 +510,7 @@ jobs:
         with:
           context: add-on
           file: add-on/Dockerfile
+          platforms: ${{ matrix.platform }}
           push: true
           build-args: |
             BUILD_FROM=${{ steps.base.outputs.base_image }}
