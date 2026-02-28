@@ -30,12 +30,15 @@ profile family-calendar flags=(attach_disconnected,mediate_deleted) {
   /package/** rix,
 
   # Add-on data (options.json, persistent storage)
+  /data/ r,
   /data/** rw,
 
   # Application code
+  /app/ r,
   /app/** r,
 
   # Static frontend files
+  /usr/local/apache2/htdocs/ r,
   /usr/local/apache2/htdocs/** r,
 
   # Python runtime

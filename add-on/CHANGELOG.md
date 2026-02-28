@@ -1,4 +1,4 @@
-**1.49.4 - 2026-02-28**
+**1.49.5 - 2026-02-28**
 
-- debug: add diagnostic output to S6 run script
+- fix: allow reading directory listings in AppArmor profile
 

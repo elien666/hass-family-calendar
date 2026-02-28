@@ -5,13 +5,4 @@
 bashio::log.info "Starting Family Calendar backend..."
 cd /app || bashio::exit.nok "Could not change to /app directory"
 export PYTHONPATH="/app"
-
-# Debug: diagnose module import issue
-bashio::log.info "CWD: $(pwd)"
-bashio::log.info "Contents of /app: $(ls -la /app/)"
-bashio::log.info "Contents of /app/backend: $(ls -la /app/backend/ 2>&1)"
-bashio::log.info "PYTHONPATH: ${PYTHONPATH}"
-bashio::log.info "sys.path: $(python3 -c 'import sys; print(sys.path)' 2>&1)"
-bashio::log.info "Can import backend: $(python3 -c 'import backend; print(backend.__file__)' 2>&1)"
-
 exec python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 80
