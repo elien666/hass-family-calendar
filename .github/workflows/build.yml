@@ -9,9 +9,10 @@ on:
       - main
 
 jobs:
-  # Job 0: Run tests (backend + frontend)
+  # Job 0: Run tests (backend + frontend) — only on PRs, not redundantly after merge
   test:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
 
     steps:
       - name: Checkout repository
