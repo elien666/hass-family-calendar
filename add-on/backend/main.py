@@ -546,7 +546,12 @@ async def proxy_api(path: str, request: Request):
     hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
     target_url = f"{hass_api_url.rstrip('/')}/{path}"
 
-    logger.debug(f"Proxying {request.method} request to: {target_url}")
+    # Log camera state requests at INFO level for debugging token fetch issues
+    is_camera_state = path.startswith("states/camera.")
+    if is_camera_state:
+        logger.info(f"Camera state request: {request.method} {target_url}")
+    else:
+        logger.debug(f"Proxying {request.method} request to: {target_url}")
 
     _get_auth_token()  # Validate early
 
@@ -573,7 +578,10 @@ async def proxy_api(path: str, request: Request):
                 follow_redirects=True
             )
 
-            logger.debug(f"Response status: {response.status_code} from {target_url}")
+            if is_camera_state:
+                logger.info(f"Camera state response: {response.status_code} from {target_url} ({len(response.content)} bytes)")
+            else:
+                logger.debug(f"Response status: {response.status_code} from {target_url}")
 
             return Response(
                 content=response.content,
@@ -581,6 +589,8 @@ async def proxy_api(path: str, request: Request):
                 headers=filter_response_headers(response.headers)
             )
     except Exception as e:
+        if is_camera_state:
+            logger.error(f"Camera state request FAILED for {target_url}: {type(e).__name__}: {e}")
         handle_proxy_error(e, "Home Assistant API", target_url)
 
 
