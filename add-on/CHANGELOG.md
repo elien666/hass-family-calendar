@@ -1,5 +1,4 @@
-**1.49.10 - 2026-02-28**
+**1.49.11 - 2026-03-01**
 
-- feat: enable pre-built GHCR container images
-- fix: set Docker platform per architecture in GHCR publish
+- fix: improve camera token fetch diagnostics and retry logic
 
