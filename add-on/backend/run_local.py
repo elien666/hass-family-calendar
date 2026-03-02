@@ -12,19 +12,18 @@ backend_dir = Path(__file__).parent
 addon_dir = backend_dir.parent
 sys.path.insert(0, str(addon_dir))
 
-# Load environment variables from .env file
+# Load environment variables from .env file (only from project root)
 try:
     from dotenv import load_dotenv
-    # Load .env from backend directory or project root
-    env_file = backend_dir / ".env"
-    if not env_file.exists():
-        env_file = backend_dir.parent.parent / ".env"
+    # Load .env only from project root
+    project_root = backend_dir.parent.parent
+    env_file = project_root / ".env"
     if env_file.exists():
         load_dotenv(env_file)
         print(f"Loaded environment variables from {env_file}")
     else:
-        print(f"No .env file found. Create {backend_dir / '.env'} or {backend_dir.parent.parent / '.env'}")
-        print(f"See {backend_dir / 'env.example'} for an example\n")
+        print(f"No .env file found. Create {env_file}")
+        print(f"See {project_root / '.env.example'} for an example\n")
 except ImportError:
     print("Warning: python-dotenv not installed. Install it with: pip install python-dotenv")
     print("Or set environment variables manually\n")

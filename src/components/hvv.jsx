@@ -53,7 +53,6 @@ const Div = styled.div`
 const Departure = memo(({ line, direction, realtimeOffset }) => (
     <div className={'departure'}>
       <div><img src={`https://cloud.geofox.de/icon/linename?name=${line}&outlined=true&fileFormat=SVG&height=14&appearance=COLOURED`} alt={`Linie ${line}`}/></div>
-      {/*<div>{direction}</div>*/}
       <div>
         {realtimeOffset  === 0 ? 'Jetzt' : <>in {realtimeOffset} '</>}
       </div>
@@ -64,12 +63,13 @@ const Hvv = () => {
   const config = useConfig()
   const ENABLE_HVV = config.ENABLE_HVV || false
   
+  // Call all hooks unconditionally (before any early returns)
+  const [data, error] = useHvv(SUPPORTED_CALLS.departureList)
+
   // Don't render if HVV feature is disabled
   if (!ENABLE_HVV) {
     return null
   }
-
-  const [data, error] = useHvv(SUPPORTED_CALLS.departureList)
 
   return (
     <Div>

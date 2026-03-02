@@ -5,6 +5,7 @@ import { WiDaySunny, WiNightClear, WiRain, WiSnow, WiSleet, WiWindy, WiFog, WiCl
 import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import { isDevelopment } from './config'
 
 export const weatherIconToPresentation = {
   'clear-day': { icon: WiDaySunny, label: 'Klar', color: '#eeeef5' },
@@ -27,14 +28,21 @@ const useWeatherData = (toggleLoading) => {
   // Use reactive config hook to get current config values
   const config = useConfig()
   const ENABLE_WEATHER = config.ENABLE_WEATHER || false
-  const WEATHER_API_KEY = config.WEATHER_API_KEY || ''
   const WEATHER_LATITUDE = config.WEATHER_LATITUDE
   const WEATHER_LONGITUDE = config.WEATHER_LONGITUDE
 
-  // Check if weather is configured
-  const isConfigured = ENABLE_WEATHER && WEATHER_API_KEY && WEATHER_LATITUDE && WEATHER_LONGITUDE
+  // Check if weather is configured (API key is handled by backend)
+  const isConfigured = ENABLE_WEATHER && WEATHER_LATITUDE && WEATHER_LONGITUDE
   
-  const url = () => `./forecast/${WEATHER_API_KEY}/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?&units=si&exclude=minutely`
+  const url = () => {
+    const path = `/forecast/${WEATHER_LATITUDE},${WEATHER_LONGITUDE}?units=si&exclude=minutely`
+    // In development mode, use the FastAPI backend proxy
+    if (isDevelopment) {
+      return `http://localhost:8000${path}`
+    }
+    // In production mode, use relative URL (backend handles proxying)
+    return `.${path}`
+  }
 
   React.useEffect(() => {
     // Skip if not configured
@@ -43,21 +51,37 @@ const useWeatherData = (toggleLoading) => {
       return
     }
 
+    let isMounted = true
+    const abortController = new AbortController()
+
     if(toggleLoading) toggleLoading(true)
 
-    axios(url())
+    axios(url(), {
+      signal: abortController.signal
+    })
       .then((response) => {
-        setData(response.data)
-        setError(false)
+        if (isMounted) {
+          setData(response.data)
+          setError(false)
+        }
       })
       .catch((err) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(err))
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(err))
+        }
       })
-      .finally(() => { if(toggleLoading) toggleLoading(false) })
+      .finally(() => { 
+        if (isMounted && toggleLoading) toggleLoading(false) 
+      })
 
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ timer, toggleLoading, isConfigured, ENABLE_WEATHER, WEATHER_API_KEY, WEATHER_LATITUDE, WEATHER_LONGITUDE ])
+  }, [ timer, toggleLoading, isConfigured, ENABLE_WEATHER, WEATHER_LATITUDE, WEATHER_LONGITUDE ])
 
   return [ data, error ]
 }

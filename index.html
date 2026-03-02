@@ -9,9 +9,8 @@
             content="HASS Family Calendar"
     />
     <title>Familienkalender</title>
-    <!-- Load runtime configuration from HA add-on synchronously before app starts -->
-    <!-- In development, this file doesn't exist - app will fall back to environment variables -->
-    <script src="./config.js"></script>
+    <!-- Configuration is loaded via API endpoint /api/config by ConfigProvider -->
+    <!-- No config.js file needed - removed to prevent ServiceWorker errors -->
 </head>
 <body>
 <noscript>You need to enable JavaScript to run this app.</noscript>

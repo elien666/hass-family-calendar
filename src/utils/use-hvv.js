@@ -6,27 +6,42 @@ import useTimeout from './use-timeout'
 import { useConfig } from './ConfigProvider'
 import logger from './logger'
 import { formatErrorForUI } from './axios-error-handler'
+import { buildHaUrl } from './config'
 
 export const SUPPORTED_CALLS = { departureList: 'departureList', checkName: 'checkName' }
 
-// Backend now handles Geofox authentication (signature generation)
-// Frontend just sends the request body
-const callApi = async (endPoint, data) => (
-  axios({
+// Call Geofox API with authentication
+// Always use backend proxy which handles signature generation (secrets stay in backend)
+const callApi = async (endPoint, data, signal, config) => {
+  const headers = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json;charset=UTF-8',
+  }
+  
+  // Include Authorization header if available to satisfy supervisor middleware
+  // This endpoint doesn't require HA auth, but including a token prevents warnings
+  // Note: HASS_ACCESS_TOKEN is only available in local dev mode, not in production
+  const hassToken = config.HASS_ACCESS_TOKEN || ''
+  if (hassToken && hassToken.trim() !== '' && hassToken !== 'undefined' && hassToken !== 'null') {
+    headers['Authorization'] = `Bearer ${hassToken}`
+  }
+  
+  // Always use backend proxy which handles signature generation server-side
+  // This keeps GEOFOX_SECRET secure in the backend
+  const url = buildHaUrl(`/gti/public/${endPoint}`, config)
+  return axios({
     method: 'post',
-    url: `./gti/public/${endPoint}`,
+    url: url,
     data: data,
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json;charset=UTF-8',
-    }
+    signal: signal,
+    headers: headers,
   })
-)
+}
 
 const byRealtimeOffset = (a, b) => a.realtimeOffset - b.realtimeOffset
 
-const transformData = (data) => {
-  const mapped = data.departures.map((entry) => (
+export const transformData = (data) => {
+  const mapped = (data?.departures ?? []).map((entry) => (
     {
       line: entry.line.name,
       direction: entry.line.direction,
@@ -66,6 +81,9 @@ const useHvv = (endPoint) => {
       return
     }
 
+    let isMounted = true
+    const abortController = new AbortController()
+
     let data = { version: 51 }
 
     switch(endPoint) {
@@ -96,20 +114,29 @@ const useHvv = (endPoint) => {
 
     }
 
-    callApi(endPoint, data)
+    callApi(endPoint, data, abortController.signal, config)
       .then((response) => {
-        if (endPoint === SUPPORTED_CALLS.departureList) {
-          set(transformData(response.data))
-        } else {
-          set(response.data)
+        if (isMounted) {
+          if (endPoint === SUPPORTED_CALLS.departureList) {
+            set(transformData(response.data))
+          } else {
+            set(response.data)
+          }
+          setError(false)
         }
-        setError(false)
     })
       .catch((error) => {
-        // Error is already logged by interceptor, format for UI
-        setError(formatErrorForUI(error))
+        // Don't set error if request was aborted or component unmounted
+        if (isMounted && !abortController.signal.aborted) {
+          // Error is already logged by interceptor, format for UI
+          setError(formatErrorForUI(error))
+        }
       })
 
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   }, [endPoint, timeout, isConfigured, ENABLE_HVV])
 
   return [ responseData, error ]

@@ -1,5 +1,6 @@
 import React, { memo } from 'react'
 import styled from 'styled-components'
+import ErrorBoundary from './ErrorBoundary'
 import Weather from './weather'
 import Hvv from './hvv'
 import Ev from './ev'
@@ -50,13 +51,13 @@ const Sidebar = () => {
   return (
     <Div>
       <div className={'top-content'}>
-        <Weather />
-        <Hvv />
-        <Ev />
+        <ErrorBoundary compact><Weather /></ErrorBoundary>
+        <ErrorBoundary compact><Hvv /></ErrorBoundary>
+        <ErrorBoundary compact><Ev /></ErrorBoundary>
       </div>
       <div className={'two-cols'}>
-        <Garage />
-        <Laundry />
+        <ErrorBoundary compact><Garage /></ErrorBoundary>
+        <ErrorBoundary compact><Laundry /></ErrorBoundary>
       </div>
     </Div>
   )

@@ -4,11 +4,12 @@ import Overlay from "./overlay"
 import styled from 'styled-components'
 import ProgressBar from '@ramonak/react-progress-bar'
 import { useConfig } from '../utils/ConfigProvider'
-import { calculateOptimalTiling } from '../utils/video-tiling'
-import { useCameraAccessTokens, buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
-
-// Duration to keep overlay open, afer door ring event stopped
-const DELAY_IN_MS = 45000
+import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
+import logger from '../utils/logger'
+import { formatErrorForUI } from '../utils/axios-error-handler'
+import { DOORBELL_OVERLAY_TIMEOUT, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
+import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
+import CameraGrid from './camera-grid'
 
 const Container = styled.div`
     @keyframes fadeOut {
@@ -78,6 +79,59 @@ const Container = styled.div`
             z-index: 1;
             cursor: pointer;
         }
+
+        .token-error {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            z-index: 2;
+
+            .loading-spinner {
+                animation: spin 1s infinite linear;
+                margin: 1rem 0;
+            }
+
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(359deg);
+                }
+            }
+
+            button {
+                margin-top: 1rem;
+                padding: 0.5rem 1rem;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 8px;
+                color: white;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: background-color 0.2s;
+
+                &:hover {
+                    background-color: rgba(255, 255, 255, 0.3);
+                }
+
+                &:active {
+                    background-color: rgba(255, 255, 255, 0.4);
+                }
+
+                &:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+            }
+        }
     }
 
     .open-door {
@@ -115,35 +169,151 @@ const Doorbell = () => {
     const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
     const DOORBELL_CAMERAS = config.DOORBELL_CAMERAS || []
     
-    // Don't render if doorbell feature is disabled
-    if (!ENABLE_DOORBELL) {
-        return null
-    }
-
+    // Call all hooks unconditionally (before any early returns)
     const [ showDoorCams, toggle ] = React.useState(false)
     const [ state, error ] = useDoorbell()
     const [ cancelId, setCancelId ] = React.useState(undefined)
     const [ progress, setProgress ] = React.useState(100)
     const [ transitionDuration, setTransitionDuration ] = React.useState('0')
 
-    // Extract camera entity IDs and fetch access tokens
+    // Extract camera entity IDs
     const cameraEntityIds = React.useMemo(() => {
         return DOORBELL_CAMERAS
             .map(cam => cam.entity_id)
             .filter(Boolean) // Remove any undefined/null values
     }, [DOORBELL_CAMERAS])
 
-    const [accessTokens, tokensLoading, tokensError] = useCameraAccessTokens(cameraEntityIds)
+    // Fetch tokens fresh when modal opens
+    const [accessTokens, setAccessTokens] = React.useState({})
+    const [tokensLoading, setTokensLoading] = React.useState(false)
+    const [tokensError, setTokensError] = React.useState(null)
+
+    // Stable ref for config so effects don't re-run on config reload
+    const configRef = React.useRef(config)
+    React.useEffect(() => { configRef.current = config }, [config])
+
+    // AbortController ref for manual refresh (persists across re-renders)
+    const refreshAbortRef = React.useRef(null)
+
+    // Fetch tokens when modal opens (with abort cleanup)
+    React.useEffect(() => {
+        if (showDoorCams && cameraEntityIds.length > 0) {
+            const abortController = new AbortController()
+            setTokensLoading(true)
+            setTokensError(null)
+
+            fetchCameraAccessTokens(cameraEntityIds, configRef.current, abortController.signal)
+                .then(({ tokens, error }) => {
+                    if (!abortController.signal.aborted) {
+                        setAccessTokens(tokens)
+                        setTokensError(error)
+                        setTokensLoading(false)
+                    }
+                })
+                .catch((err) => {
+                    if (!abortController.signal.aborted) {
+                        logger.error('Failed to fetch camera tokens:', err)
+                        setTokensError(formatErrorForUI(err))
+                        setTokensLoading(false)
+                    }
+                })
+
+            return () => { abortController.abort() }
+        } else if (!showDoorCams) {
+            // Clear tokens when modal closes
+            setAccessTokens({})
+            setTokensError(null)
+            // Cancel any pending manual refresh
+            refreshAbortRef.current?.abort()
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showDoorCams, cameraEntityIds.join(',')])
+
+    // Manual refresh function (cancels previous pending refresh)
+    const refreshTokens = React.useCallback(async () => {
+        if (cameraEntityIds.length === 0) return
+
+        // Cancel previous refresh if still running
+        refreshAbortRef.current?.abort()
+        const abortController = new AbortController()
+        refreshAbortRef.current = abortController
+
+        setTokensLoading(true)
+        setTokensError(null)
+
+        try {
+            const { tokens, error } = await fetchCameraAccessTokens(
+                cameraEntityIds, configRef.current, abortController.signal
+            )
+            if (!abortController.signal.aborted) {
+                setAccessTokens(tokens)
+                setTokensError(error)
+            }
+        } catch (err) {
+            if (!abortController.signal.aborted) {
+                logger.error('Failed to refresh camera tokens:', err)
+                setTokensError(formatErrorForUI(err))
+            }
+        } finally {
+            if (!abortController.signal.aborted) {
+                setTokensLoading(false)
+            }
+        }
+    }, [cameraEntityIds])
+
+    // Auto-refresh tokens when backend connection is restored while overlay is open
+    const { isConnected } = useConnectionStateContext()
+    const wasDisconnectedRef = React.useRef(false)
+
+    React.useEffect(() => {
+        if (!isConnected) {
+            wasDisconnectedRef.current = true
+        } else if (wasDisconnectedRef.current) {
+            wasDisconnectedRef.current = false
+            if (showDoorCams && cameraEntityIds.length > 0) {
+                logger.debug('Connection restored while doorbell overlay open — refreshing camera tokens')
+                refreshTokens()
+            }
+        }
+    }, [isConnected, showDoorCams, cameraEntityIds, refreshTokens])
+
+    // Periodic token refresh while overlay is open (prevents stale tokens)
+    React.useEffect(() => {
+        if (!showDoorCams || cameraEntityIds.length === 0) return
+
+        const intervalId = setInterval(() => {
+            logger.debug('Periodic camera token refresh')
+            refreshTokens()
+        }, CAMERA_TOKEN_REFRESH_INTERVAL)
+
+        return () => clearInterval(intervalId)
+    }, [showDoorCams, cameraEntityIds, refreshTokens])
+
+    // Refs to track camera img elements so we can stop streams when overlay closes
+    const cameraImgRefs = React.useRef(new Map())
+
+    // Stop all MJPEG streams by clearing img.src while elements are still in the DOM.
+    // Must be called BEFORE toggle(false) — once React removes the <img> elements,
+    // the ref callbacks clear the Map and this function would have nothing to clean up.
+    const stopAllStreams = React.useCallback(() => {
+        cameraImgRefs.current.forEach((imgElement) => {
+            if (imgElement) {
+                imgElement.src = 'data:,' // data URI avoids a spurious request (unlike '')
+            }
+        })
+        cameraImgRefs.current.clear()
+    }, [])
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
             // Turn off with delay
             const timeoutId = window.setTimeout(() => {
+                stopAllStreams()
                 toggle(false)
                 setCancelId(undefined)
-            }, DELAY_IN_MS)
+            }, DOORBELL_OVERLAY_TIMEOUT)
             setCancelId(timeoutId)
-            setTransitionDuration(DELAY_IN_MS + 'ms')
+            setTransitionDuration(DOORBELL_OVERLAY_TIMEOUT + 'ms')
             setProgress(0)
             return () => {
                 if (timeoutId) window.clearTimeout(timeoutId)
@@ -176,7 +346,7 @@ const Doorbell = () => {
         } else if (confirmationState === 'confirm') {
             // Second click: open door
             setConfirmationState('opening')
-            unlatchFrontDoor()
+            unlatchFrontDoor(config)
             // Reset after showing the message
             setTimeout(() => setConfirmationState(null), 2000)
         }
@@ -202,10 +372,15 @@ const Doorbell = () => {
         }
     }, [showDoorCams])
 
+    // Don't render if doorbell feature is disabled
+    if (!ENABLE_DOORBELL) {
+        return null
+    }
+
     return (
         <>
-            <button onClick={() => toggle(v => !v)}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { toggle(false); setConfirmationState(null) }} fullsize={true}>
+            <button onClick={() => { if (showDoorCams) stopAllStreams(); toggle(v => !v) }}>CCTV</button>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { stopAllStreams(); toggle(false); setConfirmationState(null) }} fullsize={true}>
                 <Container onClick={openDoor}>
                 
                     <ProgressBar
@@ -219,83 +394,17 @@ const Doorbell = () => {
                     />
 
                     <div className='grid'>
-                        {(() => {
-                            if (DOORBELL_CAMERAS.length === 0) {
-                                return null
-                            }
-
-                            // Convert cameras to format expected by tiling algorithm
-                            const videos = DOORBELL_CAMERAS.map(cam => ({
-                                orientation: cam.orientation || 'landscape'
-                            }))
-
-                            // Calculate optimal layout using the tiling algorithm
-                            const canvasWidth = window.innerWidth
-                            const canvasHeight = window.innerHeight - 10 // Account for progress bar
-                            const layout = calculateOptimalTiling(videos, canvasWidth, canvasHeight)
-
-                            // Create a map of cameras by orientation for lookup
-                            const camerasByOrientation = {
-                                portrait: DOORBELL_CAMERAS.filter(cam => (cam.orientation || 'landscape') === 'portrait'),
-                                landscape: DOORBELL_CAMERAS.filter(cam => {
-                                    const orientation = cam.orientation || 'landscape'
-                                    return orientation === 'landscape'
-                                }),
-                                wide: DOORBELL_CAMERAS.filter(cam => cam.orientation === 'wide')
-                            }
-
-                            // Track which camera of each orientation we've used
-                            const usedIndices = {
-                                portrait: 0,
-                                landscape: 0,
-                                wide: 0
-                            }
-
-                            return layout.videos.map((videoLayout, index) => {
-                                const orientation = videoLayout.orientation
-                                const cameraIndex = usedIndices[orientation]
-                                const camera = camerasByOrientation[orientation][cameraIndex]
-                                
-                                if (!camera) {
-                                    return null
-                                }
-
-                                usedIndices[orientation]++
-
-                                // Get access token for this camera entity
-                                const accessToken = accessTokens[camera.entity_id] || null
-                                const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config.HASS_HOST)
-
-                                if (!streamUrl) {
-                                    return null
-                                }
-
-                                return (
-                                    <div
-                                        key={`${orientation}-${cameraIndex}-${index}`}
-                                        className="video-container"
-                                        style={{
-                                            left: `${videoLayout.x}px`,
-                                            top: `${videoLayout.y}px`,
-                                            width: `${videoLayout.width}px`,
-                                            height: `${videoLayout.height}px`
-                                        }}
-                                    >
-                                        <img
-                                            src={streamUrl}
-                                            className={orientation}
-                                            alt="Camera stream"
-                                            crossOrigin="anonymous"
-                                            key={`${camera.entity_id}-${index}`}
-                                        />   
-                                        <div 
-                                            className="video-overlay"
-                                            onClick={() => openDoor()}
-                                        />
-                                    </div>
-                                )
-                            })
-                        })()}
+                        <CameraGrid
+                            cameras={DOORBELL_CAMERAS}
+                            accessTokens={accessTokens}
+                            tokensLoading={tokensLoading}
+                            tokensError={tokensError}
+                            refreshTokens={refreshTokens}
+                            showDoorCams={showDoorCams}
+                            cameraImgRefs={cameraImgRefs}
+                            openDoor={openDoor}
+                            config={config}
+                        />
                     </div>    
                     {confirmationState === 'confirm' && (
                         <div className='open-door confirm'>

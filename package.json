@@ -26,16 +26,29 @@
   },
   "scripts": {
     "start": "vite",
+    "dev": "bash scripts/dev-start.sh",
     "build": "vite build",
     "serve": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "postinstall": "node scripts/fix-merry-timeline.js",
     "dev:deploy": "bash scripts/dev-deploy.sh",
     "dev:deploy:watch": "bash scripts/dev-deploy.sh --watch",
     "dev:deploy:restart": "bash scripts/dev-deploy.sh --restart"
   },
+  "pnpm": {
+    "overrides": {
+      "rollup": ">=4.59.0"
+    }
+  },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^5.1.1",
+    "jsdom": "^25.0.1",
     "vite": "^7.2.4",
+    "vitest": "^3.2.1",
     "chokidar-cli": "^3.0.0"
   }
 }

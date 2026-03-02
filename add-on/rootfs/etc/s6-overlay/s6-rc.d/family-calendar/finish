@@ -1,0 +1,5 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Cleanup on service stop
+# ==============================================================================
+bashio::log.info "Family Calendar backend stopped."

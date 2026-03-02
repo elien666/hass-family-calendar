@@ -61,8 +61,26 @@ export default defineConfig(({ mode }) => {
         proxy: {
             // Note: These proxies are only used when running Vite dev server directly
             // When using the FastAPI backend (recommended), the backend handles all proxying
+            // In development mode with credentials, frontend generates signatures directly
             '/forecast': 'https://api.pirateweather.net',
-            '/gti': 'http://gti.geofox.de',
+            '/gti': {
+                target: 'https://gti.geofox.de',
+                changeOrigin: true,
+                secure: true,
+                configure: (proxy, _options) => {
+                    // Forward custom Geofox authentication headers from frontend request
+                    proxy.on('proxyReq', (proxyReq, req, res) => {
+                        // Forward geofox-auth-user header if present
+                        if (req.headers['geofox-auth-user']) {
+                            proxyReq.setHeader('geofox-auth-user', req.headers['geofox-auth-user'])
+                        }
+                        // Forward geofox-auth-signature header if present
+                        if (req.headers['geofox-auth-signature']) {
+                            proxyReq.setHeader('geofox-auth-signature', req.headers['geofox-auth-signature'])
+                        }
+                    })
+                }
+            },
             // Proxy Home Assistant API requests (optional - only if VITE_HASS_HOST is set)
             // This is only needed if you're NOT using the FastAPI backend
             // The FastAPI backend handles all API proxying, so this is optional

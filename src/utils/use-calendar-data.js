@@ -32,9 +32,10 @@ const getIconFromString = (iconString) => {
   return iconMap[iconKey] || undefined
 }
 
-const loadCalendarInto = (calendar, start, end, data, buildUrl) => (
+const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
   axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
-    timeout: 10000 // 10 second timeout
+    timeout: 65000, // 65 second timeout (backend has 60s timeout, add buffer)
+    signal: signal // Add abort signal to cancel request if component unmounts
   })
     .then((response) => {
       if (!response.data || !Array.isArray(response.data)) {
@@ -79,6 +80,10 @@ const loadCalendarInto = (calendar, start, end, data, buildUrl) => (
       })
     })
     .catch((err) => {
+      // Don't throw if request was aborted (component unmounted)
+      if (axios.isCancel(err) || err.name === 'AbortError' || err.code === 'ERR_CANCELED') {
+        return
+      }
       // Error is already logged by interceptor
       // Re-throw to be handled by Promise.all catch
       throw err
@@ -93,7 +98,7 @@ const getCacheKey = (startDate) => {
   return startDate.toISODate()
 }
 
-const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, calendars, buildUrl) => {
+const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, calendars, buildUrl, isMountedRef) => {
   // Set up day buckets
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
@@ -105,7 +110,9 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, ca
   
   // Check cache
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    setData(cached.data)
+    if (isMountedRef.current) {
+      setData(cached.data)
+    }
     return
   }
 
@@ -113,10 +120,20 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, ca
 
   // Skip if no calendars configured
   if (!calendars || calendars.length === 0) {
-    setData(newData)
-    toggleLoading(false)
+    logger.warn('loadAll: No calendars configured, skipping fetch', { calendars })
+    if (isMountedRef.current) {
+      setData(newData)
+      toggleLoading(false)
+    }
     return
   }
+  
+  logger.debug('loadAll: Starting calendar fetch', { 
+    calendarsCount: calendars.length,
+    calendars: calendars.map(c => c.name),
+    startDate: startDate.toISO(),
+    endDate: dateRange[6].toISO()
+  })
 
   // Fetch data
   const abortController = new AbortController()
@@ -126,15 +143,17 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, ca
   cacheRef.current = abortController
 
   try {
-    toggleLoading(true)
+    if (isMountedRef.current) {
+      toggleLoading(true)
+    }
     // Batch all calendar requests in parallel
     const loading = calendars.map((calendar) => (
-      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData, buildUrl)
+      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData, buildUrl, abortController.signal)
     ))
 
     Promise.all(loading)
       .then(() => {
-        if (!abortController.signal.aborted) {
+        if (isMountedRef.current && !abortController.signal.aborted) {
           // Cache the result
           calendarCache.set(cacheKey, {
             data: newData,
@@ -145,18 +164,19 @@ const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, ca
         }
       })
       .catch((err) => {
-        if (!abortController.signal.aborted) {
+        // Don't set error if request was aborted or component unmounted
+        if (isMountedRef.current && !abortController.signal.aborted) {
           // Error is already logged by interceptor, format for UI
           setError(formatErrorForUI(err))
         }
       })
       .finally(() => {
-        if (!abortController.signal.aborted) {
+        if (isMountedRef.current && !abortController.signal.aborted) {
           toggleLoading(false)
         }
       })
   } catch (err) {
-    if (!abortController.signal.aborted) {
+    if (isMountedRef.current && !abortController.signal.aborted) {
       // Error is already logged by interceptor, format for UI
       setError(formatErrorForUI(err))
       toggleLoading(false)
@@ -170,26 +190,75 @@ const useCalendarData = (startDate) => {
   const config = useConfig()
   const CALENDARS = config.CALENDARS || []
   
+  // Debug: Log config changes
+  React.useEffect(() => {
+    logger.debug('useCalendarData: config changed', {
+      hasCALENDARS: 'CALENDARS' in config,
+      CALENDARS: config.CALENDARS,
+      CALENDARSCount: Array.isArray(config.CALENDARS) ? config.CALENDARS.length : 'not array',
+      configKeys: Object.keys(config)
+    })
+  }, [config])
+  
   // Process calendars from config: map icon strings to icon objects
   const calendars = React.useMemo(() => {
-    return CALENDARS.map((calendar) => ({
+    const processed = CALENDARS.map((calendar) => ({
       name: calendar.name,
       icon: getIconFromString(calendar.icon)
     }))
+    logger.debug('Processing calendars from config (memo update):', { 
+      CALENDARS, 
+      count: CALENDARS.length,
+      processedCount: processed.length,
+      processed: processed.map(c => c.name)
+    })
+    return processed
   }, [CALENDARS])
+  
+  // Debug: Log when CALENDARS changes
+  React.useEffect(() => {
+    logger.debug('CALENDARS array changed:', { 
+      CALENDARS, 
+      count: CALENDARS.length,
+      calendarsMemoCount: calendars.length
+    })
+  }, [CALENDARS, calendars.length])
 
-  const host = React.useCallback((name) => buildHaUrl(`/api/calendars/${name}`), [])
-  const url = React.useCallback((name, params) => `${host(name)}?${qs.stringify(params)}`, [host])
+  const host = React.useCallback((name) => {
+    const url = buildHaUrl(`/api/calendars/${name}`, config)
+    logger.debug(`Building calendar URL for ${name}:`, url)
+    return url
+  }, [config])
+  const url = React.useCallback((name, params) => {
+    const fullUrl = `${host(name)}?${qs.stringify(params)}`
+    logger.debug(`Full calendar URL for ${name}:`, fullUrl)
+    return fullUrl
+  }, [host])
 
   const [ data, setData ] = React.useState(emptyData)
   const [ isLoading, setIsLoading ] = React.useState(false)
   const [ error, setError ] = React.useState(false)
-  const timeout = useTimeout(60000, 'Calendar')
   const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
   const abortRef = useRef(null)
+  const isMountedRef = useRef(true)
+
+  // Use timeout to periodically refresh data, but don't include it as a dependency
+  // to avoid unnecessary re-renders
+  useTimeout(60000, 'Calendar')
 
   React.useEffect(() => {
-    if (startDate !== undefined) {
+    isMountedRef.current = true
+    
+    logger.debug('useCalendarData effect triggered:', { 
+      startDate: startDate?.toISO(), 
+      calendarsCount: calendars.length,
+      calendars: calendars.map(c => c.name),
+      hasStartDate: startDate !== undefined,
+      hasCalendars: calendars.length > 0
+    })
+    
+    // Only fetch if we have both startDate and calendars
+    if (startDate !== undefined && calendars.length > 0) {
       const isNewDate = currentStartDate === null || !currentStartDate.equals(startDate)
       
       if (isNewDate) {
@@ -198,16 +267,27 @@ const useCalendarData = (startDate) => {
         setCurrentStartDate(startDate)
       }
       
-      loadAll(startDate, data, setData, setIsLoading, abortRef, setError, calendars, url)
+      logger.debug('useCalendarData: Calling loadAll', {
+        startDate: startDate.toISO(),
+        calendarsCount: calendars.length
+      })
+      loadAll(startDate, data, setData, setIsLoading, abortRef, setError, calendars, url, isMountedRef)
+    } else {
+      if (startDate === undefined) {
+        logger.debug('useCalendarData: startDate is undefined, skipping fetch')
+      }
+      if (calendars.length === 0) {
+        logger.debug('useCalendarData: No calendars configured yet, skipping fetch')
+      }
     }
 
     return () => {
+      isMountedRef.current = false
       if (abortRef.current) {
         abortRef.current.abort()
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, timeout, calendars])
+  }, [startDate, calendars, url]) // Include url so it re-runs when config changes
 
   return [ data, error ]
 }

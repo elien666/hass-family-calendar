@@ -152,11 +152,7 @@ const Weather = () => {
   const config = useConfig()
   const ENABLE_WEATHER = config.ENABLE_WEATHER || false
   
-  // Don't render if weather feature is disabled
-  if (!ENABLE_WEATHER) {
-    return null
-  }
-
+  // Call all hooks unconditionally (before any early returns)
   const [data, error] = useWeatherData()
   const [ showWeather, toggle ] = React.useState(false)
   const keyWeather = useKeyPress('w')
@@ -193,6 +189,11 @@ const Weather = () => {
     if (keyWeather) toggleWeather()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ keyWeather ]) // Only fire when key is pressed
+
+  // Don't render if weather feature is disabled
+  if (!ENABLE_WEATHER) {
+    return null
+  }
 
   // Early return AFTER all hooks
   if (!data || !('currently' in data) || !('daily' in data) || !('hourly' in data)) {
@@ -248,7 +249,7 @@ const Weather = () => {
               <div><span>Luftfeuchtigkeit:</span> {Math.round(data.daily.data[0].humidity * 100)} %</div>
               <div><span>Wind:</span> {Math.round(data.daily.data[0].windSpeed)} km/h</div>
               <div><span>Bewölkung:</span> {Math.round(data.daily.data[0].cloudCover * 100)} %</div>
-              <div><span>Regen:</span> {data.daily.data[0].precipProbability * 100} %</div>
+              <div><span>Regen:</span> {Math.round(data.daily.data[0].precipProbability * 100)} %</div>
               <div><span>UV Index:</span> {data.daily.data[0].uvIndex}</div>
               <div><span>Luftdruck:</span> {Math.round(data.daily.data[0].pressure)}</div>
             </div>

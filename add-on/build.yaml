@@ -1,0 +1,8 @@
+---
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base:latest"
+  amd64: "ghcr.io/home-assistant/amd64-base:latest"
+labels:
+  org.opencontainers.image.title: "Familienkalender"
+  org.opencontainers.image.description: "Family dashboard for Home Assistant"
+  org.opencontainers.image.source: "https://github.com/elien666/hass-family-calendar"
