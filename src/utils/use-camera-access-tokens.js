@@ -12,6 +12,7 @@ import { formatErrorForUI } from './axios-error-handler'
  */
 const fetchSingleToken = async (entityId, config, signal) => {
   const url = buildHaUrl(`/api/states/${entityId}`, config)
+  logger.debug(`Fetching camera token for ${entityId} (aborted: ${signal?.aborted})`)
   const response = await axios(url, {
     timeout: 10000, // 10 second timeout (camera entities can be slow, backend proxy has 30s timeout)
     signal
@@ -29,8 +30,12 @@ const fetchSingleToken = async (entityId, config, signal) => {
   return { entityId, accessToken, error: accessToken ? null : `Kein access_token für ${entityId}` }
 }
 
-/** Simple delay helper for retry backoff */
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+/** Abort-aware delay helper for retry backoff */
+const delay = (ms, signal) => new Promise((resolve) => {
+  if (signal?.aborted) { resolve(); return }
+  const timeoutId = setTimeout(resolve, ms)
+  signal?.addEventListener('abort', () => { clearTimeout(timeoutId); resolve() }, { once: true })
+})
 
 /**
  * Fetch access tokens for camera entities on demand with timeout and retry
@@ -82,7 +87,10 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config, signal) =
           if (isRetryable && attempt < MAX_ATTEMPTS - 1) {
             const backoff = 1000 * Math.pow(2, attempt) // 1s, 2s
             logger.debug(`Token fetch failed for ${entityId} (attempt ${attempt + 1}): ${lastErrorDetail}, retrying in ${backoff}ms...`)
-            await delay(backoff)
+            await delay(backoff, effectiveSignal)
+            if (effectiveSignal.aborted) {
+              return { entityId, accessToken: null, error: 'Abgebrochen' }
+            }
             continue
           }
 
