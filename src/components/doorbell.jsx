@@ -292,24 +292,23 @@ const Doorbell = () => {
     // Refs to track camera img elements so we can stop streams when overlay closes
     const cameraImgRefs = React.useRef(new Map())
 
-    // Stop all camera streams when overlay closes
-    React.useEffect(() => {
-        if (!showDoorCams) {
-            // Clear all img src attributes to stop streaming
-            cameraImgRefs.current.forEach((imgElement) => {
-                if (imgElement && imgElement.src) {
-                    imgElement.src = ''
-                }
-            })
-            // Clear the refs map
-            cameraImgRefs.current.clear()
-        }
-    }, [showDoorCams])
+    // Stop all MJPEG streams by clearing img.src while elements are still in the DOM.
+    // Must be called BEFORE toggle(false) — once React removes the <img> elements,
+    // the ref callbacks clear the Map and this function would have nothing to clean up.
+    const stopAllStreams = React.useCallback(() => {
+        cameraImgRefs.current.forEach((imgElement) => {
+            if (imgElement) {
+                imgElement.src = 'data:,' // data URI avoids a spurious request (unlike '')
+            }
+        })
+        cameraImgRefs.current.clear()
+    }, [])
 
     React.useEffect(() => {
         if (state === 'off' && showDoorCams) {
             // Turn off with delay
             const timeoutId = window.setTimeout(() => {
+                stopAllStreams()
                 toggle(false)
                 setCancelId(undefined)
             }, DOORBELL_OVERLAY_TIMEOUT)
@@ -380,8 +379,8 @@ const Doorbell = () => {
 
     return (
         <>
-            <button onClick={() => toggle(v => !v)}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { toggle(false); setConfirmationState(null) }} fullsize={true}>
+            <button onClick={() => { if (showDoorCams) stopAllStreams(); toggle(v => !v) }}>CCTV</button>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { stopAllStreams(); toggle(false); setConfirmationState(null) }} fullsize={true}>
                 <Container onClick={openDoor}>
                 
                     <ProgressBar
