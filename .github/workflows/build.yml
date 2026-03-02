@@ -161,7 +161,22 @@ jobs:
         shell: bash
         run: |
           # Semantic Versioning: MAJOR.MINOR.PATCH
-          # Supports both legacy vX.Y tags and new vX.Y.Z tags
+          # Bump rules (conventional commits):
+          #   feat: or feat(scope): → MINOR++, PATCH=0
+          #   anything else         → PATCH++
+
+          # Determine bump type from conventional commits since last tag
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -1 || echo "")
+          HAS_FEAT="false"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            FEAT_COUNT=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges | grep -ciE '^feat(\(.+\))?:' || echo "0")
+            if [ "$FEAT_COUNT" -gt 0 ]; then
+              HAS_FEAT="true"
+              echo "Found $FEAT_COUNT feat: commit(s) → minor bump"
+            else
+              echo "No feat: commits → patch bump"
+            fi
+          fi
 
           # Load major version from repo
           MAJOR_VERSION=""
@@ -201,10 +216,14 @@ jobs:
 
             # Check if tag has patch version (vX.Y.Z vs vX.Y)
             if echo "$HIGHEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-              # Three-part tag: extract minor and patch, increment patch
+              # Three-part tag: extract minor and patch
               MINOR_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.\([0-9]*\)\.[0-9]*$/\1/')
               PATCH_VERSION=$(echo "$HIGHEST_TAG" | sed 's/^v[0-9]*\.[0-9]*\.\([0-9]*\)$/\1/')
-              if echo "$PATCH_VERSION" | grep -qE '^[0-9]+$'; then
+              if [ "$HAS_FEAT" = "true" ]; then
+                # feat: commit → minor bump, reset patch
+                MINOR_VERSION=$((MINOR_VERSION + 1))
+                PATCH_VERSION=0
+              elif echo "$PATCH_VERSION" | grep -qE '^[0-9]+$'; then
                 PATCH_VERSION=$((PATCH_VERSION + 1))
               else
                 PATCH_VERSION=0
@@ -304,12 +323,30 @@ jobs:
           if [ -z "$FILTERED_COMMITS" ] || [ -z "$(echo "$FILTERED_COMMITS" | grep -v '^$' | head -1)" ]; then
             FILTERED_COMMITS="Version $NEW_VERSION"
           fi
-          
-          # Format commits as a bulleted list
-          FORMATTED_COMMITS=$(echo "$FILTERED_COMMITS" | sed 's/^/- /')
-          
+
+          # Group commits by conventional commit type
+          FEATURES=$(echo "$FILTERED_COMMITS" | grep -iE '^feat(\(.+\))?:' || true)
+          FIXES=$(echo "$FILTERED_COMMITS" | grep -iE '^fix(\(.+\))?:' || true)
+          OTHER=$(echo "$FILTERED_COMMITS" | grep -viE '^(feat|fix)(\(.+\))?:' || true)
+
+          FORMATTED_COMMITS=""
+          if [ -n "$FEATURES" ] && [ -n "$(echo "$FEATURES" | grep -v '^$')" ]; then
+            FORMATTED_COMMITS+="### Features\n$(echo "$FEATURES" | sed 's/^/- /')\n\n"
+          fi
+          if [ -n "$FIXES" ] && [ -n "$(echo "$FIXES" | grep -v '^$')" ]; then
+            FORMATTED_COMMITS+="### Fixes\n$(echo "$FIXES" | sed 's/^/- /')\n\n"
+          fi
+          if [ -n "$OTHER" ] && [ -n "$(echo "$OTHER" | grep -v '^$')" ]; then
+            FORMATTED_COMMITS+="### Other\n$(echo "$OTHER" | sed 's/^/- /')\n\n"
+          fi
+
+          # Fallback if grouping produced nothing
+          if [ -z "$FORMATTED_COMMITS" ]; then
+            FORMATTED_COMMITS="$(echo "$FILTERED_COMMITS" | sed 's/^/- /')\n"
+          fi
+
           # Overwrite CHANGELOG with only the current release entry
-          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS\n"
+          NEW_ENTRY="**$NEW_VERSION - $CURRENT_DATE**\n\n$FORMATTED_COMMITS"
           echo -e "$NEW_ENTRY" > add-on/CHANGELOG.md
           
           COMMIT_COUNT=$(echo "$FILTERED_COMMITS" | grep -v '^$' | wc -l | tr -d ' ')
