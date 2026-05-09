@@ -17,9 +17,11 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     const errorMessage = error?.toString() || 'Unknown error'
+    const label = this.props.label
     logger.error(
-      `ErrorBoundary caught an error: ${errorMessage}`,
+      `ErrorBoundary caught an error${label ? ` (${label})` : ''}: ${errorMessage}`,
       {
+        boundaryLabel: label,
         errorName: error?.name,
         errorMessage,
         errorStack: error?.stack || '',
@@ -27,14 +29,18 @@ class ErrorBoundary extends React.Component {
       }
     )
 
-    // On a kiosk-style wall display nobody is standing in front of the screen to tap a button.
-    // Show a toast and auto-reload so the failure is invisible most of the time.
-    toast.error('Ein Fehler ist aufgetreten — die App lädt sich gleich neu …', {
-      duration: AUTO_RELOAD_DELAY_MS,
-    })
-    this.reloadTimerId = window.setTimeout(() => {
-      window.location.reload()
-    }, AUTO_RELOAD_DELAY_MS)
+    const autoReload = this.props.autoReload === true
+    const toastMessage = autoReload
+      ? `${label ? `${label}: ` : ''}Ein Fehler ist aufgetreten — die App lädt sich gleich neu …`
+      : `${label ? `${label}: ` : ''}Bereich konnte nicht geladen werden`
+
+    toast.error(toastMessage, { duration: AUTO_RELOAD_DELAY_MS })
+
+    if (autoReload) {
+      this.reloadTimerId = window.setTimeout(() => {
+        window.location.reload()
+      }, AUTO_RELOAD_DELAY_MS)
+    }
   }
 
   componentWillUnmount() {
@@ -46,8 +52,6 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Render nothing — the toast carries the user-facing message and the auto-reload
-      // will recover the tree. Returning null avoids the disruptive full-screen overlay.
       return null
     }
     return this.props.children

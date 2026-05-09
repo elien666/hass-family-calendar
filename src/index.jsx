@@ -10,7 +10,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
   <React.StrictMode>
-    <ErrorBoundary>
+    <ErrorBoundary autoReload label="Root">
       <ConfigProvider>
         <ConnectionStateProvider>
           <BrowserRouter>
