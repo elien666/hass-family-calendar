@@ -7,6 +7,16 @@ on:
   pull_request:
     branches:
       - main
+    # build-check pushes its own auto-commit (version bump + CHANGELOG + dist) back
+    # to the PR branch. Without this filter that push would trigger pull_request
+    # synchronize → another build-check run → another push → infinite loop.
+    # We used to add '[skip ci]' to the auto-commit subject to break the loop, but
+    # that subject ended up in squash-merge bodies on main and GitHub auto-skipped
+    # the release run. paths-ignore stops the loop without polluting the message.
+    paths-ignore:
+      - 'add-on/dist/**'
+      - 'add-on/config.yaml'
+      - 'add-on/CHANGELOG.md'
 
 jobs:
   # Job 0: Run tests (backend + frontend) — only on PRs, not redundantly after merge
@@ -378,13 +388,16 @@ jobs:
         shell: bash
         run: |
           git add add-on/config.yaml add-on/CHANGELOG.md add-on/dist
-          git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }} [skip ci]"
+          # NOTE: do not add '[skip ci]' here — it survives squash-merges and
+          # makes GitHub skip the release run on main. Loop-prevention is done
+          # via paths-ignore at the top of this file.
+          git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }}"
           git push origin HEAD:${{ github.head_ref }}
 
   # Job 2: Create release on push to main (after PR merge) - NO build
   release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     needs: []  # No dependencies - this runs independently after PR merge
