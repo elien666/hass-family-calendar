@@ -1,12 +1,22 @@
 name: Build Home Assistant Add-on
 
 on:
+  # Release + Docker image are triggered by pushing a vX.Y.Z tag on main.
+  # Tagging is the explicit "release this" gesture; pushing to main no longer
+  # builds anything by itself.
   push:
-    branches:
-      - main
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   pull_request:
     branches:
       - main
+    # build-check pushes its own auto-commit (version bump + CHANGELOG + dist) back
+    # to the PR branch. Without this filter that push would trigger pull_request
+    # synchronize → another build-check run → another push → infinite loop.
+    paths-ignore:
+      - 'add-on/dist/**'
+      - 'add-on/config.yaml'
+      - 'add-on/CHANGELOG.md'
 
 jobs:
   # Job 0: Run tests (backend + frontend) — only on PRs, not redundantly after merge
@@ -378,114 +388,70 @@ jobs:
         shell: bash
         run: |
           git add add-on/config.yaml add-on/CHANGELOG.md add-on/dist
-          git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }} [skip ci]"
+          # NOTE: do not add '[skip ci]' here — it survives squash-merges and
+          # makes GitHub skip the release run on main. Loop-prevention is done
+          # via paths-ignore at the top of this file.
+          git commit -m "chore: build addon v${{ steps.update-version.outputs.new_version }}"
           git push origin HEAD:${{ github.head_ref }}
 
-  # Job 2: Create release on push to main (after PR merge) - NO build
+  # Job 2: Create GitHub Release when a vX.Y.Z tag is pushed
   release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    needs: []  # No dependencies - this runs independently after PR merge
-    
+    needs: []
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # Fetch full history for commit messages
-          ref: main  # Checkout main branch
-          fetch-tags: true  # Fetch tags to reference them
+          fetch-depth: 0
+          # Checkout the tagged commit (default for tag-push events)
+          fetch-tags: true
 
-      - name: Read version from config.yaml
+      - name: Derive version from tag
         id: read-version
         shell: bash
         run: |
-          # Read current version from config.yaml that was set during PR build
-          VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
-          
-          if [ -z "$VERSION" ]; then
-            echo "Error: Could not read version from config.yaml"
-            exit 1
-          fi
-          
-          TAG_NAME="v${VERSION}"
-          
-          echo "Version from config.yaml: $VERSION"
-          echo "Tag name: $TAG_NAME"
+          TAG_NAME="${GITHUB_REF#refs/tags/}"   # e.g. v1.50.1
+          VERSION="${TAG_NAME#v}"               # e.g. 1.50.1
+          echo "Tag: $TAG_NAME"
+          echo "Version: $VERSION"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-
-      - name: Create and push git tag
-        id: create-tag
-        shell: bash
-        run: |
-          # Configure git identity
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          TAG_NAME="${{ steps.read-version.outputs.tag_name }}"
-          VERSION="${{ steps.read-version.outputs.version }}"
-          
-          # Ensure we're on main branch
-          git checkout main || true
-          
-          # Check if tag already exists remotely
-          if git ls-remote --tags origin "$TAG_NAME" | grep -q "$TAG_NAME"; then
-            echo "Tag $TAG_NAME already exists on remote, skipping tag creation"
-            echo "tag_created=false" >> $GITHUB_OUTPUT
-          elif git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "Tag $TAG_NAME already exists locally, skipping tag creation"
-            echo "tag_created=false" >> $GITHUB_OUTPUT
-          else
-            # Create and push the tag on the current HEAD (the merged PR commit)
-            git tag -a "$TAG_NAME" -m "Release $VERSION"
-            git push origin "$TAG_NAME"
-            echo "Created and pushed tag $TAG_NAME"
-            echo "tag_created=true" >> $GITHUB_OUTPUT
-          fi
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
-        id: create-release
-        if: steps.create-tag.outputs.tag_created == 'true'
         shell: bash
         run: |
-          TAG_NAME="${{ steps.create-tag.outputs.tag_name }}"
+          TAG_NAME="${{ steps.read-version.outputs.tag_name }}"
           VERSION="${{ steps.read-version.outputs.version }}"
-          
-          # Read CHANGELOG content for release notes
+
+          # Skip if release for this tag already exists
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists, skipping creation"
+            exit 0
+          fi
+
+          # Read CHANGELOG entry for this version
           RELEASE_NOTES=""
           if [ -f "add-on/CHANGELOG.md" ]; then
-            # Extract the changelog entry for this version (first entry after update)
             RELEASE_NOTES=$(awk '
               BEGIN { found=0 }
-              /^\*\*'"$VERSION"' - / {
-                found=1
-                next
-              }
-              found && /^\*\*/ {
-                exit
-              }
-              found {
-                print
-              }
+              /^\*\*'"$VERSION"' - / { found=1; next }
+              found && /^\*\*/ { exit }
+              found { print }
             ' add-on/CHANGELOG.md)
           fi
-          
-          # Fallback if no changelog content
+
           if [ -z "$RELEASE_NOTES" ] || [ -z "$(echo "$RELEASE_NOTES" | grep -v '^$')" ]; then
             RELEASE_NOTES="Release $VERSION"
           fi
-          
-          # Create GitHub Release
-          echo "Creating release $TAG_NAME with version $VERSION"
+
+          echo "Creating release $TAG_NAME"
           gh release create "$TAG_NAME" \
             --title "Release $VERSION" \
-            --notes "$RELEASE_NOTES" \
-            --target main
+            --notes "$RELEASE_NOTES"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -507,14 +473,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          ref: main
+        # Default: checkout the tagged commit that triggered this run.
 
-      - name: Read version from config.yaml
+      - name: Derive version from tag
         id: version
         shell: bash
         run: |
-          VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG_NAME#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Read base image for architecture
