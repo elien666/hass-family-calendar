@@ -216,6 +216,12 @@ export function useHomeAssistantWebSocket({
           try {
             connection.send(JSON.stringify({ type: 'ping' }))
           } catch { return } // send failed — onclose will handle it
+          // Clear any prior pending timeout before scheduling a new one.
+          // Without this, a delayed pong path can leave a previous timeout
+          // orphaned (it still fires and closes a now-healthy connection).
+          if (heartbeatTimeoutRef.current) {
+            clearTimeout(heartbeatTimeoutRef.current)
+          }
           heartbeatTimeoutRef.current = setTimeout(() => {
             logger.warn(`${logPrefix} heartbeat timeout — closing stale connection`)
             try { connection.close(4000, 'heartbeat timeout') } catch {}
@@ -288,14 +294,28 @@ export function useHomeAssistantWebSocket({
             if (isMountedRef.current) {
               setError('Backend nicht erreichbar. Wiederherstellungsversuche alle 60 Sekunden.')
             }
-            // Set up periodic retry every 60 seconds
+            // Set up periodic retry every 60 seconds.
+            // Re-schedule only if the previous attempt did NOT establish a connection — when it
+            // succeeds, onopen clears periodicRetryTimeoutRef and resets stoppedReconnectingRef,
+            // so this guard naturally stops the chain. Without this guard the recursive
+            // self-schedule kept queueing fresh timers after every retry, accumulating orphaned
+            // timeouts (visible as occasional duplicate reconnect attempts after long uptimes).
             const schedulePeriodicRetry = () => {
+              if (periodicRetryTimeoutRef.current) {
+                clearTimeout(periodicRetryTimeoutRef.current)
+              }
               periodicRetryTimeoutRef.current = setTimeout(() => {
-                if (isMountedRef.current && !isConnectingRef.current && isConnectedRef.current && stoppedReconnectingRef.current) {
-                  logger.debug(`Periodic retry attempt for ${logPrefix} (backend might be back up)`)
-                  reconnectAttemptsRef.current = 0 // Reset attempts for periodic retry
-                  connectRef.current()
-                  // Schedule next retry
+                periodicRetryTimeoutRef.current = null
+                if (!isMountedRef.current || isConnectingRef.current || !isConnectedRef.current || !stoppedReconnectingRef.current) {
+                  return
+                }
+                logger.debug(`Periodic retry attempt for ${logPrefix} (backend might be back up)`)
+                reconnectAttemptsRef.current = 0 // Reset attempts for periodic retry
+                connectRef.current()
+                // Re-schedule only if we still don't have a live connection. If connect succeeded,
+                // onopen will have cleared stoppedReconnectingRef and the guard above stops us
+                // on the next tick anyway, but this keeps the no-op tick short.
+                if (!connectionRef.current && stoppedReconnectingRef.current) {
                   schedulePeriodicRetry()
                 }
               }, WS_PERIODIC_RETRY_INTERVAL)
