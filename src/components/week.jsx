@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import styled from 'styled-components'
 import clsx from 'clsx'
 import Header from './header'

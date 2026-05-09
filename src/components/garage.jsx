@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react'
 import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline, mdiArrowUp, mdiArrowDown, mdiAlertCircle } from '@mdi/js'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
 import { useConfig } from '../utils/ConfigProvider'
