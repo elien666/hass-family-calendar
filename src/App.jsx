@@ -9,6 +9,7 @@ import './fonts/fonts.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import ConfigStatusBanner, { DISMISSED_STORAGE_KEY } from './components/ConfigStatusBanner'
 import { useConfigError, useIsUsingCachedConfig, useConfigLoading } from './utils/ConfigProvider'
+import Reload from './utils/use-reload'
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -52,6 +53,11 @@ const Div = styled.div`
 `
 
 function MainApp() {
+  // Schedules a hard reload every 3 hours. The wall display is a kiosk that runs for days —
+  // a periodic reload absorbs slow leaks (timers, MJPEG handles, accumulated state) without
+  // anyone needing to diagnose them.
+  Reload()
+
   const configError = useConfigError()
   const isUsingCachedConfig = useIsUsingCachedConfig()
   const loading = useConfigLoading()
@@ -75,10 +81,10 @@ function MainApp() {
       <GlobalStyle/>
       <ConfigStatusBanner />
       <div className={'main'}>
-        <ErrorBoundary>
+        <ErrorBoundary autoReload label="Kalender">
           <Week />
         </ErrorBoundary>
-        <ErrorBoundary>
+        <ErrorBoundary autoReload label="Sidebar">
           <Sidebar />
         </ErrorBoundary>
       </div>
@@ -94,7 +100,7 @@ function MainApp() {
 
 function App() {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary autoReload label="App">
       <Routes>
         <Route path="/demo" element={<TilingDemo />} />
         <Route path="/tiling-demo" element={<TilingDemo />} />

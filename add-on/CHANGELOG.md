@@ -1,6 +1,10 @@
-**1.50.1 - 2026-05-09**
+**1.51.0 - 2026-05-09**
+
+### Features
+- feat(error-boundary): isolate Header failures, scope auto-reload to top-level (#199)
 
 ### Fixes
+- fix: auto-recover from runtime errors and long-uptime resource leaks (#198)
 - fix: unwrap legacy CJS default export of @mdi/react for vite v8 (#192)
 - fix: disable pauseOnFocusLoss on toast so it auto-closes without needing a tap
 

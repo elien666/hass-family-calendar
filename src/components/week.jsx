@@ -3,6 +3,7 @@ import Icon from '../utils/mdi-icon'
 import styled from 'styled-components'
 import clsx from 'clsx'
 import Header from './header'
+import ErrorBoundary from './ErrorBoundary'
 import React, { useMemo } from 'react'
 import useCalendarData from '../utils/use-calendar-data'
 import useShortcuts from '../utils/use-shortcuts'
@@ -157,8 +158,10 @@ const Week = () => {
   
   return (
     <Div {...swipeHandlers}>
-      <Header nextWeek={nextWeek} previousWeek={previousWeek}
-              startWeekWithToday={startWeekWithToday}/>
+      <ErrorBoundary label="Header">
+        <Header nextWeek={nextWeek} previousWeek={previousWeek}
+                startWeekWithToday={startWeekWithToday}/>
+      </ErrorBoundary>
       <div className={'schedule'}>
           {/* First row: Captions */}
           {weekData.map((day, index) => (
