@@ -7,7 +7,7 @@ import { useConfig } from '../utils/ConfigProvider'
 import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
 import { formatErrorForUI } from '../utils/axios-error-handler'
-import { DOORBELL_OVERLAY_TIMEOUT, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
+import { DOORBELL_OVERLAY_TIMEOUT, DOORBELL_MANUAL_CLOSE_COOLDOWN, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
 import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
 import CameraGrid from './camera-grid'
 
@@ -289,6 +289,8 @@ const Doorbell = () => {
         return () => clearInterval(intervalId)
     }, [showDoorCams, cameraEntityIds, refreshTokens])
 
+    const [ confirmationState, setConfirmationState ] = React.useState(null) // null, 'confirm', 'opening'
+
     // Refs to track camera img elements so we can stop streams when overlay closes
     const cameraImgRefs = React.useRef(new Map())
 
@@ -304,21 +306,44 @@ const Doorbell = () => {
         cameraImgRefs.current.clear()
     }, [])
 
+    // Manual-close override: while a person is still detected ('on'), let the user dismiss
+    // the modal and keep it dismissed. It re-opens only when (a) the sensor went 'off' since
+    // the manual close (= a fresh detection edge), and (b) at least DOORBELL_MANUAL_CLOSE_COOLDOWN
+    // has passed since the manual close.
+    const manualCloseAtRef = React.useRef(0)
+    const suppressedThisOnPhaseRef = React.useRef(false)
+
+    const manualCloseModal = React.useCallback(() => {
+        manualCloseAtRef.current = Date.now()
+        suppressedThisOnPhaseRef.current = true
+        stopAllStreams()
+        toggle(false)
+        setConfirmationState(null)
+    }, [stopAllStreams])
+
     React.useEffect(() => {
-        if (state === 'off' && showDoorCams) {
-            // Turn off with delay
-            const timeoutId = window.setTimeout(() => {
-                stopAllStreams()
-                toggle(false)
-                setCancelId(undefined)
-            }, DOORBELL_OVERLAY_TIMEOUT)
-            setCancelId(timeoutId)
-            setTransitionDuration(DOORBELL_OVERLAY_TIMEOUT + 'ms')
-            setProgress(0)
-            return () => {
-                if (timeoutId) window.clearTimeout(timeoutId)
+        if (state === 'off') {
+            // Sensor cleared — next 'on' is a fresh edge and may auto-open again
+            suppressedThisOnPhaseRef.current = false
+            if (showDoorCams) {
+                // Turn off with delay
+                const timeoutId = window.setTimeout(() => {
+                    stopAllStreams()
+                    toggle(false)
+                    setCancelId(undefined)
+                }, DOORBELL_OVERLAY_TIMEOUT)
+                setCancelId(timeoutId)
+                setTransitionDuration(DOORBELL_OVERLAY_TIMEOUT + 'ms')
+                setProgress(0)
+                return () => {
+                    if (timeoutId) window.clearTimeout(timeoutId)
+                }
             }
         } else if (state === 'on') {
+            const cooldownActive = Date.now() - manualCloseAtRef.current < DOORBELL_MANUAL_CLOSE_COOLDOWN
+            if (suppressedThisOnPhaseRef.current || cooldownActive) {
+                return
+            }
             setTransitionDuration(0)
             setProgress(100)
             toggle(true)
@@ -337,8 +362,6 @@ const Doorbell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ cancelId, state ])
 
-    const [ confirmationState, setConfirmationState ] = React.useState(null) // null, 'confirm', 'opening'
-    
     const openDoor = () => {
         if (confirmationState === null) {
             // First click: show confirmation
@@ -379,8 +402,8 @@ const Doorbell = () => {
 
     return (
         <>
-            <button onClick={() => { if (showDoorCams) stopAllStreams(); toggle(v => !v) }}>CCTV</button>
-            <Overlay visible={showDoorCams} onClick={openDoor} onClose={() => { stopAllStreams(); toggle(false); setConfirmationState(null) }} fullsize={true}>
+            <button onClick={() => { if (showDoorCams) { manualCloseModal() } else { toggle(true) } }}>CCTV</button>
+            <Overlay visible={showDoorCams} onClick={openDoor} onClose={manualCloseModal} fullsize={true}>
                 <Container onClick={openDoor}>
                 
                     <ProgressBar
