@@ -205,10 +205,8 @@ const logger = {
     }
   },
   debug: (...args) => {
-    if (isDevelopment) {
-      console.log('[DEBUG]', ...args)
-    }
-    // Send DEBUG level logs to backend (only in development)
+    // Send DEBUG level logs to backend (only in development).
+    // Browser console intentionally stays quiet — read the backend log for debug output.
     if (isDevelopment) {
       const message = formatMessage(args)
       const metadata = extractMetadata(args)
