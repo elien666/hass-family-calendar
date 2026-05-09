@@ -1,7 +1,7 @@
 import React from 'react'
 import { calculateOptimalTiling } from '../utils/video-tiling'
 import { buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import { mdiLoading } from '@mdi/js'
 
 const TokenError = ({ tokensLoading, tokensError, refreshTokens }) => (
