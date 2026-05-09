@@ -81,10 +81,10 @@ function MainApp() {
       <GlobalStyle/>
       <ConfigStatusBanner />
       <div className={'main'}>
-        <ErrorBoundary>
+        <ErrorBoundary autoReload label="Kalender">
           <Week />
         </ErrorBoundary>
-        <ErrorBoundary>
+        <ErrorBoundary autoReload label="Sidebar">
           <Sidebar />
         </ErrorBoundary>
       </div>
@@ -100,7 +100,7 @@ function MainApp() {
 
 function App() {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary autoReload label="App">
       <Routes>
         <Route path="/demo" element={<TilingDemo />} />
         <Route path="/tiling-demo" element={<TilingDemo />} />
