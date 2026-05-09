@@ -20,8 +20,8 @@ export default defineConfig(({ mode }) => {
               }
               
               // UI libraries
-              if (id.includes('styled-components') || 
-                  id.includes('react-toastify') || 
+              if (id.includes('styled-components') ||
+                  id.includes('sonner') ||
                   id.includes('react-loader-spinner') ||
                   id.includes('@mdi/')) {
                 return 'ui-vendor';
