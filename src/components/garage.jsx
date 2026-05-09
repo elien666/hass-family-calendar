@@ -1,11 +1,11 @@
 import React, { memo, useCallback } from 'react'
 import { mdiGarageVariant, mdiGarageAlertVariant, mdiGarageOpenVariant, mdiCloudQuestionOutline, mdiArrowUp, mdiArrowDown, mdiAlertCircle } from '@mdi/js'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import styled from 'styled-components'
 import useGarageDoor, { toggleGarageDoor, closeGarageDoor, openGarageDoor } from '../utils/use-garage-door'
 import { useConfig } from '../utils/ConfigProvider'
 import useKeyPress from '../utils/use-key-press'
-import { toast } from 'react-toastify'
+import { toast } from 'sonner'
 import Overlay from './overlay'
 import clsx from 'clsx'
 import logger from '../utils/logger'
@@ -132,25 +132,14 @@ const Status = ({ garageDoor, animate = false }) => (
   </StatusDiv>
 )
 
+const GARAGE_TOAST_WATCHDOG_MS = 30000
+
 const showToast = (promise) => (
   toast.promise(promise, {
-    pending: 'Garagentor ist in Bewegung …',
-    success: {
-      render({ data }) {
-        return toPresentation(data).label
-      }
-    },
-    error: 'Nope'
-  }, {
-    position: "bottom-center",
-    autoClose: 5000,
-    hideProgressBar: false,
-    closeOnClick: false,
-    pauseOnHover: false,
-    draggable: false,
-    progress: undefined,
-    theme: "dark",
-    transition: undefined,
+    loading: 'Garagentor ist in Bewegung …',
+    success: (data) => toPresentation(data).label,
+    error: 'Nope',
+    duration: 5000,
   })
 )
 
@@ -164,20 +153,27 @@ const Garage = () => {
   const [ animate, setAnimate ] = React.useState(false)
   const [ showControls, toggle ] = React.useState(false)
 
+  const garageDoorRef = React.useRef(garageDoor)
+  React.useEffect(() => { garageDoorRef.current = garageDoor }, [garageDoor])
+
   React.useEffect(() => {
     // Check if garage door is in motion (unknown, opening, or closing)
     const isInMotion = garageDoor === 'unknown' || garageDoor === 'opening' || garageDoor === 'closing'
-    
+
     if (isInMotion) {
       if(!garageInMotion) {
-        // Set garageInMotion to resolve function of promise
-        const promise = new Promise((resolve) => {
-          setGarageInMotion({ resolve })
-        })
+        let resolveFn
+        const promise = new Promise((resolve) => { resolveFn = resolve })
+        // Watchdog: ensures the pending toast can never hang indefinitely if HA never reports a final state
+        const watchdogId = window.setTimeout(() => {
+          resolveFn(garageDoorRef.current)
+          setGarageInMotion(undefined)
+        }, GARAGE_TOAST_WATCHDOG_MS)
+        setGarageInMotion({ resolve: resolveFn, watchdogId })
         showToast(promise)
       }
     } else if (garageInMotion) {
-      // Resolve promise and reset
+      window.clearTimeout(garageInMotion.watchdogId)
       garageInMotion.resolve(garageDoor)
       setGarageInMotion(undefined)
     }

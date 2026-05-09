@@ -1,5 +1,5 @@
 import React, { memo } from 'react'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
 import styled from 'styled-components'
 import clsx from 'clsx'

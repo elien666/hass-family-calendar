@@ -4,8 +4,7 @@ import styled, { createGlobalStyle } from 'styled-components'
 import Week from './components/week'
 import Sidebar from './components/sidebar'
 import TilingDemo from './components/tiling-demo'
-import { ToastContainer } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
+import { Toaster } from 'sonner'
 import './fonts/fonts.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import ConfigStatusBanner, { DISMISSED_STORAGE_KEY } from './components/ConfigStatusBanner'
@@ -83,13 +82,11 @@ function MainApp() {
           <Sidebar />
         </ErrorBoundary>
       </div>
-      <ToastContainer 
-        autoClose={5000}
-        hideProgressBar={false}
-        closeOnClick={false}
-        pauseOnHover={false}
-        draggable={false}
+      <Toaster
+        position="bottom-center"
         theme="dark"
+        duration={5000}
+        closeButton
       />
     </Div>
   )

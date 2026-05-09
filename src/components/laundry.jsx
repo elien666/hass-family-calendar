@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import React, { memo, useCallback } from 'react'
 import useWashingMachine from '../utils/use-washing-machine'
 import { useConfig } from '../utils/ConfigProvider'

@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import clsx from 'clsx'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import { mdiClose } from '@mdi/js'
 import React from 'react'
 

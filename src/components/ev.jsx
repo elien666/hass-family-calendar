@@ -8,7 +8,7 @@ import {
   mdiAlertCircle,
   mdiFan
 } from '@mdi/js'
-import Icon from '@mdi/react'
+import Icon from '../utils/mdi-icon'
 import styled from 'styled-components'
 import useEv, { startPreclimate, stopPreclimate } from '../utils/use-ev'
 import { useConfig } from '../utils/ConfigProvider'

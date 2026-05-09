@@ -448,6 +448,7 @@ export function useHomeAssistantWebSocket({
 
   // Cleanup on unmount
   React.useEffect(() => {
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       cleanup()
