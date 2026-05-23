@@ -1,10 +1,16 @@
 name: Build Home Assistant Add-on
 
 on:
-  # Release + Docker image are triggered by pushing a vX.Y.Z tag on main.
-  # Tagging is the explicit "release this" gesture; pushing to main no longer
-  # builds anything by itself.
+  # Two-stage release:
+  #  1. A push to main runs the `auto-tag` job, which reads the version that
+  #     build-check already wrote into add-on/config.yaml and pushes the matching
+  #     vX.Y.Z tag (if it doesn't exist yet).
+  #  2. That tag push triggers the `release` + `publish-images` jobs below.
+  # The tag push does NOT re-trigger auto-tag (push.branches is main-only, the
+  # tag arrives via push.tags), so there is no loop.
   push:
+    branches:
+      - main
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
   pull_request:
@@ -28,6 +34,44 @@ on:
         type: string
 
 jobs:
+  # Job -1: On push to main, tag the version build-check already wrote into
+  # config.yaml. This is what actually fires the release: build-check (during the
+  # PR) bumps the version + CHANGELOG + dist, but nothing tagged it — so merging to
+  # main produced a version with no release. This job closes that gap.
+  auto-tag:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Tag version from config.yaml if not already tagged
+        shell: bash
+        run: |
+          VERSION=$(grep '^version:' add-on/config.yaml | sed 's/version: "\(.*\)"/\1/' | tr -d ' ')
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "config.yaml version '$VERSION' is not X.Y.Z — nothing to tag."
+            exit 0
+          fi
+          TAG="v$VERSION"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists — skipping (no new release)."
+            exit 0
+          fi
+
+          echo "Creating and pushing $TAG → triggers release + publish-images."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
   # Job 0: Run tests (backend + frontend) — only on PRs, not redundantly after merge
   test:
     runs-on: ubuntu-latest
