@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.51.2"
+version: "1.51.3"
 slug: "family-calendar"
 image: "ghcr.io/elien666/family-calendar/{arch}"
 init: false
