@@ -1,4 +1,8 @@
 packages: []
 
+# pnpm v11 no longer reads `pnpm.overrides` from package.json — it lives here now.
+overrides:
+  rollup: ">=4.59.0"
+
 onlyBuiltDependencies:
   - esbuild
