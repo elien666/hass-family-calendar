@@ -181,7 +181,7 @@ jobs:
           echo "S6-overlay structure: OK"
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: add-on/Dockerfile
 
