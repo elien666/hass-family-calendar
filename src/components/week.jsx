@@ -47,7 +47,7 @@ const Div = styled.div`
   height: 100%;
   overflow: hidden;
 
-  .calendar {
+  .weekGrid {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -430,7 +430,7 @@ const Week = () => {
                 startWeekWithToday={startWeekWithToday}/>
       </ErrorBoundary>
 
-      <div className={'calendar'}>
+      <div className={'weekGrid'}>
         {/* Spaltenköpfe */}
         <div className={'headRow'}>
           <div/>

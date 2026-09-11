@@ -5,41 +5,64 @@ import useEverydayCalendar, { storeData } from '../utils/use-everyday-calendar-s
 import { useConfig } from '../utils/ConfigProvider'
 import { ThreeDots } from 'react-loader-spinner'
 
-const Div = styled.div` 
+const Div = styled.div`
+    /* Das Overlay gibt volle Bildschirmhöhe vor; der Inhalt teilt sie in
+       Überschrift und Raster auf, statt darüber hinauszuwachsen. */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+
+    /* Das Schließkreuz des Overlays schwebt oben rechts über dem Inhalt und
+       verdeckte sonst die Dezember-Spalte. */
+    padding-right: 56px;
 
     h2 {
         text-align: center;
         margin-bottom: 12px !important;
+        flex: none;
     }
 
-    .calendar {
+    /* Ladeanzeige und Fehlermeldung mittig, statt oben zu kleben.
+       Die Klasse saß bisher auf diesem Div, die Regel zielte aber auf das
+       Raster darin — sie lief also ins Leere. */
+    &.loading {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .everydayGrid {
         display: grid;
+        /* Erste Spalte trägt die Tageszahlen, dann zwölf Monate; erste
+           Zeile die Monatszahlen, darunter 31 Tage.
+           Das fehlende Komma in repeat(32 1fr) machte die Zeilenangabe
+           ungültig — CSS verwarf sie still, alle gridArea-Angaben liefen
+           ins Leere und das Raster wurde zur 11.000 px langen Kolonne. */
         grid-template-columns: repeat(13, 1fr);
-        grid-template-rows: repeat(32 1fr);
+        grid-template-rows: repeat(32, 1fr);
         column-gap: 0;
         row-gap: 0;
-
-        &.loading {
-            grid-template-columns: 1fr;
-            grid-template-rows: 1fr;
-        }
+        flex: 1;
+        min-height: 0;
 
         > * {
             place-self: center;
-            //height: 35px;
+            min-height: 0;
         }
 
         .dot {
-            height: 18px;
-            width: 18px;
-            border-radius: 12px;
+            /* Punktgröße folgt der Zeilenhöhe, damit das Jahr auf jedem
+               Display in eine Bildschirmhöhe passt. */
+            height: min(18px, 2.2vh);
+            width: min(18px, 2.2vh);
+            aspect-ratio: 1;
+            border-radius: 50%;
             background-color: #8e8c8c;
-            margin: 5px 0;
 
             &.on {
                 background-color: #00ff00;
             }
-        }           
+        }
     }
 `
 
@@ -112,7 +135,7 @@ const EverydayCalendar = () => {
                     <div>{error instanceof Error ? error.message : String(error)}</div>
                 </div>
             )}
-            <div className='calendar'>
+            <div className='everydayGrid'>
                 {day_labels.map((label, index) => (
                     <div key={index} style={{ gridArea: `${label+1} / 1 / ${label+1} / 1` }}>{label}</div>
                 ))}
