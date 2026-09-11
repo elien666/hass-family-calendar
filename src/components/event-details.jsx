@@ -71,15 +71,15 @@ const Div = styled.div`
     white-space: pre-wrap;
   }
 
-  .time { font-variant-numeric: tabular-nums; }
-
-  .hint {
-    margin-top: 18px;
-    padding-top: 12px;
-    border-top: solid 1px #3a3a40;
-    font-size: 13px;
-    color: #6e6e78;
+  /* Lange Beschreibungen (bis 2500 Zeichen im Bestand) scrollen in sich
+     selbst, damit Titel und Uhrzeit im Blick bleiben. */
+  dd.note {
+    max-height: 42vh;
+    overflow-y: auto;
+    padding-right: 8px;
   }
+
+  .time { font-variant-numeric: tabular-nums; }
 `
 
 /** "Mo., 7. September" — der Wochentag hilft beim Einordnen. */
@@ -90,7 +90,7 @@ const formatTime = (iso) =>
   DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
 
 /** Dauer in der Sprache, in der man darüber spricht: "1,5 Std." statt "90 min". */
-const formatDuration = (startIso, endIso) => {
+export const formatDuration = (startIso, endIso) => {
   const start = DateTime.fromISO(startIso)
   const end = DateTime.fromISO(endIso)
   if (!start.isValid || !end.isValid) return null
@@ -110,7 +110,7 @@ const formatDuration = (startIso, endIso) => {
  * Source-UID und Herkunftsvermerk an; auf einem Familientablet sagt das
  * niemandem etwas, während Treffpunkt und Status wichtig sind.
  */
-const cleanDescription = (description) => {
+export const cleanDescription = (description) => {
   if (!description) return null
   const cleaned = description
     .split('\n')
@@ -122,7 +122,7 @@ const cleanDescription = (description) => {
 }
 
 /** Aus der Wiederholungsregel wird ein lesbarer Satz, kein RRULE-Kauderwelsch. */
-const describeRecurrence = (rrule) => {
+export const describeRecurrence = (rrule) => {
   if (!rrule) return null
   if (/FREQ=DAILY/i.test(rrule)) return 'Jeden Tag'
   if (/FREQ=WEEKLY/i.test(rrule)) return 'Jede Woche'
@@ -208,7 +208,7 @@ const EventDetails = ({ event, day, onClose }) => {
           {description && (
             <>
               <dt>Notiz</dt>
-              <dd>{description}</dd>
+              <dd className={'note'}>{description}</dd>
             </>
           )}
 
@@ -227,7 +227,6 @@ const EventDetails = ({ event, day, onClose }) => {
           )}
         </dl>
 
-        <div className={'hint'}>Zum Schließen tippen</div>
       </Div>
     </Overlay>
   )
