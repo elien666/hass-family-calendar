@@ -69,7 +69,11 @@ const WASTE_BINS = [
  */
 export const displayTitle = (summary) => {
   const text = (summary || '').trim()
-  if (!/^Abfuhr/i.test(text)) return text
+  if (!/^Abfuhr/i.test(text)) {
+    // Führendes Emoji entfernen: Es wird ohnehin als Aktivitätssymbol
+    // gezeigt und stünde sonst doppelt im Titel.
+    return text.replace(/^(?:\p{Extended_Pictographic}️?\s*)+/u, '').trim() || text
+  }
   const bin = WASTE_BINS.find(({ pattern }) => pattern.test(text))
   return bin ? bin.label : text.replace(/^Abfuhr\s+/i, '')
 }

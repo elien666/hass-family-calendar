@@ -20,6 +20,7 @@ import {
   DAY_END_HOUR,
   HOUR_HEIGHT,
 } from '../utils/day-layout'
+import EventDetails from './event-details'
 import { CALENDAR_NOW_TICK } from '../utils/constants'
 
 const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
@@ -158,6 +159,15 @@ const Div = styled.div`
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
+      cursor: pointer;
+      touch-action: manipulation;
+
+      &:active { filter: brightness(1.25); }
+
+      &:focus-visible {
+        outline: solid 2px #f2f2f4;
+        outline-offset: -2px;
+      }
 
       .awayIcon { font-family: ${EMOJI_FONT}; }
 
@@ -196,6 +206,15 @@ const Div = styled.div`
     align-items: center;
     gap: 5px;
     overflow: hidden;
+    cursor: pointer;
+    touch-action: manipulation;
+
+    &:active { filter: brightness(1.25); }
+
+    &:focus-visible {
+      outline: solid 2px #f2f2f4;
+      outline-offset: -2px;
+    }
 
     .chipLabel {
       overflow: hidden;
@@ -276,6 +295,16 @@ const Div = styled.div`
     font-size: 13.5px;
     line-height: 1.28;
     box-shadow: -1px 0 0 rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    /* Der Browser soll die Geste nicht als Doppeltipp-Zoom deuten. */
+    touch-action: manipulation;
+
+    &:active { filter: brightness(1.25); }
+
+    &:focus-visible {
+      outline: solid 2px #f2f2f4;
+      outline-offset: -2px;
+    }
 
     .eventTitle {
       font-weight: 600;
@@ -357,6 +386,11 @@ const Week = () => {
     onSwipedRight: () => previousWeek()
   })
 
+  // Angetippter Termin samt seinem Tag — das Datum steht nicht im Termin
+  // selbst, wird im Detail-Overlay aber gebraucht.
+  const [ selected, setSelected ] = React.useState(null)
+  const closeDetails = React.useCallback(() => setSelected(null), [])
+
   // Die Jetzt-Linie muss auch dann nachrücken, wenn keine neuen Daten kommen.
   // useTimeout kippt in festem Takt einen Wert und erzwingt so ein Rerender.
   const tick = useTimeout(CALENDAR_NOW_TICK, 'calendar-now')
@@ -429,6 +463,18 @@ const Week = () => {
                 return (
                   <div key={index} className={'awayLane'}>
                     <div className={'awayBar'}
+                         role={'button'}
+                         tabIndex={0}
+                         onClick={() => setSelected({
+                           event,
+                           day: weekData[startIndex]?.date,
+                         })}
+                         onKeyDown={(e) => {
+                           if (e.key === 'Enter' || e.key === ' ') {
+                             e.preventDefault()
+                             setSelected({ event, day: weekData[startIndex]?.date })
+                           }
+                         }}
                          style={{
                            left: `${(startIndex / 7) * 100}%`,
                            width: `calc(${(span / 7) * 100}% - 6px)`,
@@ -458,6 +504,15 @@ const Week = () => {
                 const { title, icon, primary, wasteColor } = classifyEvent(event)
                 return (
                   <div key={eventIndex} className={'chip'}
+                       role={'button'}
+                       tabIndex={0}
+                       onClick={() => setSelected({ event, day: day.date })}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter' || e.key === ' ') {
+                           e.preventDefault()
+                           setSelected({ event, day: day.date })
+                         }
+                       }}
                        style={{ borderLeftColor: PERSONS[primary].color }}>
                     {wasteColor
                       ? <span className={'wasteDot'} style={{ backgroundColor: wasteColor }}/>
@@ -501,6 +556,15 @@ const Week = () => {
                   return (
                     <div key={eventIndex}
                          className={'event'}
+                         role={'button'}
+                         tabIndex={0}
+                         onClick={() => setSelected({ event, day: day.date })}
+                         onKeyDown={(e) => {
+                           if (e.key === 'Enter' || e.key === ' ') {
+                             e.preventDefault()
+                             setSelected({ event, day: day.date })
+                           }
+                         }}
                          style={{
                            top,
                            height,
@@ -555,6 +619,12 @@ const Week = () => {
         <div style={{ padding: '1rem', color: '#f85a5a', textAlign: 'center', marginTop: '1rem' }}>
           <div>Warnung: {error instanceof Error ? error.message : String(error)}</div>
         </div>
+      )}
+
+      {selected && (
+        <ErrorBoundary label="Termindetails">
+          <EventDetails event={selected.event} day={selected.day} onClose={closeDetails}/>
+        </ErrorBoundary>
       )}
     </Div>
   )

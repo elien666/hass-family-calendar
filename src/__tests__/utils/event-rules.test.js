@@ -120,6 +120,30 @@ describe('Abfuhrtitel kürzen', () => {
   })
 })
 
+describe('Führende Emoji im Titel', () => {
+  it('entfernt sie, weil das Symbol schon separat gezeigt wird', () => {
+    expect(displayTitle('🏑 Training Mo. WU10')).toBe('Training Mo. WU10')
+    expect(displayTitle('🏫 Schulfotograf')).toBe('Schulfotograf')
+  })
+
+  it('lässt Emoji innerhalb des Titels stehen', () => {
+    expect(displayTitle('Klasse 3a 🌲 Waldtag')).toBe('Klasse 3a 🌲 Waldtag')
+  })
+
+  it('behält den Titel, wenn er nur aus einem Emoji besteht', () => {
+    // Sonst bliebe die Kachel leer.
+    expect(displayTitle('🎂')).toBe('🎂')
+  })
+
+  it('ändert nichts an der Personen- und Aktivitätserkennung', () => {
+    // Die Regeln lesen den Originaltitel, nicht den gekürzten.
+    const result = classifyEvent(ev('🏑 Training Mo. WU10'))
+    expect(result.persons).toContain('norell')
+    expect(result.icon).toBe('🏑')
+    expect(result.title).toBe('Training Mo. WU10')
+  })
+})
+
 describe('Robustheit', () => {
   it('verträgt fehlende Felder', () => {
     expect(() => classifyEvent({})).not.toThrow()
