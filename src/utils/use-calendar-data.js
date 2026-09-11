@@ -33,8 +33,9 @@ const getIconFromString = (iconString) => {
 }
 
 // Weeks to prefetch around the visible one, so switching weeks does not show
-// a loading state: the previous week and the following three.
-const PREFETCH_OFFSETS = [-1, 1, 2, 3]
+// a loading state: the previous week and the following three. They are fetched
+// in this order, so the next week - the most likely destination - is warm first.
+const PREFETCH_OFFSETS = [1, -1, 2, 3]
 
 const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
   axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
@@ -165,17 +166,42 @@ const fetchWeek = (startDate, calendars, buildUrl) => {
   return request
 }
 
+// Identifies the most recent prefetch run, so a run started for an earlier week
+// stops as soon as the user has navigated somewhere else.
+let currentPrefetchRun = 0
+
 // Loads the surrounding weeks in the background to keep navigation instant.
+//
+// The weeks are fetched one after another rather than all at once: a parallel
+// burst would hit Home Assistant with PREFETCH_OFFSETS x calendars requests at
+// the same moment. Nearest weeks go first, so the most likely next week is ready
+// earliest.
+//
 // Prefetch failures are intentionally swallowed: they must never surface as an
-// error for the week the user is actually looking at.
+// error for the week the user is actually looking at, and one failing week must
+// not stop the ones after it.
 const prefetchNeighbours = (startDate, calendars, buildUrl) => {
-  PREFETCH_OFFSETS.forEach((offset) => {
-    const neighbourStart = startDate.plus({ days: offset * 7 })
-    if (getCachedWeek(neighbourStart)) {
-      return
+  const run = ++currentPrefetchRun
+
+  const fetchNext = async () => {
+    for (const offset of PREFETCH_OFFSETS) {
+      // A newer run has taken over: these weeks are no longer the ones to warm up
+      if (run !== currentPrefetchRun) {
+        return
+      }
+      const neighbourStart = startDate.plus({ days: offset * 7 })
+      if (getCachedWeek(neighbourStart)) {
+        continue
+      }
+      try {
+        await fetchWeek(neighbourStart, calendars, buildUrl)
+      } catch {
+        // Keep going: a failing week must not block the remaining ones
+      }
     }
-    fetchWeek(neighbourStart, calendars, buildUrl).catch(() => {})
-  })
+  }
+
+  fetchNext()
 }
 
 const loadAll = (startDate, setData, toggleLoading, activeWeekRef, setError, calendars, buildUrl, isMountedRef) => {

@@ -65,6 +65,83 @@ describe('useCalendarData week prefetching', () => {
     expect(weeks).toContain('2026-09-28')
   })
 
+  it('runs the prefetches one at a time instead of in one burst', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const release = []
+
+    axios.mockImplementation(() => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      return new Promise((resolve) => {
+        release.push(() => {
+          inFlight--
+          resolve({ data: [] })
+        })
+      })
+    })
+
+    renderHook(() => useCalendarData(MONDAY))
+
+    // Resolve requests one by one; each release may start the next prefetch
+    for (let i = 0; i < 5; i++) {
+      await waitFor(() => expect(release.length).toBeGreaterThan(i))
+      await act(async () => { release[i]() })
+    }
+
+    await waitFor(() => expect(release.length).toBe(5))
+
+    // One visible week plus four prefetches, never overlapping
+    expect(maxInFlight).toBe(1)
+  })
+
+  it('prefetches the next week before the more distant ones', async () => {
+    const release = []
+    axios.mockImplementation(() => new Promise((resolve) => {
+      release.push(() => resolve({ data: [] }))
+    }))
+
+    renderHook(() => useCalendarData(MONDAY))
+
+    // Visible week first
+    await waitFor(() => expect(release.length).toBe(1))
+    await act(async () => { release[0]() })
+
+    // Then the next week, ahead of the previous one and the distant ones
+    await waitFor(() => expect(release.length).toBe(2))
+    expect(requestedWeekStarts(axios)[1]).toBe('2026-09-14')
+  })
+
+  it('stops a prefetch run that has been superseded by a week change', async () => {
+    const release = []
+    axios.mockImplementation(() => new Promise((resolve) => {
+      release.push(() => resolve({ data: [] }))
+    }))
+
+    const { rerender } = renderHook(
+      ({ startDate }) => useCalendarData(startDate),
+      { initialProps: { startDate: MONDAY } }
+    )
+
+    // Let the visible week finish so the prefetch chain starts
+    await waitFor(() => expect(release.length).toBe(1))
+    await act(async () => { release[0]() })
+    await waitFor(() => expect(release.length).toBe(2))
+
+    // Navigate away, then let the in-flight prefetch settle
+    await act(async () => {
+      rerender({ startDate: MONDAY.plus({ days: 70 }) })
+    })
+    await act(async () => { release[1]() })
+
+    await waitFor(() => expect(release.length).toBeGreaterThan(2))
+
+    // The superseded run must not keep walking its remaining offsets
+    const requested = requestedWeekStarts(axios)
+    expect(requested).not.toContain('2026-09-21')
+    expect(requested).not.toContain('2026-09-28')
+  })
+
   it('shows the next week without an intermediate empty (loading) state', async () => {
     const { result, rerender } = renderHook(
       ({ startDate }) => useCalendarData(startDate),
