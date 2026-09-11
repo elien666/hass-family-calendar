@@ -19,3 +19,7 @@ export const CAMERA_TOKEN_REFRESH_INTERVAL = 600000 // 10 minutes
 export const PRECLIMATE_ANIMATION_DURATION = 10000
 export const PRECLIMATE_COMMAND_TIMEOUT = 15000
 export const GARAGE_FEEDBACK_TIMEOUT = 3000
+
+// Kalender: Auto-Scroll zur aktuellen Uhrzeit
+export const CALENDAR_AUTOSCROLL_RESUME = 120000 // 2 Minuten ohne Berührung
+export const CALENDAR_NOW_TICK = 30000 // Jetzt-Linie nachführen

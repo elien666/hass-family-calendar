@@ -4,8 +4,8 @@ import axios from 'axios'
 import qs from 'qs'
 // Import only the icons that are commonly used for calendars
 // Add more icons here as needed when configuring calendars
-import { 
-  mdiDelete, 
+import {
+  mdiDelete,
   mdiCake,
   // Add other commonly used calendar icons here as needed
 } from '@mdi/js'
@@ -23,7 +23,7 @@ const iconMap = {
   // Add mappings for other icons as needed
 }
 
-const getIconFromString = (iconString) => {
+export const getIconFromString = (iconString) => {
   if (!iconString || typeof iconString !== 'string') {
     return undefined
   }
@@ -32,7 +32,12 @@ const getIconFromString = (iconString) => {
   return iconMap[iconKey] || undefined
 }
 
-const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
+// Weeks to prefetch around the visible one, so switching weeks does not show
+// a loading state: the previous week and the following three. They are fetched
+// in this order, so the next week - the most likely destination - is warm first.
+const PREFETCH_OFFSETS = [1, -1, 2, 3]
+
+export const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
   axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
     timeout: 65000, // 65 second timeout (backend has 60s timeout, add buffer)
     signal: signal // Add abort signal to cancel request if component unmounts
@@ -55,7 +60,7 @@ const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
           offsetDayEnd = Math.floor(DateTime.fromSQL(event.end.date).diff(start, 'days').as('days')) - 1
         }
         const offsetDayStart = Math.floor(eventStart.diff(start, 'days').as('days'))
-        
+
         // Limit end to length
         if (offsetDayEnd >= data.length) {
           offsetDayEnd = data.length - 1
@@ -94,89 +99,169 @@ const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
 const calendarCache = new Map()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
+// In-flight requests per week, so a prefetch and a later navigation to the same
+// week share one request instead of firing it twice.
+const pendingWeeks = new Map()
+
 const getCacheKey = (startDate) => {
   return startDate.toISODate()
 }
 
-const loadAll = (startDate, data, setData, toggleLoading, cacheRef, setError, calendars, buildUrl, isMountedRef) => {
-  // Set up day buckets
+const buildDateRange = (startDate) => {
   const dateRange = [0,1,2,3,4,5].map((diff) => (
     startDate.plus({ days: diff })).startOf('day')
   )
   dateRange[6] = startDate.plus({ days: 6 }).endOf('day')
+  return dateRange
+}
 
-  const cacheKey = getCacheKey(startDate)
-  const cached = calendarCache.get(cacheKey)
-  
-  // Check cache
+// Returns cached week data if it is still fresh, otherwise undefined.
+const getCachedWeek = (startDate) => {
+  const cached = calendarCache.get(getCacheKey(startDate))
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    if (isMountedRef.current) {
-      setData(cached.data)
-    }
-    return
+    return cached.data
+  }
+  return undefined
+}
+
+// Drops a week from the cache so the next load fetches it again. Used by the
+// periodic refresh to pick up calendar changes made elsewhere.
+const invalidateWeek = (startDate) => {
+  calendarCache.delete(getCacheKey(startDate))
+}
+
+// Fetches one week and puts it into the cache. Resolves with the week data.
+// Concurrent calls for the same week share a single request.
+//
+// Week requests are deliberately not abortable: they are shared between the
+// visible week and background prefetches, so aborting one caller's navigation
+// would also cancel a fetch another caller still needs. A request whose result
+// is no longer wanted is simply ignored by the caller and still fills the cache.
+const fetchWeek = (startDate, calendars, buildUrl) => {
+  const cacheKey = getCacheKey(startDate)
+
+  const pending = pendingWeeks.get(cacheKey)
+  if (pending) {
+    return pending
   }
 
+  const dateRange = buildDateRange(startDate)
   const newData = dateRange.map((date) => ({ date, allDay: [], events: []}))
+
+  const request = Promise.all(calendars.map((calendar) => (
+    loadCalendarInto(calendar, dateRange[0], dateRange[6], newData, buildUrl, undefined)
+  )))
+    .then(() => {
+      calendarCache.set(cacheKey, {
+        data: newData,
+        timestamp: Date.now()
+      })
+      return newData
+    })
+    .finally(() => {
+      pendingWeeks.delete(cacheKey)
+    })
+
+  pendingWeeks.set(cacheKey, request)
+  return request
+}
+
+// Identifies the most recent prefetch run, so a run started for an earlier week
+// stops as soon as the user has navigated somewhere else.
+let currentPrefetchRun = 0
+
+// Loads the surrounding weeks in the background to keep navigation instant.
+//
+// The weeks are fetched one after another rather than all at once: a parallel
+// burst would hit Home Assistant with PREFETCH_OFFSETS x calendars requests at
+// the same moment. Nearest weeks go first, so the most likely next week is ready
+// earliest.
+//
+// Prefetch failures are intentionally swallowed: they must never surface as an
+// error for the week the user is actually looking at, and one failing week must
+// not stop the ones after it.
+const prefetchNeighbours = (startDate, calendars, buildUrl) => {
+  const run = ++currentPrefetchRun
+
+  const fetchNext = async () => {
+    for (const offset of PREFETCH_OFFSETS) {
+      // A newer run has taken over: these weeks are no longer the ones to warm up
+      if (run !== currentPrefetchRun) {
+        return
+      }
+      const neighbourStart = startDate.plus({ days: offset * 7 })
+      if (getCachedWeek(neighbourStart)) {
+        continue
+      }
+      try {
+        await fetchWeek(neighbourStart, calendars, buildUrl)
+      } catch {
+        // Keep going: a failing week must not block the remaining ones
+      }
+    }
+  }
+
+  fetchNext()
+}
+
+const loadAll = (startDate, setData, toggleLoading, activeWeekRef, setError, calendars, buildUrl, isMountedRef) => {
+  // Marks results of an earlier week as stale once the user has navigated on
+  const isStale = () => !isMountedRef.current || activeWeekRef.current !== getCacheKey(startDate)
 
   // Skip if no calendars configured
   if (!calendars || calendars.length === 0) {
     logger.warn('loadAll: No calendars configured, skipping fetch', { calendars })
     if (isMountedRef.current) {
-      setData(newData)
+      setData(buildDateRange(startDate).map((date) => ({ date, allDay: [], events: []})))
       toggleLoading(false)
     }
     return
   }
-  
-  logger.debug('loadAll: Starting calendar fetch', { 
+
+  const cached = getCachedWeek(startDate)
+  if (cached) {
+    if (isMountedRef.current) {
+      setData(cached)
+      setError(false)
+    }
+    // Still warm up the neighbours around the newly shown week
+    prefetchNeighbours(startDate, calendars, buildUrl)
+    return
+  }
+
+  logger.debug('loadAll: Starting calendar fetch', {
     calendarsCount: calendars.length,
     calendars: calendars.map(c => c.name),
-    startDate: startDate.toISO(),
-    endDate: dateRange[6].toISO()
+    startDate: startDate.toISO()
   })
-
-  // Fetch data
-  const abortController = new AbortController()
-  if (cacheRef.current) {
-    cacheRef.current.abort()
-  }
-  cacheRef.current = abortController
 
   try {
     if (isMountedRef.current) {
       toggleLoading(true)
     }
-    // Batch all calendar requests in parallel
-    const loading = calendars.map((calendar) => (
-      loadCalendarInto(calendar, dateRange[0], dateRange[6], newData, buildUrl, abortController.signal)
-    ))
 
-    Promise.all(loading)
-      .then(() => {
-        if (isMountedRef.current && !abortController.signal.aborted) {
-          // Cache the result
-          calendarCache.set(cacheKey, {
-            data: newData,
-            timestamp: Date.now()
-          })
-          setData(newData)
+    fetchWeek(startDate, calendars, buildUrl)
+      .then((weekData) => {
+        if (!isStale()) {
+          setData(weekData)
           setError(false)
         }
+        prefetchNeighbours(startDate, calendars, buildUrl)
       })
       .catch((err) => {
-        // Don't set error if request was aborted or component unmounted
-        if (isMountedRef.current && !abortController.signal.aborted) {
+        // Don't surface errors for a week the user has already navigated away from
+        if (!isStale()) {
           // Error is already logged by interceptor, format for UI
           setError(formatErrorForUI(err))
         }
       })
       .finally(() => {
-        if (isMountedRef.current && !abortController.signal.aborted) {
+        if (!isStale()) {
           toggleLoading(false)
         }
       })
   } catch (err) {
-    if (isMountedRef.current && !abortController.signal.aborted) {
+    if (!isStale()) {
       // Error is already logged by interceptor, format for UI
       setError(formatErrorForUI(err))
       toggleLoading(false)
@@ -189,7 +274,7 @@ const emptyData = []
 const useCalendarData = (startDate) => {
   const config = useConfig()
   const CALENDARS = config.CALENDARS || []
-  
+
   // Debug: Log config changes
   React.useEffect(() => {
     logger.debug('useCalendarData: config changed', {
@@ -199,26 +284,26 @@ const useCalendarData = (startDate) => {
       configKeys: Object.keys(config)
     })
   }, [config])
-  
+
   // Process calendars from config: map icon strings to icon objects
   const calendars = React.useMemo(() => {
     const processed = CALENDARS.map((calendar) => ({
       name: calendar.name,
       icon: getIconFromString(calendar.icon)
     }))
-    logger.debug('Processing calendars from config (memo update):', { 
-      CALENDARS, 
+    logger.debug('Processing calendars from config (memo update):', {
+      CALENDARS,
       count: CALENDARS.length,
       processedCount: processed.length,
       processed: processed.map(c => c.name)
     })
     return processed
   }, [CALENDARS])
-  
+
   // Debug: Log when CALENDARS changes
   React.useEffect(() => {
-    logger.debug('CALENDARS array changed:', { 
-      CALENDARS, 
+    logger.debug('CALENDARS array changed:', {
+      CALENDARS,
       count: CALENDARS.length,
       calendarsMemoCount: calendars.length
     })
@@ -236,42 +321,63 @@ const useCalendarData = (startDate) => {
   }, [host])
 
   const [ data, setData ] = React.useState(emptyData)
-  const [ isLoading, setIsLoading ] = React.useState(false)
+  const [ , setIsLoading ] = React.useState(false)
   const [ error, setError ] = React.useState(false)
   const [ currentStartDate, setCurrentStartDate ] = React.useState(null)
-  const abortRef = useRef(null)
+  // Cache key of the week currently being displayed; results for any other week
+  // are stale and get discarded.
+  const activeWeekRef = useRef(null)
   const isMountedRef = useRef(true)
 
-  // Use timeout to periodically refresh data, but don't include it as a dependency
-  // to avoid unnecessary re-renders
-  useTimeout(60000, 'Calendar')
-
+  // Track mounted state separately from the fetch effect, so navigating between
+  // weeks does not mark the hook as unmounted.
   React.useEffect(() => {
     isMountedRef.current = true
-    
-    logger.debug('useCalendarData effect triggered:', { 
-      startDate: startDate?.toISO(), 
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  // Flips every 60 seconds and re-runs the effect below to refresh the data
+  const refreshTick = useTimeout(60000, 'Calendar')
+  // Skip the invalidation on the very first run: that is the initial load, not a refresh
+  const lastRefreshTick = useRef(refreshTick)
+
+  React.useEffect(() => {
+    logger.debug('useCalendarData effect triggered:', {
+      startDate: startDate?.toISO(),
       calendarsCount: calendars.length,
       calendars: calendars.map(c => c.name),
       hasStartDate: startDate !== undefined,
       hasCalendars: calendars.length > 0
     })
-    
+
     // Only fetch if we have both startDate and calendars
     if (startDate !== undefined && calendars.length > 0) {
       const isNewDate = currentStartDate === null || !currentStartDate.equals(startDate)
-      
+      const isRefresh = lastRefreshTick.current !== refreshTick
+      lastRefreshTick.current = refreshTick
+
+      activeWeekRef.current = getCacheKey(startDate)
+
       if (isNewDate) {
-        // Start date was changed, show loading animation
-        setData(emptyData)
+        // Start date was changed. Show the prefetched week right away if we have
+        // it; only fall back to the loading animation for an uncached week.
+        setData(getCachedWeek(startDate) || emptyData)
         setCurrentStartDate(startDate)
+      } else if (isRefresh) {
+        // The timer fired: drop the cached copy so the week is fetched again and
+        // changes made elsewhere show up. The currently displayed data stays in
+        // place until the new data arrives, so this never flashes a loading state.
+        invalidateWeek(startDate)
       }
-      
+
       logger.debug('useCalendarData: Calling loadAll', {
         startDate: startDate.toISO(),
-        calendarsCount: calendars.length
+        calendarsCount: calendars.length,
+        isRefresh
       })
-      loadAll(startDate, data, setData, setIsLoading, abortRef, setError, calendars, url, isMountedRef)
+      loadAll(startDate, setData, setIsLoading, activeWeekRef, setError, calendars, url, isMountedRef)
     } else {
       if (startDate === undefined) {
         logger.debug('useCalendarData: startDate is undefined, skipping fetch')
@@ -281,13 +387,8 @@ const useCalendarData = (startDate) => {
       }
     }
 
-    return () => {
-      isMountedRef.current = false
-      if (abortRef.current) {
-        abortRef.current.abort()
-      }
-    }
-  }, [startDate, calendars, url]) // Include url so it re-runs when config changes
+  // refreshTick drives the periodic refresh; url re-runs it when the config changes
+  }, [startDate, calendars, url, refreshTick])
 
   return [ data, error ]
 }
