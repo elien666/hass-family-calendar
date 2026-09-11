@@ -22,6 +22,7 @@ import {
   HOUR_HEIGHT,
 } from '../utils/day-layout'
 import EventDetails from './event-details'
+import MonthView from './month-view'
 import { CALENDAR_NOW_TICK } from '../utils/constants'
 
 const formatDateTime = (iso) => DateTime.fromISO(iso).toLocaleString(DateTime.TIME_24_SIMPLE)
@@ -389,6 +390,7 @@ const Week = () => {
 
   // Angetippter Termin samt seinem Tag — das Datum steht nicht im Termin
   // selbst, wird im Detail-Overlay aber gebraucht.
+  const [ showMonth, setShowMonth ] = React.useState(false)
   const [ selected, setSelected ] = React.useState(null)
   const closeDetails = React.useCallback(() => setSelected(null), [])
 
@@ -427,7 +429,8 @@ const Week = () => {
     <Div {...swipeHandlers}>
       <ErrorBoundary label="Header">
         <Header nextWeek={nextWeek} previousWeek={previousWeek}
-                startWeekWithToday={startWeekWithToday}/>
+                startWeekWithToday={startWeekWithToday}
+                onOpenMonth={() => setShowMonth(true)}/>
       </ErrorBoundary>
 
       <div className={'weekGrid'}>
@@ -625,6 +628,12 @@ const Week = () => {
           <EventDetails event={selected.event} day={selected.day} onClose={closeDetails}/>
         </ErrorBoundary>
       )}
+
+      {/* Immer gerendert, damit die Hooks von MonthView bei jedem Render in
+          gleicher Reihenfolge laufen; `visible` steuert Anzeige und Laden. */}
+      <ErrorBoundary label="Monatsübersicht">
+        <MonthView visible={showMonth} onClose={() => setShowMonth(false)}/>
+      </ErrorBoundary>
     </Div>
   )
 }

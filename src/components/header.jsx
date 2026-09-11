@@ -1,6 +1,6 @@
 import React, { memo } from 'react'
 import Icon from '../utils/mdi-icon'
-import { mdiChevronLeft, mdiChevronRight, mdiLoading } from '@mdi/js'
+import { mdiChevronLeft, mdiChevronRight, mdiLoading, mdiCalendarMonthOutline } from '@mdi/js'
 import styled from 'styled-components'
 import clsx from 'clsx'
 import Clock from './clock'
@@ -42,7 +42,17 @@ const Div = styled.div`
     svg {
       cursor: pointer;
     }
-    
+
+    .monthButton {
+      margin-left: 10px;
+      padding: 4px;
+      border-radius: 6px;
+      touch-action: manipulation;
+
+      &:active { background-color: #3a3a44; }
+      &:focus-visible { outline: solid 2px #ffffff; outline-offset: 2px; }
+    }
+
     button {
       cursor: pointer;
       background-color: transparent;
@@ -56,7 +66,7 @@ const Div = styled.div`
 
 `
 
-const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
+const Header = ({ nextWeek, previousWeek, startWeekWithToday, onOpenMonth }) => {
 
   return (
     <Div>
@@ -71,6 +81,20 @@ const Header = ({ nextWeek, previousWeek, startWeekWithToday }) => {
               color='#ffffff'
               onClick={nextWeek}/>
         <button onClick={startWeekWithToday}>Today</button>
+        <Icon path={mdiCalendarMonthOutline}
+              size={'30px'}
+              color='#ffffff'
+              className={'monthButton'}
+              role={'button'}
+              tabIndex={0}
+              aria-label={'Monatsübersicht'}
+              onClick={onOpenMonth}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onOpenMonth?.()
+                }
+              }}/>
         <Doorbell />
       </div>
 

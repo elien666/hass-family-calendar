@@ -23,7 +23,7 @@ const iconMap = {
   // Add mappings for other icons as needed
 }
 
-const getIconFromString = (iconString) => {
+export const getIconFromString = (iconString) => {
   if (!iconString || typeof iconString !== 'string') {
     return undefined
   }
@@ -37,7 +37,7 @@ const getIconFromString = (iconString) => {
 // in this order, so the next week - the most likely destination - is warm first.
 const PREFETCH_OFFSETS = [1, -1, 2, 3]
 
-const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
+export const loadCalendarInto = (calendar, start, end, data, buildUrl, signal) => (
   axios(buildUrl(calendar.name, { start: start.toISO(), end: end.toISO() }), {
     timeout: 65000, // 65 second timeout (backend has 60s timeout, add buffer)
     signal: signal // Add abort signal to cancel request if component unmounts
