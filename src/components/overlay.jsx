@@ -33,6 +33,11 @@ const Div = styled.div`
       border-width: 2px;
       padding: 4px 6px;
     }
+
+    /* Für Textinhalte: 80vw sind auf Lesetext angewandt viel zu breit. */
+    &.compact {
+      width: min(620px, 92vw);
+    }
     
     h2 {
       margin: 0;
@@ -61,7 +66,7 @@ const Div = styled.div`
   }
 `
 
-const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
+const Overlay = ({ visible, children, onClick, onClose, fullsize = false, compact = false }) => {
   // Use onClose if provided, otherwise fall back to onClick
   const handleClose = onClose || onClick
 
@@ -101,7 +106,7 @@ const Overlay = ({ visible, children, onClick, onClose, fullsize = false }) => {
     <div className='close' onClick={handleCloseClick}>
       <Icon path={mdiClose} size={2} />
     </div>
-    <div className={clsx('content', { fullsize })} onClick={(event) => event.stopPropagation()}>  
+    <div className={clsx('content', { fullsize, compact })} onClick={(event) => event.stopPropagation()}>
       {children}
     </div>
    </Div>
