@@ -37,11 +37,6 @@
     "dev:deploy:watch": "bash scripts/dev-deploy.sh --watch",
     "dev:deploy:restart": "bash scripts/dev-deploy.sh --restart"
   },
-  "pnpm": {
-    "overrides": {
-      "rollup": ">=4.59.0"
-    }
-  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

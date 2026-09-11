@@ -2,7 +2,8 @@ import React from 'react'
 import useDoorbell, { unlatchFrontDoor } from "../utils/use-doorbell"
 import Overlay from "./overlay"
 import styled from 'styled-components'
-import ProgressBar from '@ramonak/react-progress-bar'
+import ProgressBarDefault from '@ramonak/react-progress-bar'
+import { resolveComponent } from '../utils/resolve-component'
 import { useConfig } from '../utils/ConfigProvider'
 import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
 import logger from '../utils/logger'
@@ -10,6 +11,13 @@ import { formatErrorForUI } from '../utils/axios-error-handler'
 import { DOORBELL_OVERLAY_TIMEOUT, DOORBELL_MANUAL_CLOSE_COOLDOWN, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
 import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
 import CameraGrid from './camera-grid'
+
+// @ramonak/react-progress-bar ships a CJS bundle; depending on the build's interop
+// the default import can arrive as a { default: Component } wrapper object instead
+// of the component. Rendering that object threw React #130 ("got: object") when the
+// doorbell overlay opened (CCTV button), crashing the Header error boundary. Resolve
+// the actual renderable component up front.
+const ProgressBar = resolveComponent(ProgressBarDefault)
 
 const Container = styled.div`
     @keyframes fadeOut {

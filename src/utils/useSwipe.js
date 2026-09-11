@@ -1,27 +1,48 @@
-import { useState } from 'react'
+import { useRef } from 'react'
 
+const MIN_SWIPE_DISTANCE = 50
+
+/**
+ * Erkennt waagerechte Wischgesten.
+ *
+ * Seit der Kalender senkrecht scrollt, muss die Geste die Richtung
+ * unterscheiden: Wer die Zeitachse hoch- oder runterzieht, will nicht die
+ * Woche wechseln. Deshalb zählt ein Wisch nur, wenn er deutlich waagerechter
+ * verläuft als senkrecht.
+ *
+ * @param {{onSwipedLeft: Function, onSwipedRight: Function}} input
+ */
 const useSwipe = (input) => {
-    const [touchStart, setTouchStart] = useState(0)
-    const [touchEnd, setTouchEnd] = useState(0)
-
-    const minSwipeDistance = 50
+    // Refs statt State: Die Zwischenwerte einer laufenden Geste gehören nicht
+    // ins Rendering, und ein Rerender pro touchmove wäre auf dem Tablet teuer.
+    const start = useRef(null)
+    const current = useRef(null)
 
     const onTouchStart = (e) => {
-        setTouchEnd(0) // otherwise the swipe is fired even with usual touch events
-        setTouchStart(e.targetTouches[0].clientX)
+        const touch = e.targetTouches[0]
+        start.current = { x: touch.clientX, y: touch.clientY }
+        current.current = null
     }
 
-    const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX)
+    const onTouchMove = (e) => {
+        const touch = e.targetTouches[0]
+        current.current = { x: touch.clientX, y: touch.clientY }
+    }
 
     const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) return
-        const distance = touchStart - touchEnd
-        const isLeftSwipe = distance > minSwipeDistance
-        const isRightSwipe = distance < -minSwipeDistance
-        if (isLeftSwipe) {
+        if (!start.current || !current.current) return
+
+        const dx = start.current.x - current.current.x
+        const dy = start.current.y - current.current.y
+        start.current = null
+        current.current = null
+
+        // Senkrechte Anteile überwiegen: Das war Scrollen, kein Wochenwechsel.
+        if (Math.abs(dx) <= Math.abs(dy)) return
+
+        if (dx > MIN_SWIPE_DISTANCE) {
             input.onSwipedLeft()
-        }
-        if (isRightSwipe) {
+        } else if (dx < -MIN_SWIPE_DISTANCE) {
             input.onSwipedRight()
         }
     }

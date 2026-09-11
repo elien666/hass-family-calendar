@@ -14,17 +14,22 @@ export default defineConfig(({ mode }) => {
           manualChunks: (id) => {
             // Split vendor dependencies into separate chunks
             if (id.includes('node_modules')) {
-              // React and ReactDOM
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'react-vendor';
-              }
-              
-              // UI libraries
+              // UI libraries — checked BEFORE the React core match below, because their
+              // package paths also contain the substring "react" (e.g. @mdi/react,
+              // react-loader-spinner). Letting them fall into react-vendor changes the
+              // chunk layout and, for @mdi/react's legacy CJS bundle, the CJS→ESM interop
+              // wrapping — which produced the intermittent React #130 / "Header konnte
+              // nicht geladen werden" crash. Keep them in their own chunk.
               if (id.includes('styled-components') ||
                   id.includes('sonner') ||
                   id.includes('react-loader-spinner') ||
                   id.includes('@mdi/')) {
                 return 'ui-vendor';
+              }
+
+              // React and ReactDOM core (matched only after the UI libs above)
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'react-vendor';
               }
               
               // Date/time library
