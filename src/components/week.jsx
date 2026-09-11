@@ -50,6 +50,11 @@ const Div = styled.div`
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    /* Eigener Stapelkontext: Die z-index-Werte für Terminstapel und
+       Jetzt-Linie bleiben dadurch im Kalender eingeschlossen und können
+       die Overlays (CCTV, Wäsche, Garage, Wetter, Türklingel) nicht
+       überdecken, die im selben Elternkontext liegen. */
+    isolation: isolate;
     background-color: #252528;
     border-radius: 4px;
     overflow: hidden;
