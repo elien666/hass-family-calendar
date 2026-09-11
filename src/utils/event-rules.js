@@ -13,12 +13,18 @@
  * Regel 1 und 4 laufen unabhängig: Ein Termin trägt Personenfarbe UND Symbol.
  */
 
+/**
+ * `color` färbt die schmale Kante einer Terminkachel, `tile` deren Fläche.
+ * `text` ist dieselbe Farbe so weit aufgehellt, dass sie als Schrift auf
+ * dunklem Grund lesbar bleibt — die Kantenfarben erreichen den nötigen
+ * Kontrast nicht (Familie käme nur auf 2,5:1).
+ */
 export const PERSONS = {
-  bjoern: { label: 'Björn', color: '#3f8a6e', tile: '#2b4f43' },
-  swantje: { label: 'Swantje', color: '#7d6bb0', tile: '#413761' },
-  norell: { label: 'Norell', color: '#4a90b8', tile: '#31485a' },
-  hayo: { label: 'Hayo', color: '#d98c3f', tile: '#56412a' },
-  family: { label: 'Familie', color: '#5a5a62', tile: '#3a3a44' },
+  bjoern: { label: 'Björn', color: '#3f8a6e', tile: '#2b4f43', text: '#6fc7a3' },
+  swantje: { label: 'Swantje', color: '#7d6bb0', tile: '#413761', text: '#b3a2e0' },
+  norell: { label: 'Norell', color: '#4a90b8', tile: '#31485a', text: '#79bde2' },
+  hayo: { label: 'Hayo', color: '#d98c3f', tile: '#56412a', text: '#eeab63' },
+  family: { label: 'Familie', color: '#5a5a62', tile: '#3a3a44', text: '#a9a7b0' },
 }
 
 /** Abwesenheit hebt sich bewusst von Björns Personenfarbe ab: Es geht nicht um
