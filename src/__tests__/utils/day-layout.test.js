@@ -18,10 +18,25 @@ const timed = (summary, start, end) => ({
   end: { dateTime: `2026-09-10T${end}:00+02:00` },
 })
 
+/**
+ * Erwartete Dezimalstunde eines ISO-Zeitpunkts in der lokalen Zone.
+ *
+ * toDecimalHour liefert bewusst die lokale Wanduhrzeit — der Kalender zeigt
+ * Termine so an, wie die Familie sie liest. Die Erwartung wird deshalb aus
+ * derselben Zone abgeleitet statt als feste Zahl gesetzt: Sonst hängt der
+ * Test an der Zeitzone der Maschine und schlägt in UTC fehl.
+ */
+const localHour = (iso) => {
+  const dt = DateTime.fromISO(iso)
+  return dt.hour + dt.minute / 60
+}
+
 describe('toDecimalHour', () => {
   it('rechnet Minuten in Bruchteile um', () => {
-    expect(toDecimalHour('2026-09-10T17:30:00+02:00')).toBeCloseTo(17.5)
-    expect(toDecimalHour('2026-09-10T16:45:00+02:00')).toBeCloseTo(16.75)
+    expect(toDecimalHour('2026-09-10T17:30:00+02:00'))
+      .toBeCloseTo(localHour('2026-09-10T17:30:00+02:00'))
+    expect(toDecimalHour('2026-09-10T16:45:00+02:00'))
+      .toBeCloseTo(localHour('2026-09-10T16:45:00+02:00'))
   })
 
   it('gibt bei ungültiger Eingabe null zurück', () => {
@@ -33,7 +48,8 @@ describe('toDecimalHour', () => {
 describe('layoutDayEvents — Position aus der Uhrzeit', () => {
   it('setzt den Abstand nach der Startzeit', () => {
     const [ item ] = layoutDayEvents([ timed('Training', '17:30', '19:30') ])
-    expect(item.top).toBeCloseTo((17.5 - DAY_START_HOUR) * HOUR_HEIGHT)
+    const start = localHour('2026-09-10T17:30:00+02:00')
+    expect(item.top).toBeCloseTo((start - DAY_START_HOUR) * HOUR_HEIGHT)
   })
 
   it('leitet die Höhe aus der Dauer ab', () => {
