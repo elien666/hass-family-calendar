@@ -123,6 +123,12 @@ const getCachedWeek = (startDate) => {
   return undefined
 }
 
+// Drops a week from the cache so the next load fetches it again. Used by the
+// periodic refresh to pick up calendar changes made elsewhere.
+const invalidateWeek = (startDate) => {
+  calendarCache.delete(getCacheKey(startDate))
+}
+
 // Fetches one week and puts it into the cache. Resolves with the week data.
 // Concurrent calls for the same week share a single request.
 //
@@ -306,9 +312,10 @@ const useCalendarData = (startDate) => {
     }
   }, [])
 
-  // Use timeout to periodically refresh data, but don't include it as a dependency
-  // to avoid unnecessary re-renders
-  useTimeout(60000, 'Calendar')
+  // Flips every 60 seconds and re-runs the effect below to refresh the data
+  const refreshTick = useTimeout(60000, 'Calendar')
+  // Skip the invalidation on the very first run: that is the initial load, not a refresh
+  const lastRefreshTick = useRef(refreshTick)
 
   React.useEffect(() => {
     logger.debug('useCalendarData effect triggered:', {
@@ -322,6 +329,8 @@ const useCalendarData = (startDate) => {
     // Only fetch if we have both startDate and calendars
     if (startDate !== undefined && calendars.length > 0) {
       const isNewDate = currentStartDate === null || !currentStartDate.equals(startDate)
+      const isRefresh = lastRefreshTick.current !== refreshTick
+      lastRefreshTick.current = refreshTick
 
       activeWeekRef.current = getCacheKey(startDate)
 
@@ -330,11 +339,17 @@ const useCalendarData = (startDate) => {
         // it; only fall back to the loading animation for an uncached week.
         setData(getCachedWeek(startDate) || emptyData)
         setCurrentStartDate(startDate)
+      } else if (isRefresh) {
+        // The timer fired: drop the cached copy so the week is fetched again and
+        // changes made elsewhere show up. The currently displayed data stays in
+        // place until the new data arrives, so this never flashes a loading state.
+        invalidateWeek(startDate)
       }
 
       logger.debug('useCalendarData: Calling loadAll', {
         startDate: startDate.toISO(),
-        calendarsCount: calendars.length
+        calendarsCount: calendars.length,
+        isRefresh
       })
       loadAll(startDate, setData, setIsLoading, activeWeekRef, setError, calendars, url, isMountedRef)
     } else {
@@ -346,7 +361,8 @@ const useCalendarData = (startDate) => {
       }
     }
 
-  }, [startDate, calendars, url]) // Include url so it re-runs when config changes
+  // refreshTick drives the periodic refresh; url re-runs it when the config changes
+  }, [startDate, calendars, url, refreshTick])
 
   return [ data, error ]
 }
