@@ -13,6 +13,7 @@ import { ThreeDots } from 'react-loader-spinner'
 import classifyEvent, { PERSONS, AWAY_STYLE } from '../utils/event-rules'
 import {
   layoutDayEvents,
+  laneGeometry,
   spanMultiDayEvents,
   currentHourOffset,
   axisHeight,
@@ -550,9 +551,7 @@ const Week = () => {
                 {laidOutDays[index]?.map(({ event, top, height, lane, lanes }, eventIndex) => {
                   const { title, icon, primary } = classifyEvent(event)
                   const person = PERSONS[primary]
-                  // Überlappende Termine versetzt stapeln statt die Spalte zu
-                  // teilen — so bleibt jeder Titel lesbar.
-                  const offset = lanes > 1 ? lane * 14 : 0
+                  const { left, width } = laneGeometry(lane, lanes)
                   return (
                     <div key={eventIndex}
                          className={'event'}
@@ -568,8 +567,8 @@ const Week = () => {
                          style={{
                            top,
                            height,
-                           left: `calc(3px + ${offset}px)`,
-                           right: '3px',
+                           left,
+                           width,
                            zIndex: 10 + lane,
                            backgroundColor: person.tile,
                            borderLeftColor: person.color,

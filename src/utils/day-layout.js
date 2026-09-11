@@ -86,6 +86,51 @@ export const layoutDayEvents = (events) => {
   return laid.map((item) => ({ ...item, lanes }))
 }
 
+/** Ab wie vielen Spuren die Kacheln einander überlappen dürfen. Bis dahin
+ *  stehen sie sauber nebeneinander. */
+const MAX_CLEAN_LANES = 2
+
+/** Wie weit sich die Kacheln bei vielen Spuren überlappen (Anteil der Breite). */
+const CROWDED_OVERLAP = 0.25
+
+/**
+ * Waagerechte Lage einer Terminkachel innerhalb ihrer Tagesspalte.
+ *
+ * Zwei gleichzeitige Termine sind der Normalfall (37 von 161 belegten Tagen
+ * im Bestand) — die stehen nebeneinander, jeder auf halber Breite und
+ * vollständig sichtbar. Erst ab drei Spuren würde das zu schmal; dann
+ * überlappen die Kacheln leicht und gewinnen dadurch Breite zurück, wobei
+ * die linke Kante jeder Kachel frei bleibt.
+ *
+ * @param {number} lane Spur dieses Termins, von 0
+ * @param {number} lanes Anzahl Spuren an diesem Tag
+ * @returns {{left: string, width: string}} CSS-Werte
+ */
+export const laneGeometry = (lane, lanes) => {
+  if (!lanes || lanes < 2) {
+    return { left: '3px', width: 'calc(100% - 6px)' }
+  }
+
+  if (lanes <= MAX_CLEAN_LANES) {
+    const share = 100 / lanes
+    return {
+      left: `calc(${lane * share}% + 3px)`,
+      width: `calc(${share}% - 6px)`,
+    }
+  }
+
+  // Gedrängt: Die Kacheln greifen ineinander, damit jede lesbar breit bleibt.
+  // Die Schrittweite verteilt die Startpunkte, die Breite darf über einen
+  // Schritt hinausgehen — aber nie über den rechten Spaltenrand.
+  const step = 100 / lanes
+  const left = lane * step
+  const width = Math.min(step * (1 + CROWDED_OVERLAP), 100 - left)
+  return {
+    left: `calc(${left}% + 3px)`,
+    width: `calc(${width}% - 6px)`,
+  }
+}
+
 /**
  * Fasst mehrtägige Ganztages-Termine zu durchgehenden Balken zusammen.
  *

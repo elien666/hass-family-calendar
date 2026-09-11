@@ -106,7 +106,7 @@ describe('Regel 4 — Aktivitätssymbole', () => {
 describe('Abfuhrtitel kürzen', () => {
   it.each([
     [ 'Abfuhr gelbe Wertstofftonne/-sack', 'Gelber Sack', '#c9a227' ],
-    [ 'Abfuhr grüne Biotonne', 'Bio', '#5c8a3a' ],
+    [ 'Abfuhr grüne Biotonne', 'Garten', '#5c8a3a' ],
     [ 'Abfuhr blaue Papiertonne', 'Papier', '#3f74b0' ],
     [ 'Abfuhr schwarze Restmülltonne', 'Restmüll', '#6e6e78' ],
   ])('%s wird zu "%s"', (summary, label, color) => {

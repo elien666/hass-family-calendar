@@ -64,7 +64,7 @@ const ACTIVITIES = [
  *  In einer Tagesspalte ist das zu lang — Farbpunkt plus ein Wort genügt. */
 const WASTE_BINS = [
   { pattern: /gelbe?\s+(wertstoff|sack)/i, label: 'Gelber Sack', color: '#c9a227' },
-  { pattern: /bio/i, label: 'Bio', color: '#5c8a3a' },
+  { pattern: /bio/i, label: 'Garten', color: '#5c8a3a' },
   { pattern: /papier|blaue/i, label: 'Papier', color: '#3f74b0' },
   { pattern: /restmüll|schwarze/i, label: 'Restmüll', color: '#6e6e78' },
 ]

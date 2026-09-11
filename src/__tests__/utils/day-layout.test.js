@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DateTime } from 'luxon'
 import {
   layoutDayEvents,
+  laneGeometry,
   spanMultiDayEvents,
   toDecimalHour,
   hourToOffset,
@@ -109,6 +110,64 @@ describe('layoutDayEvents — Randfälle', () => {
   it('verträgt leere Eingaben', () => {
     expect(layoutDayEvents([])).toEqual([])
     expect(layoutDayEvents(undefined)).toEqual([])
+  })
+})
+
+describe('laneGeometry', () => {
+  /** Prozentwert aus einem calc()-Ausdruck ziehen. */
+  const pct = (value) => parseFloat(value.match(/([\d.]+)%/)?.[1] ?? '0')
+
+  it('gibt einem einzelnen Termin die volle Spaltenbreite', () => {
+    const { left, width } = laneGeometry(0, 1)
+    expect(left).toBe('3px')
+    expect(pct(width)).toBe(100)
+  })
+
+  it('stellt zwei Termine nebeneinander statt übereinander', () => {
+    // Der häufigste Fall; vorher überdeckte die vordere Kachel die hintere.
+    const first = laneGeometry(0, 2)
+    const second = laneGeometry(1, 2)
+    expect(pct(first.width)).toBe(50)
+    expect(pct(second.width)).toBe(50)
+    expect(pct(first.left)).toBe(0)
+    expect(pct(second.left)).toBe(50)
+  })
+
+  it('lässt zwei nebeneinanderliegende Kacheln nicht überlappen', () => {
+    const first = laneGeometry(0, 2)
+    const second = laneGeometry(1, 2)
+    expect(pct(first.left) + pct(first.width)).toBeLessThanOrEqual(pct(second.left))
+  })
+
+  it('gibt Kacheln ab drei Spuren mehr Breite als den reinen Anteil', () => {
+    // Ein Drittel wäre zu schmal für einen lesbaren Titel.
+    const { width } = laneGeometry(0, 3)
+    expect(pct(width)).toBeGreaterThan(100 / 3)
+  })
+
+  it('beginnt die erste Spur immer am linken Rand', () => {
+    [ 1, 2, 3, 5 ].forEach((lanes) => {
+      expect(pct(laneGeometry(0, lanes).left)).toBe(0)
+    })
+  })
+
+  it('ordnet die Spuren von links nach rechts', () => {
+    const lefts = [ 0, 1, 2, 3, 4 ].map((lane) => pct(laneGeometry(lane, 5).left))
+    expect(lefts).toEqual([ ...lefts ].sort((a, b) => a - b))
+  })
+
+  it('hält alle Kacheln innerhalb der Spalte', () => {
+    [ 2, 3, 4, 5 ].forEach((lanes) => {
+      for (let lane = 0; lane < lanes; lane += 1) {
+        const { left, width } = laneGeometry(lane, lanes)
+        expect(pct(left) + pct(width)).toBeLessThanOrEqual(100.5)
+      }
+    })
+  })
+
+  it('verträgt fehlende Angaben', () => {
+    expect(() => laneGeometry(0, 0)).not.toThrow()
+    expect(() => laneGeometry(0, undefined)).not.toThrow()
   })
 })
 
