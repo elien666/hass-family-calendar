@@ -85,7 +85,7 @@ const Container = styled.div`
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 1;
+            z-index: 3;
             cursor: pointer;
         }
 
@@ -93,10 +93,18 @@ const Container = styled.div`
             background-color: #000;
         }
 
+        /* Snapshot poster shown above the (still black) video until the first frame decodes */
+        img.snapshot {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
         /* Spinner while the WebRTC connection is being negotiated */
         .stream-status {
             position: absolute;
             inset: 0;
+            z-index: 2;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -106,8 +114,15 @@ const Container = styled.div`
             background-color: rgba(0, 0, 0, 0.35);
             pointer-events: none;
 
+            /* With a snapshot behind it: unobtrusive spinner in the corner, no dimming */
+            &.with-snapshot {
+                inset: auto 8px 8px auto;
+                background: none;
+            }
+
             .loading-spinner {
                 animation: spin 1s infinite linear;
+                filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
             }
         }
 

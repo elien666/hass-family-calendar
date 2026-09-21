@@ -3,33 +3,52 @@ import logger from './logger'
 import {
   WEBRTC_CONNECT_TIMEOUT,
   WEBRTC_ICE_GATHER_TIMEOUT,
+  WEBRTC_HOST_CANDIDATE_GRACE,
   WEBRTC_DECODE_TIMEOUT,
   WEBRTC_STATS_INTERVAL,
 } from './constants'
 
+const isHostCandidate = (candidate) =>
+  typeof candidate?.candidate === 'string' && / typ host/i.test(candidate.candidate)
+
 /**
- * Wait until the peer connection has gathered its ICE candidates (or a cap
- * elapses). Needed for providers that ignore trickled candidates — Frigate's
- * own WebRTC class answers a single, complete offer.
+ * Wait until the offer carries enough ICE candidates to send.
+ *
+ * Providers without trickle ICE (Frigate's own WebRTC class) answer a single
+ * offer, so it must already contain the candidates. On a LAN the host
+ * candidates are all that ever gets used and they arrive within milliseconds;
+ * STUN/TURN gathering (`getCandidatesUpfront` false) would add up to 1.5 s for
+ * candidates nobody needs. So: resolve `graceMs` after the first host
+ * candidate, or when gathering completes, or at the cap — whichever is first.
+ * With `waitForAll` (HA asked for candidates upfront) only completion or the
+ * cap count.
  */
-const waitForIceGathering = (pc, timeoutMs) => new Promise((resolve) => {
+export const waitForIceCandidates = (pc, { timeoutMs, graceMs, waitForAll = false }) => new Promise((resolve) => {
   if (pc.iceGatheringState === 'complete') {
     resolve()
     return
   }
   let done = false
+  let graceTimer = null
   const finish = () => {
     if (done) return
     done = true
-    clearTimeout(timer)
+    clearTimeout(capTimer)
+    if (graceTimer) clearTimeout(graceTimer)
     pc.removeEventListener('icegatheringstatechange', onChange)
+    pc.removeEventListener('icecandidate', onCandidate)
     resolve()
   }
   const onChange = () => {
     if (pc.iceGatheringState === 'complete') finish()
   }
-  const timer = setTimeout(finish, timeoutMs)
+  const onCandidate = (event) => {
+    if (waitForAll || graceTimer || !isHostCandidate(event.candidate)) return
+    graceTimer = setTimeout(finish, graceMs)
+  }
+  const capTimer = setTimeout(finish, timeoutMs)
   pc.addEventListener('icegatheringstatechange', onChange)
+  pc.addEventListener('icecandidate', onCandidate)
 })
 
 export const isWebRtcSupported = () =>
@@ -218,13 +237,19 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
 
       const negotiate = async () => {
         let configuration = {}
-        try {
-          const clientConfig = await signaling.getClientConfig(entityId)
-          configuration = clientConfig.configuration || {}
-          candidatesUpfront = clientConfig.getCandidatesUpfront
-        } catch (err) {
-          // Not fatal: fall back to browser defaults (host candidates only)
-          logger.debug(`${logPrefix} no client config, using defaults: ${err.message}`)
+        if (tcpOnly) {
+          // TCP pairs only with go2rtc's host candidate — STUN/TURN would just
+          // slow gathering down. Skipping the client-config round-trip too.
+          configuration = { iceServers: [] }
+        } else {
+          try {
+            const clientConfig = await signaling.getClientConfig(entityId)
+            configuration = clientConfig.configuration || {}
+            candidatesUpfront = clientConfig.getCandidatesUpfront
+          } catch (err) {
+            // Not fatal: fall back to browser defaults (host candidates only)
+            logger.debug(`${logPrefix} no client config, using defaults: ${err.message}`)
+          }
         }
         if (settled) return
 
@@ -281,10 +306,14 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
         try {
           const offer = await pc.createOffer()
           await pc.setLocalDescription(offer)
-          // Always wait briefly for gathering so the offer carries host candidates —
-          // this is what providers without trickle ICE (Frigate) need, and it costs
-          // only a few ms on a LAN. Trickle continues afterwards where supported.
-          await waitForIceGathering(pc, WEBRTC_ICE_GATHER_TIMEOUT)
+          // The offer must carry host candidates (Frigate's WebRTC class ignores
+          // trickled ones); on a LAN they arrive within milliseconds. Trickle
+          // continues afterwards where supported.
+          await waitForIceCandidates(pc, {
+            timeoutMs: WEBRTC_ICE_GATHER_TIMEOUT,
+            graceMs: WEBRTC_HOST_CANDIDATE_GRACE,
+            waitForAll: candidatesUpfront,
+          })
           if (settled || !pc) return
           await signaling.sendOffer(entityId, requestId, pc.localDescription.sdp, onSignalingEvent)
           logger.debug(`${logPrefix} offer sent (${mode})`)

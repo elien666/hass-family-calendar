@@ -146,7 +146,7 @@ export const fetchCameraAccessTokens = async (cameraEntityIds, config, signal) =
 // In production: uses HASS_HOST from config or current origin
 // Format: <hass_host>/api/camera_proxy_stream/<camera entity_id>?token=<access_token>
 // Video elements can't send Authorization headers, so token is passed as query parameter
-export const buildCameraStreamUrl = (entityId, accessToken = null, config = {}) => {
+const buildCameraProxyUrl = (path, entityId, accessToken, config, extraParams = {}) => {
   if (!entityId) {
     return null
   }
@@ -165,15 +165,27 @@ export const buildCameraStreamUrl = (entityId, accessToken = null, config = {}) 
     // Last resort fallback
     return null
   }
-  
-  // Build direct Home Assistant camera stream URL
-  const url = `${baseUrl}/api/camera_proxy_stream/${entityId}`
-  
-  // Add access token as query parameter if provided
+
+  const params = new URLSearchParams()
+  // Access token as query parameter (img/video elements can't send headers)
   if (accessToken) {
-    const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}token=${encodeURIComponent(accessToken)}`
+    params.set('token', accessToken)
   }
-  
-  return url
+  Object.entries(extraParams).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) params.set(key, String(value))
+  })
+  const query = params.toString()
+  return `${baseUrl}${path}/${entityId}${query ? `?${query}` : ''}`
 }
+
+export const buildCameraStreamUrl = (entityId, accessToken = null, config = {}) =>
+  buildCameraProxyUrl('/api/camera_proxy_stream', entityId, accessToken, config)
+
+/**
+ * Single JPEG snapshot (HA's /api/camera_proxy = the camera's entity_picture).
+ * For Frigate cameras this is latest.jpg and arrives in a few hundred ms —
+ * shown as poster while WebRTC negotiates. `cacheKey` busts the browser cache
+ * so a re-opened overlay doesn't show a stale frame.
+ */
+export const buildCameraSnapshotUrl = (entityId, accessToken = null, config = {}, cacheKey = null) =>
+  buildCameraProxyUrl('/api/camera_proxy', entityId, accessToken, config, cacheKey ? { t: cacheKey } : {})

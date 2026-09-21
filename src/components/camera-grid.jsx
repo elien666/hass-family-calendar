@@ -1,6 +1,6 @@
 import React from 'react'
 import { calculateOptimalTiling } from '../utils/video-tiling'
-import { buildCameraStreamUrl } from '../utils/use-camera-access-tokens'
+import { buildCameraStreamUrl, buildCameraSnapshotUrl } from '../utils/use-camera-access-tokens'
 import { useWebRtcStream } from '../utils/use-webrtc-stream'
 import Icon from '../utils/mdi-icon'
 import { mdiLoading } from '@mdi/js'
@@ -139,15 +139,33 @@ const CameraTile = ({
   const webrtcActive = webrtcWanted && (status === 'connecting' || status === 'playing')
   const useMjpeg = !webrtcWanted || status === 'failed'
 
+  // Poster while WebRTC negotiates: HA's snapshot (Frigate latest.jpg) is there in
+  // a few hundred ms. The cache key is fixed per overlay session so the browser
+  // doesn't re-request it on every render, but does on the next opening.
+  const snapshotKeyRef = React.useRef(null)
+  if (showDoorCams && snapshotKeyRef.current === null) snapshotKeyRef.current = Date.now()
+  if (!showDoorCams) snapshotKeyRef.current = null
+  const snapshotUrl = status === 'connecting' && mjpegProps.accessToken
+    ? buildCameraSnapshotUrl(camera.entity_id, mjpegProps.accessToken, mjpegProps.config, snapshotKeyRef.current)
+    : null
+
   return (
     <div className="video-container" style={style} data-stream={webrtcActive ? 'webrtc' : 'mjpeg'}>
       {webrtcActive && (
         <>
           <WebRtcVideo stream={stream} orientation={orientation} />
+          {snapshotUrl && (
+            <img
+              className={`snapshot ${orientation}`}
+              src={snapshotUrl}
+              alt="Letztes Kamerabild"
+              crossOrigin="anonymous"
+            />
+          )}
           {status === 'connecting' && (
-            <div className="stream-status">
+            <div className={`stream-status ${snapshotUrl ? 'with-snapshot' : ''}`}>
               <Icon path={mdiLoading} size="40px" color="#ffffff" className="loading-spinner" />
-              <div>Verbinde…</div>
+              {!snapshotUrl && <div>Verbinde…</div>}
             </div>
           )}
         </>

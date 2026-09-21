@@ -19,7 +19,8 @@ export const CAMERA_TOKEN_REFRESH_INTERVAL = 600000 // 10 minutes
 // WebRTC-Kamerastreams (Türklingel-Overlay)
 export const WEBRTC_SIGNALING_TIMEOUT = 8000  // Backend-Relay antwortet nicht
 export const WEBRTC_CONNECT_TIMEOUT = 8000    // bis 'connected', sonst nächster Transport / MJPEG
-export const WEBRTC_ICE_GATHER_TIMEOUT = 1500 // Obergrenze fürs Sammeln lokaler ICE-Kandidaten
+export const WEBRTC_ICE_GATHER_TIMEOUT = 1500 // Obergrenze fürs Sammeln lokaler ICE-Kandidaten (nur wenn HA sie vorab braucht)
+export const WEBRTC_HOST_CANDIDATE_GRACE = 150 // nach dem ersten Host-Kandidaten: kurz die restlichen einsammeln, dann Offer senden
 export const WEBRTC_DECODE_TIMEOUT = 5000     // verbunden, aber kein Frame dekodiert → nächster Transport
 export const WEBRTC_STATS_INTERVAL = 500      // Abfrageintervall für getStats() bis zum ersten Frame
 export const PRECLIMATE_ANIMATION_DURATION = 10000
