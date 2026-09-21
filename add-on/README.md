@@ -120,6 +120,7 @@ Each feature can be individually enabled or disabled using toggle switches in th
   - `entity_doorbell_button` - Entity ID for the doorbell unlatch button
   - `cameras` - List of cameras (`entity_id`, optional `orientation`: `portrait`, `landscape`, `wide`)
   - `stream_mode` - `webrtc` (default) or `mjpeg`. `webrtc` plays the cameras as real video via Home Assistant's WebRTC API (`camera/webrtc/offer`, go2rtc) and falls back to MJPEG automatically if the connection fails. `mjpeg` forces the legacy `/api/camera_proxy_stream` path (capped at 2 fps for Frigate cameras).
+  - Each tile shows HA's snapshot immediately and switches to live video once the first frame decodes. Snapshot and MJPEG go through the add-on backend, no camera access token is needed. A camera that is `unavailable` in HA gets no stream attempt (last picture greyed out, restarts by itself when the camera is back); failed streams retry every 30 s.
   - `webrtc_transport` - `auto` (default), `udp` or `tcp`. `auto` tries UDP first and re-negotiates over go2rtc's TCP candidate when the UDP path connects but no frame decodes (keyframe bursts lost). Use `tcp` to skip the UDP attempt on networks where UDP is known to be unreliable.
 
 **Everyday Calendar** (`enable_everyday_calendar`)

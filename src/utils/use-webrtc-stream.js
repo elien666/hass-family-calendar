@@ -97,9 +97,10 @@ const readVideoStats = async (pc) => {
  * @param {boolean} options.enabled - start/stop the stream
  * @param {WebRtcSignalingClient|null} options.signaling - shared signaling client
  * @param {'auto'|'udp'|'tcp'} [options.transport='auto'] - ICE transport strategy
+ * @param {number} [options.retryKey=0] - bump to restart a failed stream
  * @returns {{ stream: MediaStream|null, status: 'idle'|'connecting'|'playing'|'failed', error: string|null, transport: 'udp'|'tcp'|null }}
  */
-export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'auto' }) => {
+export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'auto', retryKey = 0 }) => {
   const [stream, setStream] = React.useState(null)
   const [status, setStatus] = React.useState('idle')
   const [error, setError] = React.useState(null)
@@ -126,7 +127,9 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
     let current = null // teardown of the running attempt
 
     const runAttempt = (mode) => new Promise((resolve) => {
-      // resolve(null) = success (stream playing); resolve(message) = this attempt failed
+      // resolve(null) = success (stream playing)
+      // resolve({ message, fatal }) = this attempt failed; fatal = HA itself rejected
+      // the stream (camera down, no provider) — another transport won't help
       let pc = null
       let connectTimer = null
       let decodeTimer = null
@@ -155,11 +158,11 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
         }
       }
 
-      const finish = (message) => {
+      const finish = (message, fatal = false) => {
         if (settled) return
         settled = true
         if (message !== null) teardown()
-        resolve(message)
+        resolve(message === null ? null : { message, fatal })
       }
       current = { teardown: () => { settled = true; teardown() } }
 
@@ -228,7 +231,9 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
             }
             break
           case 'error':
-            finish(event.message || event.code || 'Unbekannter WebRTC-Fehler')
+            // HA/go2rtc said no (e.g. RTSP source unreachable): don't burn time on
+            // another transport, fall through to the fallback right away.
+            finish(event.message || event.code || 'Unbekannter WebRTC-Fehler', true)
             break
           default:
             break
@@ -338,8 +343,9 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
         const failure = await runAttempt(mode)
         if (cancelled) return
         if (failure === null) return // playing
-        lastError = failure
-        logger.warn(`${logPrefix} attempt via ${mode} failed: ${failure}`)
+        lastError = failure.message
+        logger.warn(`${logPrefix} attempt via ${mode} failed: ${failure.message}`)
+        if (failure.fatal) break
       }
       setError(lastError || 'WebRTC nicht verfügbar')
       setStatus('failed')
@@ -351,7 +357,7 @@ export const useWebRtcStream = ({ entityId, enabled, signaling, transport = 'aut
       cancelled = true
       if (current) current.teardown()
     }
-  }, [entityId, enabled, signaling, transport])
+  }, [entityId, enabled, signaling, transport, retryKey])
 
   return { stream, status, error, transport: activeTransport }
 }

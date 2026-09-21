@@ -1,67 +1,21 @@
 import React from 'react'
 import { calculateOptimalTiling } from '../utils/video-tiling'
-import { buildCameraStreamUrl, buildCameraSnapshotUrl } from '../utils/use-camera-access-tokens'
+import { buildCameraStreamUrl, buildCameraSnapshotUrl } from '../utils/camera-urls'
 import { useWebRtcStream } from '../utils/use-webrtc-stream'
+import { CAMERA_RETRY_INTERVAL } from '../utils/constants'
 import Icon from '../utils/mdi-icon'
 import { mdiLoading } from '@mdi/js'
 
-const TokenError = ({ tokensLoading, tokensError, refreshTokens }) => (
-  <div className="token-error">
-    {tokensLoading ? (
-      <>
-        <Icon
-          path={mdiLoading}
-          size="48px"
-          color="#ffffff"
-          className="loading-spinner"
-        />
-        <div>Lade Token...</div>
-      </>
-    ) : (
-      <>
-        <div>{tokensError || 'Kamera-Token nicht verfügbar'}</div>
-        <button onClick={(e) => { e.stopPropagation(); refreshTokens() }}>
-          Token neu laden
-        </button>
-      </>
-    )}
-  </div>
-)
-
 /**
- * Legacy MJPEG path: <img> on HA's /api/camera_proxy_stream (needs the
- * camera's access_token). Capped at 2 fps for Frigate cameras — used when
- * WebRTC is disabled or failed.
+ * Legacy MJPEG path: <img> on HA's /api/camera_proxy_stream via the backend
+ * (no camera token needed). Capped at 2 fps for Frigate cameras — used when
+ * WebRTC is disabled or failed. `onFailed` fires when HA refuses the stream.
  */
-const MjpegStream = ({
-  camera,
-  orientation,
-  index,
-  accessToken,
-  tokensLoading,
-  tokensError,
-  refreshTokens,
-  showDoorCams,
-  cameraImgRefs,
-  config,
-}) => {
-  const hasToken = !!accessToken
-  const streamUrl = buildCameraStreamUrl(camera.entity_id, accessToken, config)
-
-  if (!hasToken || !streamUrl) {
-    return (
-      <TokenError
-        tokensLoading={tokensLoading}
-        tokensError={tokensError}
-        refreshTokens={refreshTokens}
-      />
-    )
-  }
-
-  if (!showDoorCams) {
+const MjpegStream = ({ camera, orientation, index, cameraImgRefs, config, onFailed }) => {
+  const streamUrl = buildCameraStreamUrl(camera.entity_id, config)
+  if (!streamUrl) {
     return null
   }
-
   return (
     <img
       ref={(el) => {
@@ -75,7 +29,7 @@ const MjpegStream = ({
       src={streamUrl}
       className={orientation}
       alt="Camera stream"
-      crossOrigin="anonymous"
+      onError={onFailed}
       key={`${camera.entity_id}-${index}`}
     />
   )
@@ -113,8 +67,13 @@ const WebRtcVideo = ({ stream, orientation }) => {
 }
 
 /**
- * One camera tile. Tries WebRTC first (unless streamMode === 'mjpeg') and
- * falls back to the MJPEG <img> when the WebRTC connection fails.
+ * One camera tile.
+ *
+ * - shows HA's snapshot immediately as poster
+ * - tries WebRTC first (unless streamMode === 'mjpeg'), falls back to MJPEG
+ * - a camera whose HA state is "unavailable" gets neither: snapshot + hint,
+ *   and the stream starts by itself once the state changes
+ * - failed tiles retry every CAMERA_RETRY_INTERVAL while the overlay is open
  */
 const CameraTile = ({
   camera,
@@ -126,65 +85,113 @@ const CameraTile = ({
   signaling,
   showDoorCams,
   openDoor,
-  ...mjpegProps
+  cameraImgRefs,
+  config,
+  cameraState,
 }) => {
-  const webrtcWanted = streamMode !== 'mjpeg' && !!signaling
+  const unavailable = cameraState === 'unavailable'
+  // Mode intent vs. readiness: the signaling client is created in an effect after
+  // the overlay opens, so it is null on the first render. Deciding "no WebRTC →
+  // MJPEG" on that render would open MJPEG streams that get dropped a moment
+  // later. Treat "WebRTC mode, signaling pending" as connecting instead.
+  const webrtcMode = streamMode !== 'mjpeg'
+  const webrtcWanted = webrtcMode && !!signaling
+  const [retryKey, setRetryKey] = React.useState(0)
+  const [mjpegFailed, setMjpegFailed] = React.useState(false)
+  const [snapshotFailed, setSnapshotFailed] = React.useState(false)
+
   const { stream, status, error, transport } = useWebRtcStream({
     entityId: camera.entity_id,
-    enabled: webrtcWanted && showDoorCams,
+    enabled: webrtcWanted && showDoorCams && !unavailable,
     signaling,
     transport: webrtcTransport,
+    retryKey,
   })
 
-  const webrtcActive = webrtcWanted && (status === 'connecting' || status === 'playing')
-  const useMjpeg = !webrtcWanted || status === 'failed'
+  const webrtcPending = !unavailable && webrtcMode && (!signaling || status === 'idle' || status === 'connecting')
+  const webrtcActive = !unavailable && webrtcWanted && (status === 'connecting' || status === 'playing')
+  const useMjpeg = !unavailable && !mjpegFailed && (!webrtcMode || status === 'failed')
+  const broken = unavailable || mjpegFailed
 
-  // Poster while WebRTC negotiates: HA's snapshot (Frigate latest.jpg) is there in
-  // a few hundred ms and, unlike the MJPEG stream, needs no camera token — so it
-  // is requested the moment the overlay opens. The cache key is fixed per overlay
-  // session so the browser doesn't re-request it on every render, but does on the
-  // next opening.
+  // Fresh start when the overlay re-opens or the camera comes back
+  React.useEffect(() => {
+    setMjpegFailed(false)
+    setSnapshotFailed(false)
+  }, [showDoorCams, unavailable])
+
+  // Periodic retry for tiles that failed (an unavailable camera is instead
+  // restarted by its state change, see `enabled` above)
+  const failed = showDoorCams && !unavailable && (mjpegFailed || (webrtcWanted && status === 'failed' && !useMjpeg))
+  React.useEffect(() => {
+    if (!failed) return undefined
+    const timer = setTimeout(() => {
+      setMjpegFailed(false)
+      setRetryKey((key) => key + 1)
+    }, CAMERA_RETRY_INTERVAL)
+    return () => clearTimeout(timer)
+  }, [failed, retryKey])
+
+  // Poster: HA's snapshot (Frigate latest.jpg) needs no token and is there in a
+  // few hundred ms. The cache key is fixed per overlay session so the browser
+  // doesn't re-request it on every render, but does on the next opening.
   const snapshotKeyRef = React.useRef(null)
   if (showDoorCams && snapshotKeyRef.current === null) snapshotKeyRef.current = Date.now()
   if (!showDoorCams) snapshotKeyRef.current = null
-  const snapshotUrl = status === 'connecting'
-    ? buildCameraSnapshotUrl(camera.entity_id, mjpegProps.config, snapshotKeyRef.current)
+  const showSnapshot = !snapshotFailed && (webrtcPending || broken)
+  const snapshotUrl = showSnapshot
+    ? buildCameraSnapshotUrl(camera.entity_id, config, snapshotKeyRef.current)
     : null
 
+  let badge
+  let badgeTitle = error || undefined
+  if (unavailable) {
+    badge = 'Kamera nicht erreichbar'
+    badgeTitle = `${camera.entity_id} ist in Home Assistant "unavailable"`
+  } else if (mjpegFailed) {
+    badge = 'Stream nicht verfügbar'
+  } else if (webrtcActive || webrtcPending) {
+    badge = transport ? `WebRTC (${transport.toUpperCase()})` : 'WebRTC'
+  } else {
+    badge = webrtcMode ? 'MJPEG (Fallback)' : 'MJPEG'
+  }
+
   return (
-    <div className="video-container" style={style} data-stream={webrtcActive ? 'webrtc' : 'mjpeg'}>
-      {webrtcActive && (
-        <>
-          <WebRtcVideo stream={stream} orientation={orientation} />
-          {snapshotUrl && (
-            <img
-              className={`snapshot ${orientation}`}
-              src={snapshotUrl}
-              alt="Letztes Kamerabild"
-            />
-          )}
-          {status === 'connecting' && (
-            <div className={`stream-status ${snapshotUrl ? 'with-snapshot' : ''}`}>
-              <Icon path={mdiLoading} size="40px" color="#ffffff" className="loading-spinner" />
-              {!snapshotUrl && <div>Verbinde…</div>}
-            </div>
-          )}
-        </>
+    <div
+      className={`video-container${broken ? ' broken' : ''}`}
+      style={style}
+      data-stream={unavailable ? 'unavailable' : (webrtcActive ? 'webrtc' : 'mjpeg')}
+    >
+      {webrtcActive && <WebRtcVideo stream={stream} orientation={orientation} />}
+      {snapshotUrl && (
+        <img
+          className={`snapshot ${orientation}`}
+          src={snapshotUrl}
+          alt="Letztes Kamerabild"
+          onError={() => setSnapshotFailed(true)}
+        />
+      )}
+      {webrtcPending && (
+        <div className={`stream-status ${snapshotUrl ? 'with-snapshot' : ''}`}>
+          <Icon path={mdiLoading} size="40px" color="#ffffff" className="loading-spinner" />
+          {!snapshotUrl && <div>Verbinde…</div>}
+        </div>
+      )}
+      {broken && !snapshotUrl && (
+        <div className="stream-status">
+          <div>{badge}</div>
+        </div>
       )}
       {useMjpeg && (
         <MjpegStream
           camera={camera}
           orientation={orientation}
           index={index}
-          showDoorCams={showDoorCams}
-          {...mjpegProps}
+          cameraImgRefs={cameraImgRefs}
+          config={config}
+          onFailed={() => setMjpegFailed(true)}
         />
       )}
-      <div className="stream-badge" title={error || undefined}>
-        {webrtcActive
-          ? (transport ? `WebRTC (${transport.toUpperCase()})` : 'WebRTC')
-          : (webrtcWanted ? 'MJPEG (Fallback)' : 'MJPEG')}
-      </div>
+      <div className="stream-badge" title={badgeTitle}>{badge}</div>
       <div
         className="video-overlay"
         onClick={() => openDoor()}
@@ -195,10 +202,6 @@ const CameraTile = ({
 
 const CameraGrid = ({
   cameras,
-  accessTokens,
-  tokensLoading,
-  tokensError,
-  refreshTokens,
   showDoorCams,
   cameraImgRefs,
   openDoor,
@@ -206,6 +209,7 @@ const CameraGrid = ({
   signaling = null,
   streamMode = 'webrtc',
   webrtcTransport = 'auto',
+  cameraStates = {},
 }) => {
   if (cameras.length === 0) {
     return null
@@ -257,12 +261,9 @@ const CameraGrid = ({
         signaling={signaling}
         showDoorCams={showDoorCams}
         openDoor={openDoor}
-        accessToken={accessTokens[camera.entity_id] || null}
-        tokensLoading={tokensLoading}
-        tokensError={tokensError}
-        refreshTokens={refreshTokens}
         cameraImgRefs={cameraImgRefs}
         config={config}
+        cameraState={cameraStates[camera.entity_id]}
       />
     )
   })

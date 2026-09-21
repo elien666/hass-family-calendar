@@ -222,6 +222,31 @@ describe('useWebRtcStream()', () => {
     expect(signaling.closeSession).toHaveBeenCalledWith('req-1')
   })
 
+  it('does not try another transport when HA itself rejected the stream (auto mode)', async () => {
+    const signaling = makeSignaling()
+    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'auto' }))
+    await flush()
+    await act(async () => { signaling.emit({ type: 'error', code: 'webrtc_offer_failed', message: 'RTSP 404' }) })
+    await flush()
+    expect(result.current.status).toBe('failed')
+    expect(result.current.error).toBe('RTSP 404')
+    expect(FakePeerConnection.instances).toHaveLength(1)
+    expect(signaling.sendOffer).toHaveBeenCalledTimes(1)
+  })
+
+  it('restarts when retryKey changes', async () => {
+    const signaling = makeSignaling()
+    const { rerender } = renderHook(
+      ({ retryKey }) => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp', retryKey }),
+      { initialProps: { retryKey: 0 } },
+    )
+    await flush()
+    rerender({ retryKey: 1 })
+    await flush()
+    expect(FakePeerConnection.instances).toHaveLength(2)
+    expect(FakePeerConnection.instances[0].closed).toBe(true)
+  })
+
   it('fails when the connection state becomes failed or the offer cannot be sent', async () => {
     const signaling = makeSignaling()
     const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp' }))
