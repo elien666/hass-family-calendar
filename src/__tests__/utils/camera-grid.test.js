@@ -60,7 +60,8 @@ describe('CameraGrid', () => {
     expect(container.querySelectorAll('img')).toHaveLength(1)
     expect(screen.queryByText('Verbinde…')).toBeNull()
     expect(container.querySelector('.stream-status.with-snapshot')).not.toBeNull()
-    expect(screen.getByText('WebRTC')).toBeInTheDocument()
+    // transport not known yet → no badge
+    expect(container.querySelector('.stream-badge')).toBeNull()
   })
 
   it('does not open an MJPEG stream while the signaling client is still pending', () => {
@@ -68,7 +69,7 @@ describe('CameraGrid', () => {
     const { container } = render(renderGrid({ streamMode: 'webrtc', signaling: null }))
     expect(container.querySelector('img:not(.snapshot)')).toBeNull()
     expect(container.querySelector('img.snapshot')).not.toBeNull()
-    expect(screen.getByText('WebRTC')).toBeInTheDocument()
+    expect(container.querySelector('.stream-badge')).toBeNull()
     expect(useWebRtcStream).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }))
   })
 
@@ -88,7 +89,7 @@ describe('CameraGrid', () => {
     expect(video.srcObject).toBe(stream)
     expect(video.muted).toBe(true)
     expect(container.querySelector('img.snapshot')).toBeNull()
-    expect(screen.getByText('WebRTC (TCP)')).toBeInTheDocument()
+    expect(screen.getByText('TCP')).toBeInTheDocument()
     expect(useWebRtcStream).toHaveBeenLastCalledWith(expect.objectContaining({ transport: 'tcp' }))
   })
 
@@ -97,7 +98,7 @@ describe('CameraGrid', () => {
     const { container } = render(renderGrid({ streamMode: 'webrtc', signaling: {} }))
     expect(container.querySelector('video')).toBeNull()
     expect(container.querySelector('img:not(.snapshot)')).not.toBeNull()
-    expect(screen.getByText('MJPEG (Fallback)')).toBeInTheDocument()
+    expect(screen.getByText('MJPEG')).toBeInTheDocument()
   })
 
   it('skips WebRTC and MJPEG for an unavailable camera and shows the snapshot with a hint', () => {

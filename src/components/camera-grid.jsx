@@ -142,17 +142,19 @@ const CameraTile = ({
     ? buildCameraSnapshotUrl(camera.entity_id, config, snapshotKeyRef.current)
     : null
 
-  let badge
+  // Badge: just the transport in use (TCP / UDP / MJPEG), nothing while the
+  // transport is still being negotiated; a broken tile shows why instead.
+  let badge = null
   let badgeTitle = error || undefined
   if (unavailable) {
     badge = 'Kamera nicht erreichbar'
     badgeTitle = `${camera.entity_id} ist in Home Assistant "unavailable"`
   } else if (mjpegFailed) {
     badge = 'Stream nicht verfügbar'
-  } else if (webrtcActive || webrtcPending) {
-    badge = transport ? `WebRTC (${transport.toUpperCase()})` : 'WebRTC'
-  } else {
-    badge = webrtcMode ? 'MJPEG (Fallback)' : 'MJPEG'
+  } else if (webrtcActive && transport) {
+    badge = transport.toUpperCase()
+  } else if (useMjpeg) {
+    badge = 'MJPEG'
   }
 
   return (
@@ -191,7 +193,7 @@ const CameraTile = ({
           onFailed={() => setMjpegFailed(true)}
         />
       )}
-      <div className="stream-badge" title={badgeTitle}>{badge}</div>
+      {badge && <div className="stream-badge" title={badgeTitle}>{badge}</div>}
       <div
         className="video-overlay"
         onClick={() => openDoor()}
