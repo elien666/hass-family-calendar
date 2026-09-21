@@ -320,6 +320,9 @@ def load_config() -> Dict[str, Any]:
             # falling back to MJPEG in the frontend. "mjpeg": force the legacy
             # /api/camera_proxy_stream path (max. 2 fps for Frigate cameras).
             ("DOORBELL_STREAM_MODE", "doorbell.stream_mode", "webrtc"),
+            # ICE transport for WebRTC: "auto" (UDP first, TCP re-negotiation when
+            # the UDP path connects but no frame decodes), "udp" or "tcp".
+            ("DOORBELL_WEBRTC_TRANSPORT", "doorbell.webrtc_transport", "auto"),
         ], **ctx)
 
     _load_feature_config(config, enabled_env_key="EVERYDAY_CALENDAR_ENABLED",

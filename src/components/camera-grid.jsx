@@ -122,16 +122,18 @@ const CameraTile = ({
   index,
   style,
   streamMode,
+  webrtcTransport,
   signaling,
   showDoorCams,
   openDoor,
   ...mjpegProps
 }) => {
   const webrtcWanted = streamMode !== 'mjpeg' && !!signaling
-  const { stream, status, error } = useWebRtcStream({
+  const { stream, status, error, transport } = useWebRtcStream({
     entityId: camera.entity_id,
     enabled: webrtcWanted && showDoorCams,
     signaling,
+    transport: webrtcTransport,
   })
 
   const webrtcActive = webrtcWanted && (status === 'connecting' || status === 'playing')
@@ -160,7 +162,9 @@ const CameraTile = ({
         />
       )}
       <div className="stream-badge" title={error || undefined}>
-        {webrtcActive ? 'WebRTC' : (webrtcWanted ? 'MJPEG (Fallback)' : 'MJPEG')}
+        {webrtcActive
+          ? (transport ? `WebRTC (${transport.toUpperCase()})` : 'WebRTC')
+          : (webrtcWanted ? 'MJPEG (Fallback)' : 'MJPEG')}
       </div>
       <div
         className="video-overlay"
@@ -182,6 +186,7 @@ const CameraGrid = ({
   config,
   signaling = null,
   streamMode = 'webrtc',
+  webrtcTransport = 'auto',
 }) => {
   if (cameras.length === 0) {
     return null
@@ -229,6 +234,7 @@ const CameraGrid = ({
         index={index}
         style={style}
         streamMode={streamMode}
+        webrtcTransport={webrtcTransport}
         signaling={signaling}
         showDoorCams={showDoorCams}
         openDoor={openDoor}

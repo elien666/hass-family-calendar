@@ -7,7 +7,7 @@ vi.mock('../../utils/logger', () => ({
 }))
 vi.mock('../../utils/mdi-icon', () => ({ default: () => null }))
 
-const webrtcState = { stream: null, status: 'idle', error: null }
+const webrtcState = { stream: null, status: 'idle', error: null, transport: null }
 vi.mock('../../utils/use-webrtc-stream', () => ({
   useWebRtcStream: vi.fn(() => webrtcState),
 }))
@@ -33,7 +33,7 @@ const renderGrid = (overrides) => React.createElement(CameraGrid, { ...baseProps
 
 describe('CameraGrid', () => {
   beforeEach(() => {
-    Object.assign(webrtcState, { stream: null, status: 'idle', error: null })
+    Object.assign(webrtcState, { stream: null, status: 'idle', error: null, transport: null })
     baseProps.cameraImgRefs.current.clear()
     // jsdom has no video.play()
     window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve())
@@ -54,7 +54,7 @@ describe('CameraGrid', () => {
     Object.assign(webrtcState, { status: 'connecting' })
     const signaling = { id: 'sig' }
     const { container } = render(renderGrid({ streamMode: "webrtc", signaling }))
-    expect(useWebRtcStream).toHaveBeenCalledWith({ entityId: 'camera.front', enabled: true, signaling })
+    expect(useWebRtcStream).toHaveBeenCalledWith({ entityId: 'camera.front', enabled: true, signaling, transport: 'auto' })
     expect(container.querySelector('video')).not.toBeNull()
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByText('Verbinde…')).toBeInTheDocument()
@@ -63,12 +63,14 @@ describe('CameraGrid', () => {
 
   it('binds the MediaStream to the video element once playing', () => {
     const stream = { id: 'remote' }
-    Object.assign(webrtcState, { status: 'playing', stream })
-    const { container } = render(renderGrid({ streamMode: "webrtc", signaling: {} }))
+    Object.assign(webrtcState, { status: 'playing', stream, transport: 'tcp' })
+    const { container } = render(renderGrid({ streamMode: "webrtc", signaling: {}, webrtcTransport: 'tcp' }))
     const video = container.querySelector('video')
     expect(video.srcObject).toBe(stream)
     expect(video.muted).toBe(true)
     expect(screen.queryByText('Verbinde…')).toBeNull()
+    expect(screen.getByText('WebRTC (TCP)')).toBeInTheDocument()
+    expect(useWebRtcStream).toHaveBeenLastCalledWith(expect.objectContaining({ transport: 'tcp' }))
   })
 
   it('falls back to MJPEG when WebRTC failed', () => {

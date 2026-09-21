@@ -23,7 +23,14 @@ class FakePeerConnection {
     this.ontrack = null
     this.onicecandidate = null
     this.onconnectionstatechange = null
+    this.framesDecoded = 0
+    this.packetsLost = 0
+    this.packetsReceived = 0
     FakePeerConnection.instances.push(this)
+  }
+  async getStats() {
+    const entries = [{ type: 'inbound-rtp', kind: 'video', framesDecoded: this.framesDecoded, packetsLost: this.packetsLost, packetsReceived: this.packetsReceived }]
+    return { forEach: (fn) => entries.forEach(fn) }
   }
   addTransceiver(kind, init) { this.transceivers.push({ kind, init }) }
   addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn) }
@@ -41,17 +48,22 @@ class FakePeerConnection {
 }
 
 const makeSignaling = ({ clientConfig } = {}) => {
+  let counter = 0
   const signaling = {
     handlers: new Map(),
-    createRequestId: vi.fn(() => 'req-1'),
+    createRequestId: vi.fn(() => `req-${++counter}`),
     getClientConfig: vi.fn(async () => clientConfig || { configuration: { iceServers: [] }, getCandidatesUpfront: false }),
     sendOffer: vi.fn(async (entityId, requestId, sdp, onEvent) => { signaling.handlers.set(requestId, onEvent) }),
     sendCandidate: vi.fn(async () => {}),
     closeSession: vi.fn((requestId) => signaling.handlers.delete(requestId)),
   }
-  signaling.emit = (event) => signaling.handlers.get('req-1')?.(event)
+  signaling.emit = (event, requestId = 'req-1') => signaling.handlers.get(requestId)?.(event)
+  signaling.lastAnswer = (requestId = 'req-1') => signaling.sendOffer.mock.calls.find((c) => c[1] === requestId)
   return signaling
 }
+
+/** Let the hook's pending microtasks and short timers run. */
+const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 5)) })
 
 describe('useWebRtcStream()', () => {
   let originalPC
@@ -68,11 +80,9 @@ describe('useWebRtcStream()', () => {
     delete global.MediaStream
   })
 
-  const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-
   it('stays idle when disabled or without signaling', () => {
     const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: false, signaling: null }))
-    expect(result.current).toEqual({ stream: null, status: 'idle', error: null })
+    expect(result.current).toEqual({ stream: null, status: 'idle', error: null, transport: null })
     expect(FakePeerConnection.instances).toHaveLength(0)
   })
 
@@ -102,9 +112,77 @@ describe('useWebRtcStream()', () => {
     const remoteStream = { id: 'remote' }
     act(() => { pc.ontrack({ streams: [remoteStream], track: {} }) })
     act(() => { pc.setConnectionState('connected') })
+    // ICE/DTLS up but nothing decoded yet → still connecting
+    expect(result.current.status).toBe('connecting')
+
+    pc.framesDecoded = 3
+    // stats are polled every WEBRTC_STATS_INTERVAL (500 ms)
+    await act(async () => { await new Promise((r) => setTimeout(r, 700)) })
     expect(result.current.status).toBe('playing')
+    expect(result.current.transport).toBe('udp')
     expect(result.current.stream).toBe(remoteStream)
     expect(result.current.error).toBeNull()
+  })
+
+  it('re-negotiates TCP-only when UDP connects but nothing decodes (transport auto)', async () => {
+    vi.useFakeTimers()
+    try {
+      const signaling = makeSignaling()
+      const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'auto' }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(20) })
+      const udpPc = FakePeerConnection.instances[0]
+      expect(signaling.sendOffer).toHaveBeenLastCalledWith('camera.a', 'req-1', 'v=0 offer', expect.any(Function))
+
+      await act(async () => { signaling.emit({ type: 'answer', answer: 'v=0\na=candidate:1 1 udp 1 10.0.0.1 8555 typ host\na=candidate:2 1 tcp 1 10.0.0.1 8555 typ host tcptype passive' }) })
+      expect(udpPc.remoteDescriptions[0].sdp).toContain(' udp ')
+      udpPc.packetsReceived = 900
+      udpPc.packetsLost = 300
+      act(() => { udpPc.setConnectionState('connected') })
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+
+      // UDP attempt torn down, TCP attempt started with a fresh request id
+      expect(udpPc.closed).toBe(true)
+      expect(signaling.closeSession).toHaveBeenCalledWith('req-1')
+      expect(result.current.status).toBe('connecting')
+      await act(async () => { await vi.advanceTimersByTimeAsync(20) })
+      const tcpPc = FakePeerConnection.instances[1]
+      expect(tcpPc).toBeDefined()
+      expect(signaling.sendOffer).toHaveBeenLastCalledWith('camera.a', 'req-2', 'v=0 offer', expect.any(Function))
+
+      await act(async () => { signaling.emit({ type: 'answer', answer: 'v=0\na=candidate:1 1 udp 1 10.0.0.1 8555 typ host\na=candidate:2 1 tcp 1 10.0.0.1 8555 typ host tcptype passive' }, 'req-2') })
+      expect(tcpPc.remoteDescriptions[0].sdp).not.toContain(' udp ')
+      expect(tcpPc.remoteDescriptions[0].sdp).toContain(' tcp ')
+
+      // trickled UDP candidates are ignored in TCP mode, TCP ones applied
+      await act(async () => { signaling.emit({ type: 'candidate', candidate: { candidate: 'candidate:9 1 udp 1 10.0.0.1 1 typ host' } }, 'req-2') })
+      await act(async () => { signaling.emit({ type: 'candidate', candidate: { candidate: 'candidate:9 1 tcp 1 10.0.0.1 1 typ host tcptype passive' } }, 'req-2') })
+      expect(tcpPc.addedCandidates).toHaveLength(1)
+
+      tcpPc.framesDecoded = 5
+      act(() => { tcpPc.setConnectionState('connected') })
+      await act(async () => { await vi.advanceTimersByTimeAsync(600) })
+      expect(result.current.status).toBe('playing')
+      expect(result.current.transport).toBe('tcp')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails after the last transport when nothing decodes (transport tcp only)', async () => {
+    vi.useFakeTimers()
+    try {
+      const signaling = makeSignaling()
+      const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'tcp' }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(20) })
+      const pc = FakePeerConnection.instances[0]
+      act(() => { pc.setConnectionState('connected') })
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+      expect(FakePeerConnection.instances).toHaveLength(1)
+      expect(result.current.status).toBe('failed')
+      expect(result.current.error).toMatch(/kein Bild dekodiert/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not trickle candidates when HA wants them upfront', async () => {
@@ -129,10 +207,11 @@ describe('useWebRtcStream()', () => {
 
   it('reports failure on error events and closes the peer connection', async () => {
     const signaling = makeSignaling()
-    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling }))
+    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp' }))
     await flush()
     const pc = FakePeerConnection.instances[0]
-    act(() => { signaling.emit({ type: 'error', code: 'webrtc_offer_failed', message: 'Kamera kann kein WebRTC' }) })
+    await act(async () => { signaling.emit({ type: 'error', code: 'webrtc_offer_failed', message: 'Kamera kann kein WebRTC' }) })
+    await flush()
     expect(result.current.status).toBe('failed')
     expect(result.current.error).toBe('Kamera kann kein WebRTC')
     expect(pc.closed).toBe(true)
@@ -141,14 +220,15 @@ describe('useWebRtcStream()', () => {
 
   it('fails when the connection state becomes failed or the offer cannot be sent', async () => {
     const signaling = makeSignaling()
-    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling }))
+    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp' }))
     await flush()
     act(() => { FakePeerConnection.instances[0].setConnectionState('failed') })
+    await flush()
     expect(result.current.status).toBe('failed')
 
     const broken = makeSignaling()
     broken.sendOffer.mockRejectedValue(new Error('socket closed'))
-    const second = renderHook(() => useWebRtcStream({ entityId: 'camera.b', enabled: true, signaling: broken }))
+    const second = renderHook(() => useWebRtcStream({ entityId: 'camera.b', enabled: true, signaling: broken, transport: 'udp' }))
     await flush()
     expect(second.result.current.status).toBe('failed')
     expect(second.result.current.error).toMatch(/socket closed/)
@@ -158,10 +238,10 @@ describe('useWebRtcStream()', () => {
     vi.useFakeTimers()
     try {
       const signaling = makeSignaling()
-      const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling }))
+      const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp' }))
       await act(async () => { await vi.advanceTimersByTimeAsync(20) })
       expect(signaling.sendOffer).toHaveBeenCalled()
-      await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(9000) })
       expect(result.current.status).toBe('failed')
       expect(result.current.error).toMatch(/Zeitüberschreitung/)
     } finally {
@@ -185,6 +265,7 @@ describe('useWebRtcStream()', () => {
     rerender({ enabled: true })
     await flush()
     expect(FakePeerConnection.instances).toHaveLength(2)
+    expect(signaling.sendOffer).toHaveBeenLastCalledWith('camera.a', 'req-2', 'v=0 offer', expect.any(Function))
     unmount()
     expect(FakePeerConnection.instances[1].closed).toBe(true)
   })

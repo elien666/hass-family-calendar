@@ -216,6 +216,9 @@ const Doorbell = () => {
     const DOORBELL_CAMERAS = config.DOORBELL_CAMERAS || []
     // 'webrtc' (default) or 'mjpeg' — see DOORBELL_STREAM_MODE in the backend config
     const DOORBELL_STREAM_MODE = config.DOORBELL_STREAM_MODE === 'mjpeg' ? 'mjpeg' : 'webrtc'
+    // 'auto' (UDP, dann TCP wenn kein Bild dekodiert), 'udp' oder 'tcp'
+    const DOORBELL_WEBRTC_TRANSPORT = ['udp', 'tcp'].includes(config.DOORBELL_WEBRTC_TRANSPORT)
+        ? config.DOORBELL_WEBRTC_TRANSPORT : 'auto'
     
     // Call all hooks unconditionally (before any early returns)
     const [ showDoorCams, toggle ] = React.useState(false)
@@ -494,6 +497,7 @@ const Doorbell = () => {
                             config={config}
                             signaling={signaling}
                             streamMode={DOORBELL_STREAM_MODE}
+                            webrtcTransport={DOORBELL_WEBRTC_TRANSPORT}
                         />
                     </div>    
                     {confirmationState === 'confirm' && (
