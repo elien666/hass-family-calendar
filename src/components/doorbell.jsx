@@ -5,11 +5,8 @@ import styled from 'styled-components'
 import ProgressBarDefault from '@ramonak/react-progress-bar'
 import { resolveComponent } from '../utils/resolve-component'
 import { useConfig } from '../utils/ConfigProvider'
-import { fetchCameraAccessTokens } from '../utils/use-camera-access-tokens'
-import logger from '../utils/logger'
-import { formatErrorForUI } from '../utils/axios-error-handler'
-import { DOORBELL_OVERLAY_TIMEOUT, DOORBELL_MANUAL_CLOSE_COOLDOWN, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
-import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
+import useMultiEntitySubscription from '../utils/use-multi-entity-subscription'
+import { DOORBELL_OVERLAY_TIMEOUT, DOORBELL_MANUAL_CLOSE_COOLDOWN } from '../utils/constants'
 import CameraGrid from './camera-grid'
 import { WebRtcSignalingClient } from '../utils/webrtc-signaling'
 
@@ -85,7 +82,7 @@ const Container = styled.div`
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 1;
+            z-index: 3;
             cursor: pointer;
         }
 
@@ -93,10 +90,27 @@ const Container = styled.div`
             background-color: #000;
         }
 
+        /* Snapshot poster shown above the (still black) video until the first frame decodes */
+        img.snapshot {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
+        /* Camera down: keep the last picture, but make clear it is not live */
+        &.broken img.snapshot {
+            filter: grayscale(1) brightness(0.6);
+        }
+        &.broken .stream-badge {
+            background-color: rgba(160, 40, 40, 0.75);
+            color: #fff;
+        }
+
         /* Spinner while the WebRTC connection is being negotiated */
         .stream-status {
             position: absolute;
             inset: 0;
+            z-index: 2;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -106,8 +120,86 @@ const Container = styled.div`
             background-color: rgba(0, 0, 0, 0.35);
             pointer-events: none;
 
+            /* With a snapshot behind it: unobtrusive spinner in the corner, no dimming */
+            &.with-snapshot {
+                inset: auto 8px 8px auto;
+                background: none;
+            }
+
             .loading-spinner {
                 animation: spin 1s infinite linear;
+                filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+            }
+        }
+
+        /* Small badge telling which transport is active (WebRTC vs. MJPEG fallback) */
+        .stream-badge {
+            position: absolute;
+            left: 8px;
+            bottom: 8px;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.85);
+            background-color: rgba(0, 0, 0, 0.45);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            cursor: pointer;
+        }
+
+        video {
+            background-color: #000;
+        }
+
+        /* Snapshot poster shown above the (still black) video until the first frame decodes */
+        img.snapshot {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
+        /* Camera down: keep the last picture, but make clear it is not live */
+        &.broken img.snapshot {
+            filter: grayscale(1) brightness(0.6);
+        }
+        &.broken .stream-badge {
+            background-color: rgba(160, 40, 40, 0.75);
+            color: #fff;
+        }
+
+        /* Spinner while the WebRTC connection is being negotiated */
+        .stream-status {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+
+            /* With a snapshot behind it: unobtrusive spinner in the corner, no dimming */
+            &.with-snapshot {
+                inset: auto 8px 8px auto;
+                background: none;
+            }
+
+            .loading-spinner {
+                animation: spin 1s infinite linear;
+                filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
             }
         }
 
@@ -234,51 +326,24 @@ const Doorbell = () => {
             .filter(Boolean) // Remove any undefined/null values
     }, [DOORBELL_CAMERAS])
 
-    // Fetch tokens fresh when modal opens
-    const [accessTokens, setAccessTokens] = React.useState({})
-    const [tokensLoading, setTokensLoading] = React.useState(false)
-    const [tokensError, setTokensError] = React.useState(null)
-
     // Stable ref for config so effects don't re-run on config reload
     const configRef = React.useRef(config)
     React.useEffect(() => { configRef.current = config }, [config])
 
-    // AbortController ref for manual refresh (persists across re-renders)
-    const refreshAbortRef = React.useRef(null)
-
-    // Fetch tokens when modal opens (with abort cleanup)
-    React.useEffect(() => {
-        if (showDoorCams && cameraEntityIds.length > 0) {
-            const abortController = new AbortController()
-            setTokensLoading(true)
-            setTokensError(null)
-
-            fetchCameraAccessTokens(cameraEntityIds, configRef.current, abortController.signal)
-                .then(({ tokens, error }) => {
-                    if (!abortController.signal.aborted) {
-                        setAccessTokens(tokens)
-                        setTokensError(error)
-                        setTokensLoading(false)
-                    }
-                })
-                .catch((err) => {
-                    if (!abortController.signal.aborted) {
-                        logger.error('Failed to fetch camera tokens:', err)
-                        setTokensError(formatErrorForUI(err))
-                        setTokensLoading(false)
-                    }
-                })
-
-            return () => { abortController.abort() }
-        } else if (!showDoorCams) {
-            // Clear tokens when modal closes
-            setAccessTokens({})
-            setTokensError(null)
-            // Cancel any pending manual refresh
-            refreshAbortRef.current?.abort()
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showDoorCams, cameraEntityIds.join(',')])
+    // Camera availability: a camera whose state is "unavailable" gets no stream
+    // attempt (no 8 s timeouts, no ffmpeg errors in the UI) and starts by itself
+    // when it comes back. Subscribed permanently so the state is known the moment
+    // the overlay opens.
+    const [cameraStates, setCameraStates] = React.useState({})
+    const onCameraStateUpdate = React.useCallback((entityId, state) => {
+        setCameraStates((prev) => (prev[entityId] === state ? prev : { ...prev, [entityId]: state }))
+    }, [])
+    useMultiEntitySubscription({
+        entityIds: cameraEntityIds,
+        enabled: ENABLE_DOORBELL && cameraEntityIds.length > 0,
+        onStateUpdate: onCameraStateUpdate,
+        logPrefix: 'doorbell cameras',
+    })
 
     // WebRTC signaling: one relay socket per overlay session, shared by all camera
     // tiles. Created when the overlay opens, closed (ending all HA/go2rtc sessions)
@@ -296,66 +361,6 @@ const Doorbell = () => {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showDoorCams, DOORBELL_STREAM_MODE, cameraEntityIds.join(',')])
-
-    // Manual refresh function (cancels previous pending refresh)
-    const refreshTokens = React.useCallback(async () => {
-        if (cameraEntityIds.length === 0) return
-
-        // Cancel previous refresh if still running
-        refreshAbortRef.current?.abort()
-        const abortController = new AbortController()
-        refreshAbortRef.current = abortController
-
-        setTokensLoading(true)
-        setTokensError(null)
-
-        try {
-            const { tokens, error } = await fetchCameraAccessTokens(
-                cameraEntityIds, configRef.current, abortController.signal
-            )
-            if (!abortController.signal.aborted) {
-                setAccessTokens(tokens)
-                setTokensError(error)
-            }
-        } catch (err) {
-            if (!abortController.signal.aborted) {
-                logger.error('Failed to refresh camera tokens:', err)
-                setTokensError(formatErrorForUI(err))
-            }
-        } finally {
-            if (!abortController.signal.aborted) {
-                setTokensLoading(false)
-            }
-        }
-    }, [cameraEntityIds])
-
-    // Auto-refresh tokens when backend connection is restored while overlay is open
-    const { isConnected } = useConnectionStateContext()
-    const wasDisconnectedRef = React.useRef(false)
-
-    React.useEffect(() => {
-        if (!isConnected) {
-            wasDisconnectedRef.current = true
-        } else if (wasDisconnectedRef.current) {
-            wasDisconnectedRef.current = false
-            if (showDoorCams && cameraEntityIds.length > 0) {
-                logger.debug('Connection restored while doorbell overlay open — refreshing camera tokens')
-                refreshTokens()
-            }
-        }
-    }, [isConnected, showDoorCams, cameraEntityIds, refreshTokens])
-
-    // Periodic token refresh while overlay is open (prevents stale tokens)
-    React.useEffect(() => {
-        if (!showDoorCams || cameraEntityIds.length === 0) return
-
-        const intervalId = setInterval(() => {
-            logger.debug('Periodic camera token refresh')
-            refreshTokens()
-        }, CAMERA_TOKEN_REFRESH_INTERVAL)
-
-        return () => clearInterval(intervalId)
-    }, [showDoorCams, cameraEntityIds, refreshTokens])
 
     const [ confirmationState, setConfirmationState ] = React.useState(null) // null, 'confirm', 'opening'
 
@@ -487,10 +492,7 @@ const Doorbell = () => {
                     <div className='grid'>
                         <CameraGrid
                             cameras={DOORBELL_CAMERAS}
-                            accessTokens={accessTokens}
-                            tokensLoading={tokensLoading}
-                            tokensError={tokensError}
-                            refreshTokens={refreshTokens}
+                            cameraStates={cameraStates}
                             showDoorCams={showDoorCams}
                             cameraImgRefs={cameraImgRefs}
                             openDoor={openDoor}

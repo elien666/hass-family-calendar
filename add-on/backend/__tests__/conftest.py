@@ -21,6 +21,22 @@ def reset_config_cache():
     clear_cache()
 
 
+@pytest.fixture(autouse=True)
+def main_follows_config_patches():
+    """Make `backend.main.get_config` always resolve through `backend.config`.
+
+    main.py binds `get_config` at import time (`from .config import get_config`),
+    so a test that patches `backend.config.get_config` only affects main if main
+    is imported for the first time inside that patch. That made the endpoint
+    tests depend on module import order. Delegating at call time removes the
+    dependency, whichever test module imports main first.
+    """
+    import backend.config as config_module
+    import backend.main as main_module
+    with patch.object(main_module, "get_config", side_effect=lambda: config_module.get_config()):
+        yield
+
+
 @pytest.fixture
 def mock_no_bashio(monkeypatch):
     """Simulate environment without bashio (local development)."""

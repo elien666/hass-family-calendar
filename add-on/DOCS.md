@@ -58,6 +58,8 @@ Beide Optionen müssen gesetzt sein.
 - `entity_doorbell_button` — Entity-ID des Türöffner-Buttons
 - `cameras` — Liste der Kameras mit `entity_id` und optionaler `orientation`
 - `stream_mode` — `webrtc` (Standard) oder `mjpeg`. Mit `webrtc` werden die Kameras als echtes Video über die WebRTC-Schnittstelle von Home Assistant (go2rtc) angezeigt; schlägt der Verbindungsaufbau fehl, fällt das Overlay automatisch auf MJPEG zurück. `mjpeg` erzwingt den alten Weg über `/api/camera_proxy_stream` (bei Frigate-Kameras maximal 2 Bilder pro Sekunde).
+- Beim Öffnen zeigt jede Kachel sofort das letzte Kamerabild (HA-Snapshot) und blendet auf das Live-Video um, sobald der erste Frame dekodiert ist. Snapshot und MJPEG laufen über das Add-on-Backend, ein Kamera-Token wird nicht mehr benötigt.
+- Ist eine Kamera in Home Assistant `unavailable`, wird kein Stream versucht; die Kachel zeigt das letzte Bild ausgegraut mit dem Hinweis "Kamera nicht erreichbar" und startet den Stream von selbst, sobald die Kamera zurück ist. Fehlgeschlagene Streams werden alle 30 Sekunden erneut versucht.
 - `webrtc_transport` — `auto` (Standard), `udp` oder `tcp`. Bei `auto` wird zuerst UDP versucht; kommt trotz Verbindung kein Bild an (typisch: Keyframe-Bursts gehen über UDP verloren), wird die Verbindung automatisch über den TCP-Kandidaten von go2rtc neu aufgebaut. `tcp` überspringt den UDP-Versuch und ist die richtige Wahl, wenn das Bild über UDP zuverlässig schwarz bleibt.
 
 #### Alltagskalender

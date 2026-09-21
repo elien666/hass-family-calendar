@@ -82,11 +82,15 @@ class WebSocketStateManager:
             if entity:
                 entities.add(entity)
         
-        # Doorbell
+        # Doorbell (+ its cameras: the overlay skips WebRTC/MJPEG for cameras
+        # whose state is "unavailable" and retries as soon as they come back)
         if self.config.get("ENABLE_DOORBELL"):
             entity = self.config.get("ENTITY_DOORBELL", "")
             if entity:
                 entities.add(entity)
+            for camera in self.config.get("DOORBELL_CAMERAS", []) or []:
+                if isinstance(camera, dict) and isinstance(camera.get("entity_id"), str) and camera["entity_id"]:
+                    entities.add(camera["entity_id"])
         
         # Laundry
         if self.config.get("ENABLE_LAUNDRY"):
