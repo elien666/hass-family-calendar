@@ -5,7 +5,7 @@ vi.mock('../../utils/logger', () => ({
   default: { log: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-import { useWebRtcStream } from '../../utils/use-webrtc-stream'
+import { useWebRtcStream, waitForIceCandidates } from '../../utils/use-webrtc-stream'
 
 /** Minimal RTCPeerConnection double driven by the tests. */
 class FakePeerConnection {
@@ -35,6 +35,7 @@ class FakePeerConnection {
   addTransceiver(kind, init) { this.transceivers.push({ kind, init }) }
   addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn) }
   removeEventListener(name, fn) { this.listeners[name] = (this.listeners[name] || []).filter((f) => f !== fn) }
+  dispatch(name, event = {}) { (this.listeners[name] || []).slice().forEach((fn) => fn(event)) }
   async createOffer() { return { type: 'offer', sdp: 'v=0 offer' } }
   async setLocalDescription(desc) { this.localDescription = desc }
   async setRemoteDescription(desc) { this.remoteDescriptions.push(desc) }
@@ -175,6 +176,9 @@ describe('useWebRtcStream()', () => {
       const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'tcp' }))
       await act(async () => { await vi.advanceTimersByTimeAsync(20) })
       const pc = FakePeerConnection.instances[0]
+      // TCP mode: no STUN/TURN and no client-config round-trip
+      expect(signaling.getClientConfig).not.toHaveBeenCalled()
+      expect(pc.configuration).toEqual({ iceServers: [] })
       act(() => { pc.setConnectionState('connected') })
       await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
       expect(FakePeerConnection.instances).toHaveLength(1)
@@ -216,6 +220,31 @@ describe('useWebRtcStream()', () => {
     expect(result.current.error).toBe('Kamera kann kein WebRTC')
     expect(pc.closed).toBe(true)
     expect(signaling.closeSession).toHaveBeenCalledWith('req-1')
+  })
+
+  it('does not try another transport when HA itself rejected the stream (auto mode)', async () => {
+    const signaling = makeSignaling()
+    const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'auto' }))
+    await flush()
+    await act(async () => { signaling.emit({ type: 'error', code: 'webrtc_offer_failed', message: 'RTSP 404' }) })
+    await flush()
+    expect(result.current.status).toBe('failed')
+    expect(result.current.error).toBe('RTSP 404')
+    expect(FakePeerConnection.instances).toHaveLength(1)
+    expect(signaling.sendOffer).toHaveBeenCalledTimes(1)
+  })
+
+  it('restarts when retryKey changes', async () => {
+    const signaling = makeSignaling()
+    const { rerender } = renderHook(
+      ({ retryKey }) => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling, transport: 'udp', retryKey }),
+      { initialProps: { retryKey: 0 } },
+    )
+    await flush()
+    rerender({ retryKey: 1 })
+    await flush()
+    expect(FakePeerConnection.instances).toHaveLength(2)
+    expect(FakePeerConnection.instances[0].closed).toBe(true)
   })
 
   it('fails when the connection state becomes failed or the offer cannot be sent', async () => {
@@ -276,5 +305,54 @@ describe('useWebRtcStream()', () => {
     const { result } = renderHook(() => useWebRtcStream({ entityId: 'camera.a', enabled: true, signaling }))
     expect(result.current.status).toBe('failed')
     expect(signaling.sendOffer).not.toHaveBeenCalled()
+  })
+})
+
+describe('waitForIceCandidates()', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  const makePc = () => { const pc = new FakePeerConnection({}); pc.iceGatheringState = 'gathering'; return pc }
+  const settled = (promise) => { let done = false; promise.then(() => { done = true }); return () => done }
+
+  it('resolves immediately when gathering is already complete', async () => {
+    const pc = new FakePeerConnection({})
+    const isDone = settled(waitForIceCandidates(pc, { timeoutMs: 1500, graceMs: 150 }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isDone()).toBe(true)
+  })
+
+  it('resolves shortly after the first host candidate instead of waiting for STUN/TURN', async () => {
+    const pc = makePc()
+    const isDone = settled(waitForIceCandidates(pc, { timeoutMs: 1500, graceMs: 150 }))
+    pc.dispatch('icecandidate', { candidate: { candidate: 'candidate:1 1 udp 1 10.0.0.2 5000 typ srflx raddr 0.0.0.0' } })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(isDone()).toBe(false)
+    pc.dispatch('icecandidate', { candidate: { candidate: 'candidate:2 1 udp 1 192.168.1.5 5000 typ host' } })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(isDone()).toBe(false)
+    await vi.advanceTimersByTimeAsync(60)
+    expect(isDone()).toBe(true)
+  })
+
+  it('waits for complete gathering when HA needs all candidates upfront', async () => {
+    const pc = makePc()
+    const isDone = settled(waitForIceCandidates(pc, { timeoutMs: 1500, graceMs: 150, waitForAll: true }))
+    pc.dispatch('icecandidate', { candidate: { candidate: 'candidate:2 1 udp 1 192.168.1.5 5000 typ host' } })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(isDone()).toBe(false)
+    pc.iceGatheringState = 'complete'
+    pc.dispatch('icegatheringstatechange')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isDone()).toBe(true)
+  })
+
+  it('gives up at the cap', async () => {
+    const pc = makePc()
+    const isDone = settled(waitForIceCandidates(pc, { timeoutMs: 1500, graceMs: 150 }))
+    await vi.advanceTimersByTimeAsync(1400)
+    expect(isDone()).toBe(false)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(isDone()).toBe(true)
   })
 })

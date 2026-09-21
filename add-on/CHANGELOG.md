@@ -1,10 +1,13 @@
-**1.53.0 - 2026-09-21**
+**1.54.0 - 2026-09-21**
 
 ### Features
-- feat(cctv): WebRTC-Transport-Automatik (UDP, dann TCP) und Dekodier-Prüfung
-- feat(cctv): WebRTC-Wiedergabe für Türklingel-Kameras mit MJPEG-Fallback
+- feat(cctv): Kamera-Token abschaffen, Ausfall einer Kamera sauber behandeln
+- feat(cctv): Snapshot als Poster und schnellere WebRTC-Aushandlung
 
 ### Fixes
-- fix(add-on): Übersetzungen als gültiges YAML quoten
+- fix(cctv): Snapshot ohne Kamera-Token über den Backend-Proxy laden
+
+### Other
+- style(cctv): Badge zeigt nur noch TCP, UDP oder MJPEG
 
 

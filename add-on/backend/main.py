@@ -484,7 +484,16 @@ def _build_proxy_headers(request: Request, *, include_auth: bool = True, set_sup
 
 @app.api_route("/api/camera_proxy_stream/{path:path}", methods=["GET"])
 async def proxy_camera_stream(path: str, request: Request):
-    """Proxy MJPEG camera stream requests to Home Assistant."""
+    """Proxy MJPEG camera stream requests to Home Assistant.
+
+    Authenticates with the backend token, so the frontend needs no camera
+    access_token (which HA rotates every 5 minutes). Like the WebRTC relay it
+    is restricted to the configured doorbell cameras.
+    """
+    entity_id = path.split("/", 1)[0]
+    if entity_id not in _configured_camera_entities():
+        raise HTTPException(status_code=403, detail=f"{entity_id} is not a configured doorbell camera")
+
     config = get_config()
 
     hass_host = config.get("HASS_HOST", "")
@@ -496,7 +505,7 @@ async def proxy_camera_stream(path: str, request: Request):
             hass_host = hass_api_url.replace("/core/api", "").rstrip("/")
 
     target_url = f"{hass_host.rstrip('/')}/api/camera_proxy_stream/{path}"
-    headers = _build_proxy_headers(request, include_auth=False, set_supervisor_host=False)
+    headers = _build_proxy_headers(request, include_auth=True, set_supervisor_host=True)
     query_params = dict(request.query_params)
 
     logger.debug(f"Proxying camera stream to {target_url} with query params: {list(query_params.keys())}")
@@ -563,12 +572,7 @@ async def proxy_api(path: str, request: Request):
     hass_api_url = config.get("HASS_API_URL", "http://supervisor/core/api")
     target_url = f"{hass_api_url.rstrip('/')}/{path}"
 
-    # Log camera state requests at INFO level for debugging token fetch issues
-    is_camera_state = path.startswith("states/camera.")
-    if is_camera_state:
-        logger.info(f"Camera state request: {request.method} {target_url}")
-    else:
-        logger.debug(f"Proxying {request.method} request to: {target_url}")
+    logger.debug(f"Proxying {request.method} request to: {target_url}")
 
     _get_auth_token()  # Validate early
 
@@ -595,10 +599,7 @@ async def proxy_api(path: str, request: Request):
                 follow_redirects=True
             )
 
-            if is_camera_state:
-                logger.info(f"Camera state response: {response.status_code} from {target_url} ({len(response.content)} bytes)")
-            else:
-                logger.debug(f"Response status: {response.status_code} from {target_url}")
+            logger.debug(f"Response status: {response.status_code} from {target_url}")
 
             return Response(
                 content=response.content,
@@ -606,8 +607,6 @@ async def proxy_api(path: str, request: Request):
                 headers=filter_response_headers(response.headers)
             )
     except Exception as e:
-        if is_camera_state:
-            logger.error(f"Camera state request FAILED for {target_url}: {type(e).__name__}: {e}")
         handle_proxy_error(e, "Home Assistant API", target_url)
 
 
