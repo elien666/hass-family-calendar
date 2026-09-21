@@ -140,13 +140,15 @@ const CameraTile = ({
   const useMjpeg = !webrtcWanted || status === 'failed'
 
   // Poster while WebRTC negotiates: HA's snapshot (Frigate latest.jpg) is there in
-  // a few hundred ms. The cache key is fixed per overlay session so the browser
-  // doesn't re-request it on every render, but does on the next opening.
+  // a few hundred ms and, unlike the MJPEG stream, needs no camera token — so it
+  // is requested the moment the overlay opens. The cache key is fixed per overlay
+  // session so the browser doesn't re-request it on every render, but does on the
+  // next opening.
   const snapshotKeyRef = React.useRef(null)
   if (showDoorCams && snapshotKeyRef.current === null) snapshotKeyRef.current = Date.now()
   if (!showDoorCams) snapshotKeyRef.current = null
-  const snapshotUrl = status === 'connecting' && mjpegProps.accessToken
-    ? buildCameraSnapshotUrl(camera.entity_id, mjpegProps.accessToken, mjpegProps.config, snapshotKeyRef.current)
+  const snapshotUrl = status === 'connecting'
+    ? buildCameraSnapshotUrl(camera.entity_id, mjpegProps.config, snapshotKeyRef.current)
     : null
 
   return (
@@ -159,7 +161,6 @@ const CameraTile = ({
               className={`snapshot ${orientation}`}
               src={snapshotUrl}
               alt="Letztes Kamerabild"
-              crossOrigin="anonymous"
             />
           )}
           {status === 'connecting' && (

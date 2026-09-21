@@ -57,9 +57,9 @@ describe('CameraGrid', () => {
     expect(useWebRtcStream).toHaveBeenCalledWith({ entityId: 'camera.front', enabled: true, signaling, transport: 'auto' })
     expect(container.querySelector('video')).not.toBeNull()
     expect(container.querySelector('img.snapshot')).not.toBeNull()
-    expect(container.querySelector('img.snapshot').getAttribute('src')).toMatch(
-      /^https:\/\/ha\.test\/api\/camera_proxy\/camera\.front\?token=tok123&t=\d+$/
-    )
+    const src = container.querySelector('img.snapshot').getAttribute('src')
+    expect(src).toMatch(/\/api\/camera_proxy\/camera\.front\?t=\d+$/)
+    expect(src).not.toContain('token=')
     // no MJPEG stream and no "Verbinde…" text while the snapshot is showing
     expect(container.querySelectorAll('img')).toHaveLength(1)
     expect(screen.queryByText('Verbinde…')).toBeNull()
@@ -67,11 +67,11 @@ describe('CameraGrid', () => {
     expect(screen.getByText('WebRTC')).toBeInTheDocument()
   })
 
-  it('shows spinner text instead of a snapshot while no token is available yet', () => {
+  it('shows the snapshot even before the camera token has arrived', () => {
     Object.assign(webrtcState, { status: 'connecting' })
     const { container } = render(renderGrid({ streamMode: "webrtc", signaling: {}, accessTokens: {}, tokensLoading: true }))
-    expect(container.querySelector('img.snapshot')).toBeNull()
-    expect(screen.getByText('Verbinde…')).toBeInTheDocument()
+    expect(container.querySelector('img.snapshot')).not.toBeNull()
+    expect(screen.queryByText('Verbinde…')).toBeNull()
   })
 
   it('binds the MediaStream to the video element once playing', () => {

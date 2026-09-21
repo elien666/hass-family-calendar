@@ -182,10 +182,16 @@ export const buildCameraStreamUrl = (entityId, accessToken = null, config = {}) 
   buildCameraProxyUrl('/api/camera_proxy_stream', entityId, accessToken, config)
 
 /**
- * Single JPEG snapshot (HA's /api/camera_proxy = the camera's entity_picture).
- * For Frigate cameras this is latest.jpg and arrives in a few hundred ms —
- * shown as poster while WebRTC negotiates. `cacheKey` busts the browser cache
- * so a re-opened overlay doesn't show a stale frame.
+ * Single JPEG snapshot (HA's /api/camera_proxy, for Frigate cameras latest.jpg),
+ * shown as poster while WebRTC negotiates. Goes through the backend proxy like
+ * the state requests (ingress session in the add-on, Bearer token locally), so
+ * it needs no camera access token and can start the moment the overlay opens.
+ * `cacheKey` busts the browser cache so a re-opened overlay shows a fresh frame.
  */
-export const buildCameraSnapshotUrl = (entityId, accessToken = null, config = {}, cacheKey = null) =>
-  buildCameraProxyUrl('/api/camera_proxy', entityId, accessToken, config, cacheKey ? { t: cacheKey } : {})
+export const buildCameraSnapshotUrl = (entityId, config = {}, cacheKey = null) => {
+  if (!entityId) {
+    return null
+  }
+  const url = buildHaUrl(`/api/camera_proxy/${entityId}`, config)
+  return cacheKey ? `${url}?t=${encodeURIComponent(cacheKey)}` : url
+}

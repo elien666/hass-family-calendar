@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildCameraStreamUrl, buildCameraSnapshotUrl } from '../../utils/use-camera-access-tokens'
+import { buildHaUrl } from '../../utils/config'
 
 describe('camera proxy URLs', () => {
   const config = { HASS_HOST: 'https://ha.test/' }
@@ -12,15 +13,11 @@ describe('camera proxy URLs', () => {
     expect(buildCameraStreamUrl(null, 'abc', config)).toBeNull()
   })
 
-  it('builds the snapshot URL with token and cache key', () => {
-    expect(buildCameraSnapshotUrl('camera.front', 'a b', config, 42))
-      .toBe('https://ha.test/api/camera_proxy/camera.front?token=a+b&t=42')
-    expect(buildCameraSnapshotUrl('camera.front', 'abc', config))
-      .toBe('https://ha.test/api/camera_proxy/camera.front?token=abc')
-  })
-
-  it('falls back to the current origin without HASS_HOST', () => {
-    expect(buildCameraSnapshotUrl('camera.front', 'abc', {}))
-      .toBe(`${window.location.origin}/api/camera_proxy/camera.front?token=abc`)
+  it('builds the snapshot URL via the backend/ingress proxy without a camera token', () => {
+    const base = buildHaUrl('/api/camera_proxy/camera.front', config)
+    expect(buildCameraSnapshotUrl('camera.front', config, 42)).toBe(`${base}?t=42`)
+    expect(buildCameraSnapshotUrl('camera.front', config)).toBe(base)
+    expect(buildCameraSnapshotUrl(null, config)).toBeNull()
+    expect(base).not.toContain('token=')
   })
 })
