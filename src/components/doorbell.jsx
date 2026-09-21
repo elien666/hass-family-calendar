@@ -11,6 +11,7 @@ import { formatErrorForUI } from '../utils/axios-error-handler'
 import { DOORBELL_OVERLAY_TIMEOUT, DOORBELL_MANUAL_CLOSE_COOLDOWN, CAMERA_TOKEN_REFRESH_INTERVAL } from '../utils/constants'
 import { useConnectionStateContext } from '../utils/ConnectionStateProvider'
 import CameraGrid from './camera-grid'
+import { WebRtcSignalingClient } from '../utils/webrtc-signaling'
 
 // @ramonak/react-progress-bar ships a CJS bundle; depending on the build's interop
 // the default import can arrive as a { default: Component } wrapper object instead
@@ -86,6 +87,43 @@ const Container = styled.div`
             height: 100%;
             z-index: 1;
             cursor: pointer;
+        }
+
+        video {
+            background-color: #000;
+        }
+
+        /* Spinner while the WebRTC connection is being negotiated */
+        .stream-status {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+
+            .loading-spinner {
+                animation: spin 1s infinite linear;
+            }
+        }
+
+        /* Small badge telling which transport is active (WebRTC vs. MJPEG fallback) */
+        .stream-badge {
+            position: absolute;
+            left: 8px;
+            bottom: 8px;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.85);
+            background-color: rgba(0, 0, 0, 0.45);
+            pointer-events: none;
+            z-index: 2;
         }
 
         .token-error {
@@ -176,6 +214,8 @@ const Doorbell = () => {
     const config = useConfig()
     const ENABLE_DOORBELL = config.ENABLE_DOORBELL || false
     const DOORBELL_CAMERAS = config.DOORBELL_CAMERAS || []
+    // 'webrtc' (default) or 'mjpeg' — see DOORBELL_STREAM_MODE in the backend config
+    const DOORBELL_STREAM_MODE = config.DOORBELL_STREAM_MODE === 'mjpeg' ? 'mjpeg' : 'webrtc'
     
     // Call all hooks unconditionally (before any early returns)
     const [ showDoorCams, toggle ] = React.useState(false)
@@ -236,6 +276,23 @@ const Doorbell = () => {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showDoorCams, cameraEntityIds.join(',')])
+
+    // WebRTC signaling: one relay socket per overlay session, shared by all camera
+    // tiles. Created when the overlay opens, closed (ending all HA/go2rtc sessions)
+    // when it closes. The MJPEG tokens above stay as the fallback path.
+    const [signaling, setSignaling] = React.useState(null)
+    React.useEffect(() => {
+        if (!showDoorCams || DOORBELL_STREAM_MODE !== 'webrtc' || cameraEntityIds.length === 0) {
+            return undefined
+        }
+        const client = new WebRtcSignalingClient(configRef.current)
+        setSignaling(client)
+        return () => {
+            client.close()
+            setSignaling(null)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showDoorCams, DOORBELL_STREAM_MODE, cameraEntityIds.join(',')])
 
     // Manual refresh function (cancels previous pending refresh)
     const refreshTokens = React.useCallback(async () => {
@@ -435,6 +492,8 @@ const Doorbell = () => {
                             cameraImgRefs={cameraImgRefs}
                             openDoor={openDoor}
                             config={config}
+                            signaling={signaling}
+                            streamMode={DOORBELL_STREAM_MODE}
                         />
                     </div>    
                     {confirmationState === 'confirm' && (

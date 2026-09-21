@@ -61,6 +61,7 @@ schema:
     cameras:
       - entity_id: str
         orientation: str?
+    stream_mode: list(webrtc|mjpeg)?
   go2rtc_base_url: str?
   everyday_calendar:
     enabled: bool

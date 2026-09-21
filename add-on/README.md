@@ -118,6 +118,8 @@ Each feature can be individually enabled or disabled using toggle switches in th
 - When enabled, configure:
   - `entity_doorbell` - Entity ID for the doorbell binary sensor
   - `entity_doorbell_button` - Entity ID for the doorbell unlatch button
+  - `cameras` - List of cameras (`entity_id`, optional `orientation`: `portrait`, `landscape`, `wide`)
+  - `stream_mode` - `webrtc` (default) or `mjpeg`. `webrtc` plays the cameras as real video via Home Assistant's WebRTC API (`camera/webrtc/offer`, go2rtc) and falls back to MJPEG automatically if the connection fails. `mjpeg` forces the legacy `/api/camera_proxy_stream` path (capped at 2 fps for Frigate cameras).
 
 **Everyday Calendar** (`enable_everyday_calendar`)
 - Enable everyday calendar visual tracking for daily habits

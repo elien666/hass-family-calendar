@@ -1,6 +1,6 @@
 import React from 'react'
 import { useConfig } from './ConfigProvider'
-import { isDevelopment, buildWebSocketUrl } from './config'
+import { getBackendWebSocketUrl } from './backend-websocket-url'
 import logger from './logger'
 import { useConnectionStateContext } from './ConnectionStateProvider'
 import { WS_HEARTBEAT_INTERVAL, WS_HEARTBEAT_TIMEOUT, WS_PERIODIC_RETRY_INTERVAL, WS_RECONNECT_DEBOUNCE } from './constants'
@@ -140,21 +140,7 @@ export function useHomeAssistantWebSocket({
       // Build WebSocket URL - always use FastAPI endpoint (not direct HA connection)
       // In development: connect to local FastAPI server
       // In production: use buildWebSocketUrl which properly handles ingress paths
-      let wsUrl
-      if (isDevelopment) {
-        wsUrl = 'ws://localhost:8000/api/websocket'
-      } else {
-        // Use buildWebSocketUrl to properly handle ingress URLs
-        wsUrl = buildWebSocketUrl(config)
-        
-        // Fallback if buildWebSocketUrl returns empty (shouldn't happen, but be safe)
-        if (!wsUrl) {
-          // Detect protocol from current page
-          const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-          const host = typeof window !== 'undefined' && window.location.host ? window.location.host : ''
-          wsUrl = `${protocol}//${host}/api/websocket`
-        }
-      }
+      const wsUrl = getBackendWebSocketUrl(config)
 
       if (!wsUrl) {
         logger.error(`Failed to build WebSocket URL for ${logPrefix} - cannot connect`)

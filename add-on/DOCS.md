@@ -57,6 +57,7 @@ Beide Optionen müssen gesetzt sein.
 - `entity_doorbell` — Entity-ID des Türklingel-Sensors
 - `entity_doorbell_button` — Entity-ID des Türöffner-Buttons
 - `cameras` — Liste der Kameras mit `entity_id` und optionaler `orientation`
+- `stream_mode` — `webrtc` (Standard) oder `mjpeg`. Mit `webrtc` werden die Kameras als echtes Video über die WebRTC-Schnittstelle von Home Assistant (go2rtc) angezeigt; schlägt der Verbindungsaufbau fehl, fällt das Overlay automatisch auf MJPEG zurück. `mjpeg` erzwingt den alten Weg über `/api/camera_proxy_stream` (bei Frigate-Kameras maximal 2 Bilder pro Sekunde).
 
 #### Alltagskalender
 

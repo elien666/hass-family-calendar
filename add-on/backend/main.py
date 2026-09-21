@@ -39,7 +39,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import get_config, clear_cache
 from .proxy import create_geofox_signature
-from .websocket_manager import WebSocketStateManager
+from .websocket_manager import WebSocketStateManager, HACommandError
 
 # Configure all loggers to use the same format
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -93,6 +93,23 @@ _EXCLUDED_RESPONSE_HEADERS = {
     "content-encoding", "transfer-encoding", "content-length",
     "connection", "server"
 }
+
+
+def _configured_camera_entities() -> set:
+    """Camera entity IDs the frontend may open WebRTC streams for.
+
+    The client WebSocket is only protected by ingress, so WebRTC signaling is
+    restricted to the cameras configured for the doorbell overlay.
+    """
+    config = get_config()
+    if not config.get("ENABLE_DOORBELL"):
+        return set()
+    cameras = config.get("DOORBELL_CAMERAS") or []
+    return {
+        cam.get("entity_id")
+        for cam in cameras
+        if isinstance(cam, dict) and isinstance(cam.get("entity_id"), str) and cam["entity_id"].startswith("camera.")
+    }
 
 
 def filter_response_headers(headers) -> dict:
@@ -604,6 +621,16 @@ async def client_websocket(websocket: WebSocket):
     - get_state: Get current state of an entity
     - get_states: Get current state of multiple entities
     - unsubscribe_entity: Unsubscribe from entity updates
+
+    WebRTC signaling relay (camera/webrtc/* HA commands, restricted to the
+    configured doorbell cameras; every message carries a client-chosen request_id):
+    - webrtc_client_config {entity_id, request_id}
+        -> webrtc_client_config {request_id, entity_id, configuration, get_candidates_upfront}
+    - webrtc_offer {entity_id, request_id, offer}
+        -> webrtc_event {request_id, entity_id, event: {type: session|answer|candidate|error, ...}}
+    - webrtc_candidate {entity_id, request_id, session_id, candidate}
+    - webrtc_close {request_id}
+    - errors: webrtc_error {request_id, code, message}
     """
     global websocket_manager
     
@@ -615,13 +642,89 @@ async def client_websocket(websocket: WebSocket):
     
     # Track client subscriptions
     client_subscriptions: Dict[str, Callable] = {}
-    
+
+    # WebRTC relay state: {request_id: HA message id of the camera/webrtc/offer subscription}
+    webrtc_sessions: Dict[str, int] = {}
+    # Signaling commands run as tasks so a slow offer doesn't stall the receive loop
+    webrtc_tasks: set = set()
+    send_lock = asyncio.Lock()
+
     async def send_to_client(message: Dict[str, Any]):
-        """Helper to send message to client."""
+        """Helper to send message to client (serialized — tasks may send concurrently)."""
         try:
-            await websocket.send_text(json.dumps(message))
+            async with send_lock:
+                await websocket.send_text(json.dumps(message))
         except Exception as e:
             logger.debug(f"Error sending message to client: {e}")
+
+    async def send_webrtc_error(request_id, code: str, message: str):
+        await send_to_client({"type": "webrtc_error", "request_id": request_id, "code": code, "message": message})
+
+    def spawn_webrtc_task(coro):
+        task = asyncio.create_task(coro)
+        webrtc_tasks.add(task)
+        task.add_done_callback(webrtc_tasks.discard)
+
+    async def handle_webrtc_client_config(entity_id: str, request_id):
+        try:
+            _, result = await websocket_manager.send_command(
+                {"type": "camera/webrtc/get_client_config", "entity_id": entity_id}
+            )
+        except HACommandError as e:
+            await send_webrtc_error(request_id, e.code, e.message)
+            return
+        result = result if isinstance(result, dict) else {}
+        await send_to_client({
+            "type": "webrtc_client_config",
+            "request_id": request_id,
+            "entity_id": entity_id,
+            "configuration": result.get("configuration") or {},
+            "get_candidates_upfront": bool(result.get("getCandidatesUpfront", False)),
+        })
+
+    async def handle_webrtc_offer(entity_id: str, request_id, offer: str):
+        async def on_event(event: Dict[str, Any]):
+            await send_to_client({
+                "type": "webrtc_event",
+                "request_id": request_id,
+                "entity_id": entity_id,
+                "event": event,
+            })
+
+        try:
+            msg_id, _ = await websocket_manager.send_command(
+                {"type": "camera/webrtc/offer", "entity_id": entity_id, "offer": offer},
+                event_handler=on_event,
+            )
+        except HACommandError as e:
+            logger.warning(f"WebRTC offer for {entity_id} rejected by HA: {e.code}: {e.message}")
+            await send_webrtc_error(request_id, e.code, e.message)
+            return
+
+        previous = webrtc_sessions.get(request_id)
+        webrtc_sessions[request_id] = msg_id
+        logger.debug(f"WebRTC offer accepted for {entity_id} (request_id={request_id}, ha_id={msg_id})")
+        if previous is not None and previous != msg_id:
+            await websocket_manager.unsubscribe(previous)
+
+    async def handle_webrtc_candidate(entity_id: str, request_id, session_id: str, candidate: Dict[str, Any]):
+        try:
+            await websocket_manager.send_command({
+                "type": "camera/webrtc/candidate",
+                "entity_id": entity_id,
+                "session_id": session_id,
+                "candidate": candidate,
+            })
+        except HACommandError as e:
+            # Some providers (e.g. Frigate's own WebRTC class) ignore candidates —
+            # a rejected candidate is not fatal for the stream, so only inform the client.
+            logger.debug(f"WebRTC candidate for {entity_id} rejected: {e.code}: {e.message}")
+            await send_webrtc_error(request_id, e.code, e.message)
+
+    async def close_webrtc_session(request_id):
+        msg_id = webrtc_sessions.pop(request_id, None)
+        if msg_id is not None:
+            await websocket_manager.unsubscribe(msg_id)
     
     def create_state_callback():
         """Create a callback function for state updates."""
@@ -773,6 +876,48 @@ async def client_websocket(websocket: WebSocket):
                             "message": f"Not subscribed to {entity_id}"
                         })
 
+                # ---- WebRTC signaling relay ----
+                elif msg_type in ("webrtc_client_config", "webrtc_offer", "webrtc_candidate"):
+                    request_id = data.get("request_id")
+                    entity_id = data.get("entity_id")
+                    if request_id is None or not isinstance(request_id, (str, int)):
+                        await send_to_client({"type": "error", "message": "Missing or invalid request_id"})
+                        continue
+                    if not entity_id or not _is_valid_entity_id(entity_id):
+                        await send_webrtc_error(request_id, "invalid_entity", "Missing or invalid entity_id")
+                        continue
+                    if entity_id not in _configured_camera_entities():
+                        await send_webrtc_error(request_id, "not_allowed", f"{entity_id} is not a configured doorbell camera")
+                        continue
+
+                    if msg_type == "webrtc_client_config":
+                        spawn_webrtc_task(handle_webrtc_client_config(entity_id, request_id))
+
+                    elif msg_type == "webrtc_offer":
+                        offer = data.get("offer")
+                        if not isinstance(offer, str) or not offer.strip():
+                            await send_webrtc_error(request_id, "invalid_offer", "offer must be a non-empty SDP string")
+                            continue
+                        spawn_webrtc_task(handle_webrtc_offer(entity_id, request_id, offer))
+
+                    else:  # webrtc_candidate
+                        session_id = data.get("session_id")
+                        candidate = data.get("candidate")
+                        if not isinstance(session_id, str) or not session_id:
+                            await send_webrtc_error(request_id, "invalid_session", "session_id must be a non-empty string")
+                            continue
+                        if not isinstance(candidate, dict) or not isinstance(candidate.get("candidate"), str):
+                            await send_webrtc_error(request_id, "invalid_candidate", "candidate must be an RTCIceCandidateInit object")
+                            continue
+                        spawn_webrtc_task(handle_webrtc_candidate(entity_id, request_id, session_id, candidate))
+
+                elif msg_type == "webrtc_close":
+                    request_id = data.get("request_id")
+                    if request_id is None:
+                        await send_to_client({"type": "error", "message": "Missing request_id"})
+                        continue
+                    spawn_webrtc_task(close_webrtc_session(request_id))
+
                 # Handle application-level ping (frontend heartbeat)
                 elif msg_type == "ping":
                     await send_to_client({"type": "pong"})
@@ -802,6 +947,15 @@ async def client_websocket(websocket: WebSocket):
         # Unsubscribe from all entities
         for entity_id, callback in client_subscriptions.items():
             websocket_manager.unsubscribe_client(entity_id, callback)
+
+        # Tear down WebRTC sessions so HA/go2rtc stop streaming for this client
+        for task in list(webrtc_tasks):
+            task.cancel()
+        for request_id in list(webrtc_sessions.keys()):
+            try:
+                await close_webrtc_session(request_id)
+            except Exception as e:
+                logger.debug(f"Error closing WebRTC session {request_id}: {e}")
         logger.debug("Client WebSocket connection closed, unsubscribed from all entities")
 
 

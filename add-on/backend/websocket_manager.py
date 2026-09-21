@@ -17,6 +17,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class HACommandError(Exception):
+    """Home Assistant answered a command with success=false (or it could not be sent)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+
+
 class WebSocketStateManager:
     """Manages WebSocket connection to HA and internal state cache."""
     
@@ -51,6 +60,13 @@ class WebSocketStateManager:
         # Subscription IDs for tracking
         self._subscription_id_counter = 1
         self._entity_subscriptions: Dict[int, str] = {}  # {subscription_id: entity_id}
+
+        # Request/response correlation for commands sent to HA via send_command().
+        # HA answers every command with a "result" message carrying the same id.
+        self._pending_results: Dict[int, asyncio.Future] = {}
+        # Handlers for subscription-style commands (e.g. camera/webrtc/offer) that
+        # keep pushing "event" messages with the command's id after the result.
+        self._event_handlers: Dict[int, Callable] = {}
     
     def get_entities_from_config(self) -> Set[str]:
         """Extract all entity IDs from config that need to be subscribed to.
@@ -212,9 +228,8 @@ class WebSocketStateManager:
             
             # Subscribe to state_changed events for all entities
             # This will catch state changes for all entities we care about
-            subscription_id = self._subscription_id_counter
-            self._subscription_id_counter += 1
-            
+            subscription_id = self._next_message_id()
+
             subscribe_message = {
                 "id": subscription_id,
                 "type": "subscribe_events",
@@ -238,9 +253,23 @@ class WebSocketStateManager:
                 result_id = data.get("id")
                 result_data = data.get("result")
                 success = data.get("success", True)
-                
+                error = data.get("error") or {}
+
+                # Commands sent via send_command() wait on a future keyed by id
+                future = self._pending_results.pop(result_id, None)
+                if future is not None:
+                    if future.done():
+                        return
+                    if success:
+                        future.set_result(result_data)
+                    else:
+                        future.set_exception(HACommandError(
+                            str(error.get("code", "unknown")),
+                            str(error.get("message", "Unknown error")),
+                        ))
+                    return
+
                 if not success:
-                    error = data.get("error", {})
                     logger.error(f"HA returned error for request {result_id}: {error}")
                     return
                 
@@ -275,6 +304,17 @@ class WebSocketStateManager:
                             except Exception as e:
                                 logger.error(f"Error notifying client for {entity_id}: {e}")
             
+            # Events for subscription-style commands (e.g. WebRTC signaling)
+            elif msg_type == "event":
+                handler = self._event_handlers.get(data.get("id"))
+                if handler is not None:
+                    try:
+                        await handler(data.get("event", {}))
+                    except Exception as e:
+                        logger.error(f"Error in event handler for id {data.get('id')}: {e}")
+                else:
+                    logger.debug(f"Received event without handler (id={data.get('id')})")
+
             # Handle other message types
             else:
                 logger.debug(f"Received unhandled message type: {msg_type}")
@@ -323,6 +363,7 @@ class WebSocketStateManager:
                 break
         
         logger.debug("Message handler loop ended")
+        await self._fail_pending("connection_lost", "Home Assistant WebSocket connection lost")
     
     async def _push_refreshed_states_to_clients(self):
         """Push all cached states to subscribed clients after a reconnect.
@@ -430,7 +471,101 @@ class WebSocketStateManager:
         
         self.connected = False
         self.authenticated = False
+        await self._fail_pending("shutdown", "Backend is shutting down")
     
+    # ------------------------------------------------------------------
+    # Generic command API (request/response + subscription events)
+    # ------------------------------------------------------------------
+
+    def _next_message_id(self) -> int:
+        """Allocate the next HA message id (HA requires strictly increasing ids)."""
+        msg_id = self._subscription_id_counter
+        self._subscription_id_counter += 1
+        return msg_id
+
+    async def send_command(
+        self,
+        message: Dict[str, Any],
+        *,
+        event_handler: Optional[Callable] = None,
+        timeout: float = 15.0,
+    ):
+        """Send a command to HA and wait for its "result" message.
+
+        Args:
+            message: Command payload without "id" (e.g. {"type": "camera/webrtc/offer", ...}).
+            event_handler: Optional async callback receiving every "event" payload HA
+                pushes for this command's id after the result (subscription-style
+                commands such as camera/webrtc/offer). Stays registered until
+                unsubscribe(msg_id) is called or the connection drops.
+            timeout: Seconds to wait for the result.
+
+        Returns:
+            Tuple (msg_id, result) — msg_id is needed to unsubscribe later.
+
+        Raises:
+            HACommandError: HA rejected the command, the connection is down, or
+                no result arrived in time.
+        """
+        if not self.ha_websocket or not self.connected or not self.authenticated:
+            raise HACommandError("not_connected", "Not connected to Home Assistant")
+
+        msg_id = self._next_message_id()
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        self._pending_results[msg_id] = future
+        if event_handler is not None:
+            self._event_handlers[msg_id] = event_handler
+
+        try:
+            await self.ha_websocket.send(json.dumps({"id": msg_id, **message}))
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return msg_id, result
+        except HACommandError:
+            self._event_handlers.pop(msg_id, None)
+            raise
+        except asyncio.TimeoutError:
+            self._pending_results.pop(msg_id, None)
+            self._event_handlers.pop(msg_id, None)
+            raise HACommandError("timeout", f"No response from Home Assistant for {message.get('type')}")
+        except Exception as e:
+            self._pending_results.pop(msg_id, None)
+            self._event_handlers.pop(msg_id, None)
+            raise HACommandError("send_failed", str(e))
+
+    async def unsubscribe(self, msg_id: int):
+        """End a subscription-style command and drop its event handler.
+
+        For camera/webrtc/offer this makes HA close the WebRTC session.
+        Errors are logged only — the caller is tearing down anyway.
+        """
+        self._event_handlers.pop(msg_id, None)
+        if not self.ha_websocket or not self.connected:
+            return
+        try:
+            await self.send_command(
+                {"type": "unsubscribe_events", "subscription": msg_id},
+                timeout=5.0,
+            )
+        except HACommandError as e:
+            logger.debug(f"unsubscribe_events for id {msg_id} failed: {e}")
+
+    async def _fail_pending(self, code: str, message: str):
+        """Fail all pending commands and notify event handlers after a connection loss."""
+        pending = list(self._pending_results.items())
+        self._pending_results.clear()
+        for _, future in pending:
+            if not future.done():
+                future.set_exception(HACommandError(code, message))
+
+        handlers = list(self._event_handlers.items())
+        self._event_handlers.clear()
+        for msg_id, handler in handlers:
+            try:
+                await handler({"type": "error", "code": code, "message": message})
+            except Exception as e:
+                logger.debug(f"Error notifying event handler {msg_id} about connection loss: {e}")
+
     def get_state(self, entity_id: str) -> Optional[Dict[str, Any]]:
         """Get cached state for an entity.
         

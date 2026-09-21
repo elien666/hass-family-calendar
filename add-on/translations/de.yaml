@@ -54,6 +54,9 @@ configuration:
       cameras:
         name: Kameras
         description: Liste der anzuzeigenden Kameras
+      stream_mode:
+        name: Stream-Modus
+        description: webrtc (Standard, flüssiges Video über Home Assistant/go2rtc, MJPEG-Fallback) oder mjpeg (alter Weg, max. 2 fps)
   everyday_calendar:
     name: Alltagskalender
     description: Konfiguration des Alltagskalenders.
