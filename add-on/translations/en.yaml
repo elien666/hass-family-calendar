@@ -56,10 +56,10 @@ configuration:
         description: List of camera URLs to display
       stream_mode:
         name: Stream mode
-        description: webrtc (default, smooth video via Home Assistant/go2rtc with MJPEG fallback) or mjpeg (legacy path, max. 2 fps)
+        description: "webrtc (default, smooth video via Home Assistant/go2rtc with MJPEG fallback) or mjpeg (legacy path, max. 2 fps)"
       webrtc_transport:
         name: WebRTC transport
-        description: auto (default: UDP, falls back to TCP when nothing decodes), udp or tcp
+        description: "auto (default: UDP, falls back to TCP when nothing decodes), udp or tcp"
   everyday_calendar:
     name: Everyday Calendar
     description: Configure the everyday calendar.
