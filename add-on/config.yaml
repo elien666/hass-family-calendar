@@ -1,6 +1,6 @@
 name: "Familienkalender"
 description: "Unser cooler Kalender mit Dashboard"
-version: "1.52.0"
+version: "1.53.0"
 slug: "family-calendar"
 image: "ghcr.io/elien666/family-calendar/{arch}"
 init: false
@@ -61,6 +61,8 @@ schema:
     cameras:
       - entity_id: str
         orientation: str?
+    stream_mode: list(webrtc|mjpeg)?
+    webrtc_transport: list(auto|udp|tcp)?
   go2rtc_base_url: str?
   everyday_calendar:
     enabled: bool
