@@ -49,7 +49,7 @@ importers:
         version: 19.3.0(react@19.3.0)
       react-loader-spinner:
         specifier: ^8.0.0
-        version: 8.0.2(css-to-react-native@3.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 8.0.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react-router-dom:
         specifier: ^7.0.0
         version: 7.18.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -61,14 +61,14 @@ importers:
         version: 2.0.8(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       styled-components:
         specifier: 6.4.2
-        version: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 6.4.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       weather-icons-react:
         specifier: ^1.2.0
         version: 1.2.0
     devDependencies:
       '@testing-library/jest-dom':
-        specifier: ^6.6.3
-        version: 6.9.1
+        specifier: ^7.0.0
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(jsdom@29.1.1)(vite@8.3.0))
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.3(@testing-library/dom@10.4.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -303,9 +303,15 @@ packages:
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
     engines: {node: '>=18'}
 
-  '@testing-library/jest-dom@6.9.1':
-    resolution: {integrity: sha512-zIcONa+hVtVSSep9UT3jZ5rizo2BsxgyDYU7WFD5eICBE7no3881HGeb/QkGfsJs6JTkY1aQhT7rIPC7e+0nnA==}
-    engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
+  '@testing-library/jest-dom@7.0.1':
+    resolution: {integrity: sha512-oMDTC3oA+6CXSO2JZnvOI7CA6oVub6kij5ggk9ohwye5slmkwxYDXcPOVxgMw/RQlticjtO0C1RZkR97HgrWMw==}
+    engines: {node: '>=22', npm: '>=6', yarn: '>=1'}
+    peerDependencies:
+      '@testing-library/dom': '>=10 <11'
+      vitest: '>= 0.32'
+    peerDependenciesMeta:
+      vitest:
+        optional: true
 
   '@testing-library/react@16.3.3':
     resolution: {integrity: sha512-Uo193NgQbPMz6lrrhtRQQFcMC6Re/ELLFbbuVL30WDlZxlpZf9/lMHTAVxPRLw1q1iu9OJmR1c2BLiENRstdBg==}
@@ -1387,14 +1393,17 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@6.9.1':
+  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(jsdom@29.1.1)(vite@8.3.0))':
     dependencies:
       '@adobe/css-tools': 4.4.4
+      '@testing-library/dom': 10.4.1
       aria-query: 5.3.2
       css.escape: 1.5.1
       dom-accessibility-api: 0.6.3
       picocolors: 1.1.1
       redent: 3.0.0
+    optionalDependencies:
+      vitest: 4.1.11(jsdom@29.1.1)(vite@8.3.0)
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
@@ -1523,8 +1532,7 @@ snapshots:
 
   camelcase@5.3.1: {}
 
-  camelize@1.0.1:
-    optional: true
+  camelize@1.0.1: {}
 
   chai@6.2.2: {}
 
@@ -1571,15 +1579,13 @@ snapshots:
 
   crypto-js@4.2.0: {}
 
-  css-color-keywords@1.0.0:
-    optional: true
+  css-color-keywords@1.0.0: {}
 
   css-to-react-native@3.2.0:
     dependencies:
       camelize: 1.0.1
       css-color-keywords: 1.0.0
       postcss-value-parser: 4.2.0
-    optional: true
 
   css-tree@3.2.1:
     dependencies:
@@ -1902,8 +1908,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  postcss-value-parser@4.2.0:
-    optional: true
+  postcss-value-parser@4.2.0: {}
 
   postcss@8.5.28:
     dependencies:
@@ -1941,14 +1946,13 @@ snapshots:
 
   react-is@17.0.2: {}
 
-  react-loader-spinner@8.0.2(css-to-react-native@3.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+  react-loader-spinner@8.0.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
-      styled-components: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      styled-components: 6.4.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       tinycolor2: 1.6.0
     transitivePeerDependencies:
-      - css-to-react-native
       - react-native
 
   react-router-dom@7.18.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
@@ -2072,14 +2076,14 @@ snapshots:
     dependencies:
       min-indent: 1.0.1
 
-  styled-components@6.4.2(css-to-react-native@3.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+  styled-components@6.4.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       '@emotion/is-prop-valid': 1.4.0
+      css-to-react-native: 3.2.0
       csstype: 3.2.3
       react: 19.3.0
       stylis: 4.3.6
     optionalDependencies:
-      css-to-react-native: 3.2.0
       react-dom: 19.3.0(react@19.3.0)
 
   stylis@4.3.6: {}
